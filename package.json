@@ -1,0 +1,48 @@
+{
+  "name": "@weni/webchat-service",
+  "version": "1.0.0",
+  "description": "Framework-agnostic JavaScript library for Weni WebChat integration",
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.esm.js",
+  "browser": "dist/index.umd.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "rollup -c",
+    "test": "jest",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/weni-ai/webchat-service.git"
+  },
+  "keywords": [
+    "webchat",
+    "websocket",
+    "chat",
+    "messaging",
+    "weni"
+  ],
+  "author": "Weni",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/weni-ai/webchat-service/issues"
+  },
+  "homepage": "https://github.com/weni-ai/webchat-service#readme",
+  "dependencies": {
+    "eventemitter3": "^5.0.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.7",
+    "@babel/preset-env": "^7.23.7",
+    "@rollup/plugin-commonjs": "^25.0.7",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@types/jest": "^29.5.11",
+    "babel-jest": "^29.7.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "rollup": "^4.9.4",
+    "typescript": "^5.3.3"
+  }
+}
