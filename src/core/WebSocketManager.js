@@ -50,7 +50,7 @@ export default class WebSocketManager extends EventEmitter {
         this.status = 'connecting'
         this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
 
-        const url = `${this.config.socketUrl}/${this.config.channelUuid}`
+        const url = `${this.config.socketUrl}`
         this.socket = new WebSocket(url)
 
         this.socket.onopen = () => {
@@ -94,7 +94,7 @@ export default class WebSocketManager extends EventEmitter {
     const message = {
       type: 'register',
       from: data.from,
-      callback: data.callback || '',
+      callback: data.callback || `https://flows.weni.ai/c/wwc/${this.config.channelUuid}/receive`,
       session_type: data.session_type || 'local'
     }
 
@@ -106,23 +106,66 @@ export default class WebSocketManager extends EventEmitter {
 
   /**
    * Sends a message through WebSocket
+   * Waits for connection if socket is connecting
    * @param {Object} message Message object
    * @returns {Promise<void>}
    */
   send(message) {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      this.messageQueue.push(message)
-      return Promise.reject(new Error('WebSocket not connected'))
-    }
+    return new Promise((resolve, reject) => {
+      // If socket is ready, send immediately
+      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+        try {
+          this.socket.send(JSON.stringify(message))
+          this.emit(SERVICE_EVENTS.MESSAGE_SENT, message)
+          resolve()
+        } catch (error) {
+          this.emit(SERVICE_EVENTS.ERROR, error)
+          reject(error)
+        }
+        return
+      }
 
-    try {
-      this.socket.send(JSON.stringify(message))
-      this.emit(SERVICE_EVENTS.MESSAGE_SENT, message)
-      return Promise.resolve()
-    } catch (error) {
-      this.emit(SERVICE_EVENTS.ERROR, error)
-      return Promise.reject(error)
-    }
+      // If socket is connecting, wait for it to open
+      if (this.socket && this.socket.readyState === WebSocket.CONNECTING) {
+        const onOpen = () => {
+          try {
+            this.socket.send(JSON.stringify(message))
+            this.emit(SERVICE_EVENTS.MESSAGE_SENT, message)
+            cleanup()
+            resolve()
+          } catch (error) {
+            cleanup()
+            this.emit(SERVICE_EVENTS.ERROR, error)
+            reject(error)
+          }
+        }
+
+        const onError = (error) => {
+          cleanup()
+          this.emit(SERVICE_EVENTS.ERROR, error)
+          reject(error)
+        }
+
+        const onClose = () => {
+          cleanup()
+          reject(new Error('WebSocket closed before message could be sent'))
+        }
+
+        const cleanup = () => {
+          this.socket?.removeEventListener('open', onOpen)
+          this.socket?.removeEventListener('error', onError)
+          this.socket?.removeEventListener('close', onClose)
+        }
+
+        this.socket.addEventListener('open', onOpen)
+        this.socket.addEventListener('error', onError)
+        this.socket.addEventListener('close', onClose)
+        return
+      }
+
+      // Socket is closed or doesn't exist
+      reject(new Error('WebSocket not connected'))
+    })
   }
 
   /**
