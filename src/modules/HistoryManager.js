@@ -1,7 +1,5 @@
 import EventEmitter from 'eventemitter3'
-
 import { SERVICE_EVENTS } from '../utils/constants'
-import { Message, HistoryOptions } from '../types'
 
 /**
  * @class HistoryManager
@@ -16,7 +14,7 @@ import { Message, HistoryOptions } from '../types'
  */
 export default class HistoryManager extends EventEmitter {
   /**
-   * @param {WebSocketManager} websocket - WebSocket manager instance
+   * @param {import('../core/WebSocketManager').default} websocket - WebSocket manager instance
    * @param {Object} [config={}] - Configuration options
    */
   constructor(websocket, config = {}) {
@@ -37,7 +35,7 @@ export default class HistoryManager extends EventEmitter {
 
     /**
      * @private
-     * @type {Message[]}
+     * @type {import('../types').Message[]}
      */
     this.cachedHistory = []
   }
@@ -46,8 +44,8 @@ export default class HistoryManager extends EventEmitter {
    * Requests conversation history from the server.
    * Sends a WebSocket message to fetch history.
    * 
-   * @param {HistoryOptions} [options={}] - History request options
-   * @returns {Promise<Message[]>} Array of history messages
+   * @param {import('../types').HistoryOptions} [options={}] - History request options
+   * @returns {Promise<import('../types').Message[]>} Array of history messages
    */
   async request(options = {}) {
     if (this.loading) {
@@ -107,7 +105,7 @@ export default class HistoryManager extends EventEmitter {
    * Normalizes message structure from monolith format.
    * 
    * @param {Array} rawHistory - Raw history data from server
-   * @returns {Message[]} Normalized messages
+   * @returns {import('../types').Message[]} Normalized messages
    */
   processHistory(rawHistory) {
     if (!Array.isArray(rawHistory)) {
@@ -150,9 +148,9 @@ export default class HistoryManager extends EventEmitter {
    * - Sorts by timestamp (oldest first)
    * - Removes temporary messages without IDs
    * 
-   * @param {Message[]} historyMessages - Messages from history
-   * @param {Message[]} currentMessages - Current local messages
-   * @returns {Message[]} Merged and sorted messages
+   * @param {import('../types').Message[]} historyMessages - Messages from history
+   * @param {import('../types').Message[]} currentMessages - Current local messages
+   * @returns {import('../types').Message[]} Merged and sorted messages
    */
   merge(historyMessages, currentMessages) {
     // Create a map of existing messages by ID for fast lookup
@@ -201,8 +199,8 @@ export default class HistoryManager extends EventEmitter {
    * 
    * From monolith: findInsertionPosition()
    * 
-   * @param {Message} newMessage - Message to insert
-   * @param {Message[]} messages - Existing messages
+   * @param {import('../types').Message} newMessage - Message to insert
+   * @param {import('../types').Message[]} messages - Existing messages
    * @returns {number} Index where message should be inserted
    */
   findInsertionPosition(newMessage, messages) {
@@ -224,8 +222,8 @@ export default class HistoryManager extends EventEmitter {
    * 
    * From monolith: getUniqueNewItems()
    * 
-   * @param {Message} newMessage - Message to check
-   * @param {Message[]} messages - Existing messages
+   * @param {import('../types').Message} newMessage - Message to check
+   * @param {import('../types').Message[]} messages - Existing messages
    * @returns {boolean} True if message is unique (doesn't exist)
    */
   isUnique(newMessage, messages) {
@@ -247,8 +245,8 @@ export default class HistoryManager extends EventEmitter {
    * 
    * From monolith: getPositionsWithoutId()
    * 
-   * @param {Message[]} messages - Messages to filter
-   * @returns {Message[]} Messages with valid IDs
+   * @param {import('../types').Message[]} messages - Messages to filter
+   * @returns {import('../types').Message[]} Messages with valid IDs
    */
   removeTemporaryMessages(messages) {
     return messages.filter(msg => msg.id || msg.ID)
