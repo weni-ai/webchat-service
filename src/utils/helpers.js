@@ -20,6 +20,26 @@ export function generateUUID() {
 }
 
 /**
+ * Generates a unique session ID in the format: timestamp@hostname
+ * Same format as the original widget
+ * @param {string} clientId - Optional client ID, defaults to window.location.hostname
+ * @returns {string}
+ */
+export function generateSessionId(clientId = null) {
+  let validClientId
+
+  if (clientId === null || clientId === undefined || clientId.trim === undefined || clientId.trim() === '') {
+    validClientId = window.location.hostname
+  } else {
+    validClientId = clientId
+  }
+
+  const randomId = Math.floor(Math.random() * Date.now())
+  
+  return `${randomId}@${validClientId}`
+}
+
+/**
  * Generates a unique message ID
  * @returns {string}
  */

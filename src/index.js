@@ -56,6 +56,8 @@ export default class WeniWebchatService extends EventEmitter {
       socketUrl: config.socketUrl,
       channelUuid: config.channelUuid,
       host: config.host || '',
+      clientId: config.clientId || null,
+      sessionToken: config.sessionToken || null,
       connectOn: config.connectOn || DEFAULTS.CONNECT_ON,
       storage: config.storage || DEFAULTS.STORAGE,
       callbackUrl: config.callbackUrl || '',

@@ -1,10 +1,10 @@
-import { generateUUID } from '../utils/helpers'
+import { generateSessionId } from '../utils/helpers'
 
 /**
  * SessionManager
  * 
  * Manages user sessions with features:
- * - Generate unique session IDs
+ * - Generate unique session IDs in format: timestamp@hostname
  * - Persist sessions in localStorage/sessionStorage
  * - Restore existing sessions
  * - Clear sessions
@@ -18,7 +18,7 @@ export default class SessionManager {
       autoClearCache: config.autoClearCache !== false,
       cacheTimeout: config.cacheTimeout || 30 * 60 * 1000, // 30 minutes
       contactTimeout: config.contactTimeout || 24 * 60 * 60 * 1000, // 24 hours
-      ...config
+      clientId: config.clientId || null,
     }
     
     this.sessionKey = 'weni:webchat:session'
@@ -115,7 +115,7 @@ export default class SessionManager {
     const now = Date.now()
     
     this.session = {
-      id: generateUUID(),
+      id: generateSessionId(this.config.clientId),
       createdAt: now,
       lastActivity: now,
       metadata: {}
@@ -138,10 +138,27 @@ export default class SessionManager {
       return false
     }
 
+    if (!this._isValidSessionIdFormat(session.id)) {
+      return false
+    }
+
     const now = Date.now()
     const elapsed = now - session.lastActivity
 
     return elapsed < this.config.contactTimeout
+  }
+
+  /**
+   * Checks if session ID has the correct format: timestamp@hostname
+   * @private
+   * @param {string} sessionId
+   * @returns {boolean}
+   */
+  _isValidSessionIdFormat(sessionId) {
+    // Valid format: {number}@{string}
+    // Example: 1544648616824@localhost
+    const pattern = /^\d+@.+$/
+    return pattern.test(sessionId)
   }
 
   /**
