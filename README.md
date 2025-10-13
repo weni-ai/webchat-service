@@ -8,6 +8,7 @@ Framework-agnostic JavaScript library for Weni WebChat integration. Provides a c
 ## Features
 
 - ✅ **WebSocket Management**: Automatic connection, reconnection, and ping/pong keepalive
+- ✅ **Smart Retry Strategy**: Exponential backoff with jitter for intelligent reconnections
 - ✅ **Session Management**: Persistent sessions with localStorage/sessionStorage
 - ✅ **Message Processing**: Queue management, delays, and typing indicators
 - ✅ **File Handling**: Image compression, base64 conversion, multiple file uploads
@@ -247,6 +248,41 @@ Gets connection status.
 const status = service.getConnectionStatus()
 // 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error'
 ```
+
+### Retry Strategy
+
+The service includes an intelligent retry strategy with **exponential backoff and jitter** to handle reconnections gracefully.
+
+#### `getRetryInfo()`
+Gets information about the current retry state.
+
+```javascript
+const retryInfo = service.getRetryInfo()
+// {
+//   attempts: 3,           // Current attempt count
+//   nextDelay: 4000,       // Next delay in ms
+//   maxAttempts: 30        // Maximum attempts allowed
+// }
+```
+
+#### `resetRetryStrategy()`
+Resets the retry counter (useful after network changes).
+
+**How it works:**
+- **Attempt 1**: ~1s delay
+- **Attempt 2**: ~2s delay
+- **Attempt 3**: ~4s delay
+- **Attempt 4**: ~8s delay
+- **Attempt 5**: ~16s delay
+- **Attempt 6+**: ~30s delay (capped)
+
+Each delay includes random jitter (up to 1s) to prevent thundering herd problems. The strategy automatically resets on successful connection.
+
+**Benefits:**
+- Reduces server load during outages
+- Better user experience with quick initial retries
+- Prevents all clients from reconnecting simultaneously
+- Follows AWS best practices for retry strategies
 
 ## Events
 

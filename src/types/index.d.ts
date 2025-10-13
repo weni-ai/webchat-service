@@ -285,3 +285,64 @@ export interface ParamsConfig {
   storage?: 'local' | 'session'
   [key: string]: any
 }
+
+/**
+ * Retry information
+ */
+export interface RetryInfo {
+  attempts: number
+  nextDelay: number
+  maxAttempts: number
+}
+
+/**
+ * Main service class
+ */
+export default class WeniWebchatService {
+  constructor(config: ServiceConfig)
+
+  // Lifecycle
+  init(): Promise<void>
+  connect(): Promise<void>
+  disconnect(): void
+  destroy(): void
+
+  // Messages
+  sendMessage(text: string, options?: any): Promise<void>
+  sendAttachment(file: File): Promise<void>
+  sendAudio(audioData: any): Promise<void>
+
+  // History
+  getHistory(options?: any): Promise<Message[]>
+
+  // Context
+  setContext(context: string): void
+  getContext(): string
+
+  // State
+  getState(): ChatState
+  getMessages(): Message[]
+  getSessionId(): string | null
+  getConnectionStatus(): string
+  isConnected(): boolean
+
+  // Session
+  clearSession(): void
+
+  // Audio recording
+  startRecording(): Promise<void>
+  stopRecording(): Promise<void>
+  cancelRecording(): void
+
+  // Retry strategy
+  getRetryInfo(): RetryInfo
+  resetRetryStrategy(): void
+
+  // Events
+  on(event: string, callback: (...args: any[]) => void): this
+  off(event: string, callback: (...args: any[]) => void): this
+  emit(event: string, ...args: any[]): boolean
+
+  // Static
+  static isAudioRecordingSupported(): boolean
+}

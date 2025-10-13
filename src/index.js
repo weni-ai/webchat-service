@@ -10,6 +10,8 @@ import HistoryManager from './modules/HistoryManager'
 import FileHandler from './modules/FileHandler'
 import AudioRecorder from './modules/AudioRecorder'
 
+import RetryStrategy from './network/RetryStrategy'
+
 import { validateConfig } from './utils/validators'
 import { DEFAULTS, SERVICE_EVENTS } from './utils/constants'
 import {
@@ -72,11 +74,23 @@ export default class WeniWebchatService extends EventEmitter {
       ...config
     }
 
+    // Initialize retry strategy for WebSocket reconnection
+    this.retryStrategy = new RetryStrategy({
+      baseDelay: this.config.reconnectInterval || DEFAULTS.RECONNECT_INTERVAL,
+      maxDelay: 30000, // 30 seconds max
+      factor: 2,
+      jitter: true,
+      maxJitter: 1000
+    })
+
     // Initialize core modules
     this.storage = new StorageManager(this.config.storage)
     this.state = new StateManager()
     this.session = new SessionManager(this.storage, this.config)
-    this.websocket = new WebSocketManager(this.config)
+    this.websocket = new WebSocketManager({
+      ...this.config,
+      retryStrategy: this.retryStrategy
+    })
     this.messageProcessor = new MessageProcessor(this.config)
 
     // Initialize feature modules
@@ -414,6 +428,27 @@ export default class WeniWebchatService extends EventEmitter {
    */
   isConnected() {
     return this._connected && this.websocket.getStatus() === 'connected'
+  }
+
+  /**
+   * Gets retry strategy information
+   * 
+   * @returns {Object} Retry strategy stats
+   */
+  getRetryInfo() {
+    return {
+      attempts: this.retryStrategy.getAttempts(),
+      nextDelay: this.retryStrategy.getDelay(),
+      maxAttempts: this.config.maxReconnectAttempts
+    }
+  }
+
+  /**
+   * Resets retry strategy counter
+   * Useful for manual reconnection attempts
+   */
+  resetRetryStrategy() {
+    this.retryStrategy.reset()
   }
 
   /**

@@ -26,6 +26,7 @@ export default class WebSocketManager extends EventEmitter {
       maxReconnectAttempts: config.maxReconnectAttempts || DEFAULTS.MAX_RECONNECT_ATTEMPTS,
       reconnectInterval: config.reconnectInterval || DEFAULTS.RECONNECT_INTERVAL,
       pingInterval: config.pingInterval || DEFAULTS.PING_INTERVAL,
+      retryStrategy: config.retryStrategy || null,
       ...config
     }
 
@@ -36,6 +37,7 @@ export default class WebSocketManager extends EventEmitter {
     this.pingTimer = null
     this.isRegistered = false
     this.registrationData = null
+    this.retryStrategy = this.config.retryStrategy
   }
 
   /**
@@ -65,6 +67,12 @@ export default class WebSocketManager extends EventEmitter {
         this.socket.onopen = () => {
           this.status = 'connected'
           this.reconnectAttempts = 0
+
+
+          if (this.retryStrategy) {
+            this.retryStrategy.reset()
+          }
+          
           this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
           this.emit(SERVICE_EVENTS.CONNECTED)
           this._startPingInterval()
@@ -273,11 +281,17 @@ export default class WebSocketManager extends EventEmitter {
 
   /**
    * Schedules reconnection attempt
+   * Uses RetryStrategy if available for exponential backoff with jitter
    * @private
    */
   _scheduleReconnect() {
     this.status = 'reconnecting'
     this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
+    
+    // Calculate delay using retry strategy or fallback to fixed interval
+    const delay = this.retryStrategy 
+      ? this.retryStrategy.next()
+      : this.config.reconnectInterval
     
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectAttempts++
@@ -293,7 +307,7 @@ export default class WebSocketManager extends EventEmitter {
       } catch (error) {
         // Error handled in connect()
       }
-    }, this.config.reconnectInterval)
+    }, delay)
   }
 
   /**
