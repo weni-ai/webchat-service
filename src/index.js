@@ -481,6 +481,10 @@ export default class WeniWebchatService extends EventEmitter {
       this.emit(SERVICE_EVENTS.ERROR, error)
     })
 
+    this.messageProcessor.on(SERVICE_EVENTS.MESSAGE_UNKNOWN, (rawMessage) => {
+      this.emit(SERVICE_EVENTS.MESSAGE_UNKNOWN, rawMessage)
+    })
+
     // State manager events
     this.state.on(SERVICE_EVENTS.STATE_CHANGED, (newState, oldState) => {
       this.emit(SERVICE_EVENTS.STATE_CHANGED, newState, oldState)

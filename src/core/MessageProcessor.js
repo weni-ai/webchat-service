@@ -30,20 +30,42 @@ export default class MessageProcessor extends EventEmitter {
   }
 
   /**
-   * Processes a received message
-   * @param {Object} rawMessage
+   * Processes a received WebSocket message
+   * Routes to appropriate handler based on message type
+   * @param {Object} rawMessage Raw WebSocket message
    */
   process(rawMessage) {
+    try {
+      const messageType = this._extractMessageType(rawMessage)
+
+      switch (messageType) {
+        case 'message':
+          this._processUserMessage(rawMessage)
+          break
+        case 'typing':
+          this._handleTypingIndicator(rawMessage)
+          break
+        default:
+          this.emit(SERVICE_EVENTS.MESSAGE_UNKNOWN, rawMessage)
+      }
+
+    } catch (error) {
+      this.emit(SERVICE_EVENTS.ERROR, error)
+    }
+  }
+
+  /**
+   * Processes user messages (text, media, etc)
+   * Normalizes, validates, and queues the message
+   * @private
+   * @param {Object} rawMessage
+   */
+  _processUserMessage(rawMessage) {
     try {
       const message = this._normalizeMessage(rawMessage)
       
       if (!this._validateMessage(message)) {
         this.emit(SERVICE_EVENTS.ERROR, new Error('Invalid message format'))
-        return
-      }
-
-      if (message.type === 'typing') {
-        this._handleTypingIndicator(message)
         return
       }
 
@@ -53,6 +75,28 @@ export default class MessageProcessor extends EventEmitter {
     } catch (error) {
       this.emit(SERVICE_EVENTS.ERROR, error)
     }
+  }
+
+  /**
+   * Extracts message type from raw WebSocket message
+   * @private
+   * @param {Object} raw
+   * @returns {string}
+   */
+  _extractMessageType(raw) {
+    if (!raw || typeof raw !== 'object') {
+      return 'unknown'
+    }
+
+    if (raw.type) {
+      return raw.type
+    }
+
+    if (raw.message && raw.message.type) {
+      return raw.message.type
+    }
+
+    return 'unknown'
   }
 
   /**
@@ -186,14 +230,18 @@ export default class MessageProcessor extends EventEmitter {
   /**
    * Handles typing indicator
    * @private
-   * @param {Object} message
+   * @param {Object} rawMessage
    */
-  _handleTypingIndicator(message) {
+  _handleTypingIndicator(rawMessage) {
     if (this.typingTimer) {
       clearTimeout(this.typingTimer)
     }
 
-    if (message.isTyping) {
+    const isTyping = rawMessage.isTyping || 
+                     (rawMessage.message && rawMessage.message.isTyping) ||
+                     false
+
+    if (isTyping) {
       this.emit(SERVICE_EVENTS.TYPING_START)
 
       this.typingTimer = setTimeout(() => {

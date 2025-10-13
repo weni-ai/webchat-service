@@ -172,6 +172,7 @@ export const SERVICE_EVENTS = {
   MESSAGE_UPDATED: 'message:updated',
   MESSAGE_REMOVED: 'message:removed',
   MESSAGE_PROCESSED: 'message:processed',
+  MESSAGE_UNKNOWN: 'message:unknown',
   MESSAGES_CLEARED: 'messages:cleared',
 
   // Typing
