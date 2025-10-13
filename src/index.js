@@ -130,9 +130,11 @@ export default class WeniWebchatService extends EventEmitter {
    * @returns {Promise<void>}
    */
   async connect() {
-    if (this._connected) {
+    if (this._connected || this._connecting) {
       return
     }
+
+    this._connecting = true
 
     try {
       const sessionId = this.session.getOrCreate()
@@ -153,6 +155,8 @@ export default class WeniWebchatService extends EventEmitter {
       this.state.setError(error)
       this.emit(SERVICE_EVENTS.ERROR, error)
       throw error
+    } finally {
+      this._connecting = false
     }
   }
 
