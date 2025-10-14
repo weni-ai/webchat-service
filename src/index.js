@@ -444,6 +444,29 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
+   * Gets allowed file types configuration
+   * Useful for setting the accept attribute on file inputs
+   * 
+   * @returns {Array<string>} Array of allowed MIME types
+   */
+  getAllowedFileTypes() {
+    return this.fileHandler.config.allowedTypes
+  }
+
+  /**
+   * Gets file configuration including size limits
+   * 
+   * @returns {Object} File configuration
+   */
+  getFileConfig() {
+    return {
+      allowedTypes: this.getAllowedFileTypes(),
+      maxFileSize: this.fileHandler.config.maxFileSize,
+      acceptAttribute: this.getAllowedFileTypes().join(',')
+    }
+  }
+
+  /**
    * Resets retry strategy counter
    * Useful for manual reconnection attempts
    */

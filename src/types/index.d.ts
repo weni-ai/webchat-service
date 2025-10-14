@@ -296,6 +296,15 @@ export interface RetryInfo {
 }
 
 /**
+ * File configuration
+ */
+export interface FileConfig {
+  allowedTypes: string[]
+  maxFileSize: number
+  acceptAttribute: string
+}
+
+/**
  * Main service class
  */
 export default class WeniWebchatService {
@@ -337,6 +346,10 @@ export default class WeniWebchatService {
   // Retry strategy
   getRetryInfo(): RetryInfo
   resetRetryStrategy(): void
+
+  // File configuration
+  getAllowedFileTypes(): string[]
+  getFileConfig(): FileConfig
 
   // Events
   on(event: string, callback: (...args: any[]) => void): this

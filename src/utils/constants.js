@@ -98,7 +98,7 @@ export const DEFAULTS = {
   CONTACT_TIMEOUT: 24 * 60 * 60 * 1000, // 24 hours
 
   // Files
-  MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
+  MAX_FILE_SIZE: 32 * 1024 * 1024, // 32MB
   COMPRESS_IMAGES: true,
   IMAGE_QUALITY: 0.8,
   MAX_IMAGE_WIDTH: 1920,
@@ -117,25 +117,35 @@ export const DEFAULTS = {
   LOG_ENABLED: true
 }
 
-export const ALLOWED_FILE_TYPES = [
+export const ALLOWED_IMAGE_TYPES = [
   'image/jpeg',
   'image/jpg',
   'image/png',
-  'image/gif',
-  'image/webp',
+  'image/svg+xml'
+]
+
+export const ALLOWED_VIDEO_TYPES = [
   'video/mp4',
-  'video/webm',
-  'video/quicktime',
-  'audio/mpeg',
-  'audio/mp3',
-  'audio/ogg',
-  'audio/wav',
-  'audio/webm',
+  'video/quicktime' // .mov
+]
+
+export const ALLOWED_AUDIO_TYPES = [
+  'audio/mpeg', // .mp3
+  'audio/wav'
+]
+
+export const ALLOWED_DOCUMENT_TYPES = [
   'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/vnd.ms-excel', // .xls
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' // .xlsx
+]
+
+export const ALLOWED_FILE_TYPES = [
+  ...ALLOWED_IMAGE_TYPES,
+  ...ALLOWED_VIDEO_TYPES,
+  ...ALLOWED_AUDIO_TYPES,
+  ...ALLOWED_DOCUMENT_TYPES
 ]
 
 export const AUDIO_MIME_TYPES = [
