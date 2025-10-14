@@ -93,7 +93,7 @@ const service = new WeniWebchatService({
   cacheTimeout: 1800000,                   // Cache timeout (30 min)
   
   // File settings
-  maxFileSize: 10485760,                   // Max file size (10MB)
+  maxFileSize: 33554432,                   // Max file size (32MB)
   compressImages: true,                    // Compress images
   imageQuality: 0.8,                       // Image quality (0-1)
   
@@ -283,6 +283,50 @@ Each delay includes random jitter (up to 1s) to prevent thundering herd problems
 - Better user experience with quick initial retries
 - Prevents all clients from reconnecting simultaneously
 - Follows AWS best practices for retry strategies
+
+### File Configuration
+
+The service exposes file upload configuration to help UI components set appropriate constraints.
+
+#### `getAllowedFileTypes()`
+Gets the array of allowed MIME types.
+
+```javascript
+const types = service.getAllowedFileTypes()
+// ['image/jpeg', 'image/png', 'video/mp4', ...]
+```
+
+#### `getFileConfig()`
+Gets complete file configuration including allowed types, size limits, and a ready-to-use accept attribute.
+
+```javascript
+const config = service.getFileConfig()
+// {
+//   allowedTypes: ['image/jpeg', 'image/png', ...],
+//   maxFileSize: 10485760,  // 10MB in bytes
+//   acceptAttribute: 'image/jpeg,image/png,...'  // Ready for <input accept="">
+// }
+
+// Use in your file input component:
+<input
+  type="file"
+  accept={config.acceptAttribute}
+  onChange={(e) => {
+    const file = e.target.files[0]
+    if (file.size > config.maxFileSize) {
+      alert('File too large!')
+      return
+    }
+    service.sendAttachment(file)
+  }}
+/>
+```
+
+**Supported file types by default**:
+- **Images**: JPEG, PNG, SVG
+- **Videos**: MP4, QuickTime (.mov)
+- **Audio**: MP3, WAV
+- **Documents**: PDF, Word (.docx), Excel (.xls, .xlsx)
 
 ## Events
 
