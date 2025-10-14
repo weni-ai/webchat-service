@@ -356,6 +356,30 @@ export default class WeniWebchatService {
   off(event: string, callback: (...args: any[]) => void): this
   emit(event: string, ...args: any[]): boolean
 
-  // Static
+  // Static methods
   static isAudioRecordingSupported(): boolean
+  
+  // Static constants
+  static ALLOWED_FILE_TYPES: string[]
+  static MESSAGE_TYPES: Record<string, MessageType>
+  static MESSAGE_STATUS: Record<string, string>
+  static MESSAGE_DIRECTIONS: Record<string, string>
+  static CONNECTION_STATUS: Record<string, string>
+  static STORAGE_TYPES: Record<string, string>
+  static ERROR_TYPES: Record<string, string>
+  static QUICK_REPLY_TYPES: Record<string, string>
+  static SERVICE_EVENTS: Record<string, string>
+  static DEFAULTS: any
 }
+
+// Named exports for constants
+export const ALLOWED_FILE_TYPES: string[]
+export const MESSAGE_TYPES: Record<string, MessageType>
+export const MESSAGE_STATUS: Record<string, string>
+export const MESSAGE_DIRECTIONS: Record<string, string>
+export const CONNECTION_STATUS: Record<string, string>
+export const STORAGE_TYPES: Record<string, string>
+export const ERROR_TYPES: Record<string, string>
+export const QUICK_REPLY_TYPES: Record<string, string>
+export const SERVICE_EVENTS: Record<string, string>
+export const DEFAULTS: any

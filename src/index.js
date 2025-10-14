@@ -13,7 +13,18 @@ import AudioRecorder from './modules/AudioRecorder'
 import RetryStrategy from './network/RetryStrategy'
 
 import { validateConfig } from './utils/validators'
-import { DEFAULTS, SERVICE_EVENTS } from './utils/constants'
+import { 
+  DEFAULTS, 
+  SERVICE_EVENTS,
+  ALLOWED_FILE_TYPES,
+  MESSAGE_TYPES,
+  MESSAGE_STATUS,
+  MESSAGE_DIRECTIONS,
+  CONNECTION_STATUS,
+  STORAGE_TYPES,
+  ERROR_TYPES,
+  QUICK_REPLY_TYPES
+} from './utils/constants'
 import {
   buildTextMessage,
   buildMediaMessage,
@@ -585,4 +596,30 @@ export default class WeniWebchatService extends EventEmitter {
   }
 }
 
+// Static methods
 WeniWebchatService.isAudioRecordingSupported = AudioRecorder.isSupported
+
+// Static constants
+WeniWebchatService.ALLOWED_FILE_TYPES = ALLOWED_FILE_TYPES
+WeniWebchatService.MESSAGE_TYPES = MESSAGE_TYPES
+WeniWebchatService.MESSAGE_STATUS = MESSAGE_STATUS
+WeniWebchatService.MESSAGE_DIRECTIONS = MESSAGE_DIRECTIONS
+WeniWebchatService.CONNECTION_STATUS = CONNECTION_STATUS
+WeniWebchatService.STORAGE_TYPES = STORAGE_TYPES
+WeniWebchatService.ERROR_TYPES = ERROR_TYPES
+WeniWebchatService.QUICK_REPLY_TYPES = QUICK_REPLY_TYPES
+WeniWebchatService.SERVICE_EVENTS = SERVICE_EVENTS
+WeniWebchatService.DEFAULTS = DEFAULTS
+
+export {
+  ALLOWED_FILE_TYPES,
+  MESSAGE_TYPES,
+  MESSAGE_STATUS,
+  MESSAGE_DIRECTIONS,
+  CONNECTION_STATUS,
+  STORAGE_TYPES,
+  ERROR_TYPES,
+  QUICK_REPLY_TYPES,
+  SERVICE_EVENTS,
+  DEFAULTS
+}
