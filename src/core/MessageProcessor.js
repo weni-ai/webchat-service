@@ -27,6 +27,7 @@ export default class MessageProcessor extends EventEmitter {
     this.queue = []
     this.isProcessing = false
     this.typingTimer = null
+    this.isTypingActive = false
   }
 
   /**
@@ -41,9 +42,6 @@ export default class MessageProcessor extends EventEmitter {
       switch (messageType) {
         case 'message':
           this._processUserMessage(rawMessage)
-          break
-        case 'typing':
-          this._handleTypingIndicator(rawMessage)
           break
         default:
           this.emit(SERVICE_EVENTS.MESSAGE_UNKNOWN, rawMessage)
@@ -67,6 +65,10 @@ export default class MessageProcessor extends EventEmitter {
       if (!this._validateMessage(message)) {
         this.emit(SERVICE_EVENTS.ERROR, new Error('Invalid message format'))
         return
+      }
+
+      if (message.direction === 'incoming' && this.isTypingActive) {
+        this._stopTyping()
       }
 
       this.queue.push(message)
@@ -209,13 +211,6 @@ export default class MessageProcessor extends EventEmitter {
     while (this.queue.length > 0) {
       const message = this.queue.shift()
 
-      // Show typing indicator if enabled
-      if (this.config.enableTypingIndicator && message.direction === 'incoming') {
-        this.emit(SERVICE_EVENTS.TYPING_START)
-        await this._delay(this.config.typingDelay)
-        this.emit(SERVICE_EVENTS.TYPING_STOP)
-      }
-
       this.emit(SERVICE_EVENTS.MESSAGE_PROCESSED, message)
 
       // Delay between messages
@@ -228,26 +223,41 @@ export default class MessageProcessor extends EventEmitter {
   }
 
   /**
-   * Handles typing indicator
-   * @private
-   * @param {Object} rawMessage
+   * Starts the typing indicator after TYPING_DELAY
+   * Called when a message is sent by the user
+   * @public
    */
-  _handleTypingIndicator(rawMessage) {
+  startTypingOnMessageSent() {
+    if (!this.config.enableTypingIndicator) {
+      return
+    }
+
+    // Clear any existing timer
     if (this.typingTimer) {
       clearTimeout(this.typingTimer)
     }
 
-    const isTyping = rawMessage.isTyping || 
-                     (rawMessage.message && rawMessage.message.isTyping) ||
-                     false
+    // Start typing indicator after TYPING_DELAY
+    this.typingTimer = setTimeout(() => {
+      if (!this.isTypingActive) {
+        this.isTypingActive = true
+        this.emit(SERVICE_EVENTS.TYPING_START)
+      }
+    }, this.config.typingDelay)
+  }
 
-    if (isTyping) {
-      this.emit(SERVICE_EVENTS.TYPING_START)
+  /**
+   * Stops the typing indicator
+   * @private
+   */
+  _stopTyping() {
+    if (this.typingTimer) {
+      clearTimeout(this.typingTimer)
+      this.typingTimer = null
+    }
 
-      this.typingTimer = setTimeout(() => {
-        this.emit(SERVICE_EVENTS.TYPING_STOP)
-      }, this.config.typingDelay)
-    } else {
+    if (this.isTypingActive) {
+      this.isTypingActive = false
       this.emit(SERVICE_EVENTS.TYPING_STOP)
     }
   }

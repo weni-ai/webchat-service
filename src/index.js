@@ -229,6 +229,8 @@ export default class WeniWebchatService extends EventEmitter {
     try {
       await this.websocket.send(payload)
 
+      this.messageProcessor.startTypingOnMessageSent()
+
       this.state.updateMessage(message.id, { status: 'sent' })
       this.emit(SERVICE_EVENTS.MESSAGE_SENT, message)
 
@@ -274,6 +276,8 @@ export default class WeniWebchatService extends EventEmitter {
 
       await this.websocket.send(payload)
 
+      this.messageProcessor.startTypingOnMessageSent()
+
       this.state.updateMessage(message.id, { status: 'sent' })
       this.emit(SERVICE_EVENTS.MESSAGE_SENT, message)
 
@@ -314,6 +318,8 @@ export default class WeniWebchatService extends EventEmitter {
       )
 
       await this.websocket.send(payload)
+
+      this.messageProcessor.startTypingOnMessageSent()
 
       this.state.updateMessage(message.id, { status: 'sent' })
       this.emit(SERVICE_EVENTS.MESSAGE_SENT, message)
