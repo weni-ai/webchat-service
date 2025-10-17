@@ -10,7 +10,7 @@ Framework-agnostic JavaScript library for Weni WebChat integration. Provides a c
 - ✅ **WebSocket Management**: Automatic connection, reconnection, and ping/pong keepalive
 - ✅ **Smart Retry Strategy**: Exponential backoff with jitter for intelligent reconnections
 - ✅ **Session Management**: Persistent sessions with localStorage/sessionStorage
-- ✅ **Message Processing**: Queue management, delays, and typing indicators
+- ✅ **Message Processing**: Queue management, delays, typing & thinking indicators
 - ✅ **File Handling**: Image compression, base64 conversion, multiple file uploads
 - ✅ **Audio Recording**: Built-in audio recording with MP3 conversion
 - ✅ **History Management**: Pagination, deduplication, and timestamp sorting
@@ -87,6 +87,8 @@ const service = new WeniWebchatService({
   // Message settings
   messageDelay: 1000,                      // Delay between messages (ms)
   typingDelay: 2000,                       // Typing indicator delay (ms)
+  typingTimeout: 50000,                    // Typing timeout (50s)
+  enableTypingIndicator: true,             // Enable typing indicators
   
   // Cache settings
   autoClearCache: true,                    // Auto-clear cache
@@ -382,9 +384,11 @@ service.on('connection:status:changed', (status) => {})
 service.on('message:received', (message) => {})
 service.on('message:sent', (message) => {})
 
-// Typing events
-service.on('typing:start', () => {})
-service.on('typing:stop', () => {})
+// Typing & Thinking events
+service.on('typing:start', () => {})          // Human agent typing
+service.on('typing:stop', () => {})           // Human agent stopped typing
+service.on('thinking:start', () => {})        // AI assistant processing
+service.on('thinking:stop', () => {})         // AI assistant finished
 
 // Session events
 service.on('session:restored', (session) => {})
@@ -407,6 +411,49 @@ service.on('history:loaded', (messages) => {})
 
 // Error events
 service.on('error', (error) => {})
+```
+
+### Typing & Thinking Indicators
+
+The service distinguishes between two types of indicators:
+
+#### 🤖 **Thinking Indicator** (`thinking:start` / `thinking:stop`)
+- Triggered when an **AI assistant** is processing a response
+- Activated when `typing_start` message has `from: 'ai-assistant'`
+- Auto-stops after `typingTimeout` (50s default) or when message is received
+- Template can choose to ignore these events if not needed
+
+#### ✍️ **Typing Indicator** (`typing:start` / `typing:stop`)
+- Triggered when a **human agent** is typing
+- Starts after `typingDelay` (2s default) when user sends a message
+- Also activated by server `typing_start` messages (non-AI sources)
+- Auto-stops after `typingTimeout` (50s default) or when message is received
+
+**Flow Diagram:**
+
+```
+User sends message
+        ↓
+Wait typingDelay (2s)
+        ↓
+Emit typing:start
+        ↓
+Server sends typing_start
+        ↓
+    ┌───────────────────────┐
+    │ from: 'ai-assistant'? │
+    └───────────────────────┘
+           /          \
+         Yes           No
+          ↓             ↓
+  thinking:start   typing:start
+          ↓             ↓
+  AI processing    Agent typing
+          ↓             ↓
+  Server message   Server message
+  or 50s timeout   or 50s timeout
+          ↓             ↓
+  thinking:stop    typing:stop
 ```
 
 ## Usage with Frameworks
