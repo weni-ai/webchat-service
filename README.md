@@ -216,6 +216,23 @@ Cancels recording without sending.
 service.cancelRecording()
 ```
 
+#### `hasAudioPermission()`
+Checks if microphone permission is already granted.
+
+```javascript
+const hasPermission = await service.hasAudioPermission()
+// Returns: true | false | undefined
+```
+
+#### `requestAudioPermission()`
+Requests microphone permission and returns the permission state.
+
+```javascript
+const permissionGranted = await service.requestAudioPermission()
+// Returns: true | false | undefined
+// Throws error if permission is denied or not supported
+```
+
 ### State Management
 
 #### `getState()`

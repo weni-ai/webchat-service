@@ -416,7 +416,7 @@ export default class WeniWebchatService extends EventEmitter {
    * @returns {Promise<void>}
    */
   async stopRecording() {
-    const audioData = await this.audioRecorder.stop()
+    const audioData = await this.audioRecorder.stop();
     await this.sendAudio(audioData)
   }
 
@@ -425,6 +425,23 @@ export default class WeniWebchatService extends EventEmitter {
    */
   cancelRecording() {
     this.audioRecorder.cancel()
+  }
+
+  /**
+   * Checks if microphone permission is already granted
+   * @returns {Promise<boolean|undefined>}
+   */
+  async hasAudioPermission() {
+    return await this.audioRecorder.hasPermission()
+  }
+
+  /**
+   * Requests microphone permission and returns the permission state
+   * @returns {Promise<boolean|undefined>}
+   * @throws {Error} If permission is denied or not supported
+   */
+  async requestAudioPermission() {
+    return await this.audioRecorder.requestPermission()
   }
 
   /**
@@ -568,8 +585,8 @@ export default class WeniWebchatService extends EventEmitter {
       this.emit(SERVICE_EVENTS.RECORDING_STARTED)
     })
 
-    this.audioRecorder.on(SERVICE_EVENTS.RECORDING_STOPPED, () => {
-      this.emit(SERVICE_EVENTS.RECORDING_STOPPED)
+    this.audioRecorder.on(SERVICE_EVENTS.RECORDING_STOPPED, (result) => {
+      this.emit(SERVICE_EVENTS.RECORDING_STOPPED, result)
     })
 
     this.audioRecorder.on(SERVICE_EVENTS.RECORDING_TICK, (duration) => {

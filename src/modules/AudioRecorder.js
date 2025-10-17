@@ -151,6 +151,70 @@ export default class AudioRecorder extends EventEmitter {
   }
 
   /**
+   * Checks if microphone permission is already granted
+   * @returns {Promise<boolean|undefined>}
+   */
+  async hasPermission() {
+    try {
+      const result = await navigator.permissions.query({ name: 'microphone' })
+
+      if (result.state === 'prompt') return undefined
+
+      return result.state === 'granted'
+    } catch (error) {
+      return undefined
+    }
+  }
+
+  /**
+   * Requests microphone permission and returns the permission state
+   * @returns {Promise<boolean|undefined>}
+   * @throws {Error} If permission is denied or not supported
+   */
+  async requestPermission() {
+    if (!AudioRecorder.isSupported()) {
+      throw new Error('Audio recording is not supported in this browser')
+    }
+
+    try {
+      if (this.audioStream) {
+        this._stopAudioStream()
+      }
+
+      this.audioStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      })
+    } catch (error) {
+      this.audioStream = null
+      
+      if (error.name === 'NotAllowedError') {
+        try {
+          const permissionResult = await navigator.permissions.query({ name: 'microphone' })
+          if (permissionResult.state === 'denied') {
+            throw new Error('Microphone permission denied')
+          } else {
+            throw new Error('Microphone permission dismissed')
+          }
+        } catch (permissionError) {
+          throw new Error('Microphone permission denied')
+        }
+      } else if (error.name === 'NotFoundError') {
+        throw new Error('No microphone found')
+      } else if (error.name === 'NotReadableError') {
+        throw new Error('Microphone is already in use')
+      } else {
+        throw new Error(`Failed to access microphone: ${error.message}`)
+      }
+    } finally {
+      return await this.hasPermission()
+    }
+  }
+
+  /**
    * Handles recording stop
    * @private
    */
@@ -160,7 +224,6 @@ export default class AudioRecorder extends EventEmitter {
     try {
       const blob = new Blob(this.audioChunks, { type: this.mediaRecorder.mimeType })
       const duration = this.getDuration()
-
       const base64 = await this._blobToBase64(blob)
 
       const result = {
@@ -180,6 +243,11 @@ export default class AudioRecorder extends EventEmitter {
 
     } catch (error) {
       this.emit(SERVICE_EVENTS.ERROR, error)
+      
+      if (this._stopCompleteCallback) {
+        this._stopCompleteCallback(null)
+        this._stopCompleteCallback = null
+      }
     }
   }
 
