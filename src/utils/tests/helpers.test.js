@@ -181,6 +181,8 @@ describe('Helpers', () => {
           c: 2,
           d: new Date(),
           e: [1, 2, 3],
+          f: null,
+          g: undefined,
         }
       };
 
@@ -226,61 +228,106 @@ describe('Helpers', () => {
       jest.useRealTimers();
     });
 
-    it('should retry a function and return the result', async () => {
-      const func = jest.fn().mockResolvedValue(1);
-      const result = await helpers.retry(func, 3, 1000);
-      expect(func).toHaveBeenCalledTimes(1);
-      expect(result).toBe(1);
+    describe('when the function succeeds', () => {
+      it('should return the result', async () => {
+        const func = jest.fn().mockResolvedValue(42);
+        const result = await helpers.retry(func, 3, 1000);
+        expect(func).toHaveBeenCalledTimes(1);
+        expect(result).toBe(42);
+      });
     });
 
     describe('when the function fails 1 time', () => {
       it('should retry the function and return the result', async () => {
         const func = jest.fn()
-          .mockRejectedValueOnce(new Error('fail'))
+          .mockRejectedValueOnce(new Error('1st fail'))
           .mockResolvedValueOnce(42);
         
         const promise = helpers.retry(func, 2, 1000);
-
         expect(func).toHaveBeenCalledTimes(1);
+
         await jest.advanceTimersByTimeAsync(1000);
+        expect(func).toHaveBeenCalledTimes(2);
 
         await expect(promise).resolves.toBe(42);
-        expect(func).toHaveBeenCalledTimes(2);
       });
     });
 
-    describe('when the function fails 2 times', () => {
+    describe('when the function fails less than the retries', () => {
       it('should retry the function and return the result', async () => {
         const func = jest.fn()
-          .mockRejectedValueOnce(new Error('fail'))
-          .mockRejectedValueOnce(new Error('fail'))
+          .mockRejectedValueOnce(new Error('1st fail'))
+          .mockRejectedValueOnce(new Error('2nd fail'))
           .mockResolvedValueOnce(42);
         
         const promise = helpers.retry(func, 2, 1000);
-
         expect(func).toHaveBeenCalledTimes(1);
-        await jest.advanceTimersByTimeAsync(1000);
 
-        expect(func).toHaveBeenCalledTimes(2);
         await jest.advanceTimersByTimeAsync(1000);
+        expect(func).toHaveBeenCalledTimes(2);
+
+        await jest.advanceTimersByTimeAsync(1000);
+        expect(func).toHaveBeenCalledTimes(3);
 
         await expect(promise).resolves.toBe(42);
-        expect(func).toHaveBeenCalledTimes(3);
       });
     });
 
-    describe('when the function fails 2 times', () => {
+    describe('when the function fails more than the retries', () => {
       it('should retry the function and throw an error', async () => {
+        expect.assertions(5);
+
         const func = jest.fn()
-          .mockRejectedValue(new Error('fail'));
+          .mockRejectedValueOnce(new Error('1st fail'))
+          .mockRejectedValueOnce(new Error('2nd fail'))
+          .mockRejectedValueOnce(new Error('3rd fail'));
         
-        const promise = helpers.retry(func, 2, 1000);
+        const promise = helpers.retry(func, 2, 1000)
+          .catch(error => {
+            expect(error.message).toBe('3rd fail');
+          });
 
         expect(func).toHaveBeenCalledTimes(1);
-        await jest.advanceTimersByTimeAsync(1000);
 
+        await jest.advanceTimersByTimeAsync(1000);
         expect(func).toHaveBeenCalledTimes(2);
-        expect(promise).rejects.toThrow('fail');
+
+        await jest.advanceTimersByTimeAsync(1000);
+        expect(func).toHaveBeenCalledTimes(3);
+
+        const result = await promise;
+        expect(result).toBeUndefined();
+      });
+    });
+
+    describe('when there is not retries and delay is not provided', () => {
+      it('should use the default retries and delay', async () => {
+        expect.assertions(6);
+
+        const func = jest.fn()
+          .mockRejectedValueOnce(new Error('1st fail'))
+          .mockRejectedValueOnce(new Error('2nd fail'))
+          .mockRejectedValueOnce(new Error('3rd fail'))
+          .mockRejectedValueOnce(new Error('4th fail'));
+        
+        const promise = helpers.retry(func)
+          .catch(error => {
+            expect(error.message).toBe('4th fail');
+          });
+
+        expect(func).toHaveBeenCalledTimes(1);
+
+        await jest.advanceTimersByTimeAsync(1000);
+        expect(func).toHaveBeenCalledTimes(2);
+
+        await jest.advanceTimersByTimeAsync(1000);
+        expect(func).toHaveBeenCalledTimes(3);
+
+        await jest.advanceTimersByTimeAsync(1000);
+        expect(func).toHaveBeenCalledTimes(4);
+
+        const result = await promise;
+        expect(result).toBeUndefined();
       });
     });
   });
@@ -301,6 +348,23 @@ describe('Helpers', () => {
         await jest.advanceTimersByTimeAsync(1000);
 
         await expect(promise).resolves.toBe(42);
+      });
+    });
+
+    describe('when the promise is not resolved in time', () => {
+      it('should reject the promise', async () => {
+        expect.assertions(2);
+
+        const promise = helpers.withTimeout(new Promise(resolve => setTimeout(() => resolve(42), 1100)), 1000)
+          .catch(error => {
+            expect(error.message).toBe('Operation timed out');
+          });
+
+        await jest.advanceTimersByTimeAsync(1000);
+
+        const result = await promise;
+
+        expect(result).toBeUndefined();
       });
     });
   });
