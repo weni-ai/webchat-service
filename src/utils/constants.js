@@ -1,0 +1,239 @@
+/**
+ * Global Constants
+ */
+
+export const CONNECTION_STATUS = {
+  CONNECTING: 'connecting',
+  CONNECTED: 'connected',
+  DISCONNECTED: 'disconnected',
+  RECONNECTING: 'reconnecting',
+  ERROR: 'error'
+}
+
+export const MESSAGE_TYPES = {
+  TEXT: 'text',
+  IMAGE: 'image',
+  VIDEO: 'video',
+  AUDIO: 'audio',
+  FILE: 'file',
+  LOCATION: 'location',
+  INTERACTIVE: 'interactive',
+  TYPING: 'typing'
+}
+
+export const MESSAGE_DIRECTIONS = {
+  INCOMING: 'incoming',
+  OUTGOING: 'outgoing'
+}
+
+export const MESSAGE_STATUS = {
+  PENDING: 'pending',
+  SENT: 'sent',
+  DELIVERED: 'delivered',
+  READ: 'read',
+  ERROR: 'error'
+}
+
+export const WS_MESSAGE_TYPES = {
+  REGISTER: 'register',
+  MESSAGE: 'message',
+  PING: 'ping',
+  PONG: 'pong',
+  TYPING: 'typing',
+  HISTORY: 'get_history',
+  ACK: 'ack',
+  ERROR: 'error',
+  WARNING: 'warning',
+  FORBIDDEN: 'forbidden'
+}
+
+export const STORAGE_KEYS = {
+  SESSION: 'weni:webchat:session',
+  STATE: 'weni:webchat:state',
+  MESSAGES: 'weni:webchat:messages',
+  CONFIG: 'weni:webchat:config'
+}
+
+export const STORAGE_TYPES = {
+  LOCAL: 'local',
+  SESSION: 'session'
+}
+
+export const ERROR_TYPES = {
+  NETWORK: 'network',
+  VALIDATION: 'validation',
+  PERMISSION: 'permission',
+  STORAGE: 'storage',
+  SERVER: 'server',
+  WEBSOCKET: 'websocket',
+  UNKNOWN: 'unknown'
+}
+
+export const WS_ERROR_TYPES = {
+  FORBIDDEN: 'forbidden',
+  WARNING: 'warning',
+  ERROR: 'error',
+  CONNECTION_CLOSED: 'connection_closed',
+  DUPLICATE_SESSION: 'duplicate_session'
+}
+
+export const DEFAULTS = {
+  // Connection
+  CONNECT_ON: 'mount',
+  STORAGE: 'local',
+  AUTO_RECONNECT: true,
+  MAX_RECONNECT_ATTEMPTS: 30,
+  RECONNECT_INTERVAL: 3000,
+  PING_INTERVAL: 50000,
+  MAX_PING_LIMIT: 216,
+
+  // Messages
+  MESSAGE_DELAY: 1000,
+  TYPING_DELAY: 2000,
+  ENABLE_TYPING_INDICATOR: true,
+
+  // Cache
+  AUTO_CLEAR_CACHE: true,
+  CACHE_TIMEOUT: 30 * 60 * 1000, // 30 minutes
+  CONTACT_TIMEOUT: 24 * 60 * 60 * 1000, // 24 hours
+
+  // Files
+  MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
+  COMPRESS_IMAGES: true,
+  IMAGE_QUALITY: 0.8,
+  MAX_IMAGE_WIDTH: 1920,
+  MAX_IMAGE_HEIGHT: 1080,
+
+  // Audio
+  MAX_RECORDING_DURATION: 120000, // 2 minutes
+  AUDIO_BITS_PER_SECOND: 128000,
+
+  // History
+  HISTORY_LIMIT: 20,
+  HISTORY_PAGE: 1,
+
+  // Logging
+  LOG_LEVEL: 'info',
+  LOG_ENABLED: true
+}
+
+export const ALLOWED_FILE_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/ogg',
+  'audio/wav',
+  'audio/webm',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+]
+
+export const AUDIO_MIME_TYPES = [
+  'audio/webm',
+  'audio/mp4',
+  'audio/ogg',
+  'audio/wav',
+  'audio/mpeg'
+]
+
+export const QUICK_REPLY_TYPES = {
+  TEXT: 'text',
+  LOCATION: 'location',
+  EMAIL: 'email',
+  PHONE: 'phone'
+}
+
+export const SERVICE_EVENTS = {
+  // Lifecycle
+  INITIALIZED: 'initialized',
+  DESTROYED: 'destroyed',
+
+  // Connection
+  CONNECTED: 'connected',
+  DISCONNECTED: 'disconnected',
+  RECONNECTING: 'reconnecting',
+  CONNECTION_STATUS_CHANGED: 'connection:status:changed',
+
+  // Messages
+  MESSAGE: 'message',
+  MESSAGE_RECEIVED: 'message:received',
+  MESSAGE_SENT: 'message:sent',
+  MESSAGE_ADDED: 'message:added',
+  MESSAGE_UPDATED: 'message:updated',
+  MESSAGE_REMOVED: 'message:removed',
+  MESSAGE_PROCESSED: 'message:processed',
+  MESSAGE_UNKNOWN: 'message:unknown',
+  MESSAGES_CLEARED: 'messages:cleared',
+
+  // Typing
+  TYPING_START: 'typing:start',
+  TYPING_STOP: 'typing:stop',
+
+  // Session
+  SESSION_RESTORED: 'session:restored',
+  SESSION_CLEARED: 'session:cleared',
+  SESSION_CHANGED: 'session:changed',
+
+  // State
+  STATE_CHANGED: 'state:changed',
+  STATE_RESET: 'state:reset',
+
+  // Context
+  CONTEXT_CHANGED: 'context:changed',
+
+  // Recording
+  RECORDING_STARTED: 'recording:started',
+  RECORDING_STOPPED: 'recording:stopped',
+  RECORDING_CANCELLED: 'recording:cancelled',
+  RECORDING_TICK: 'recording:tick',
+
+  // Files
+  FILE_PROCESSED: 'file:processed',
+
+  // History
+  HISTORY_LOADED: 'history:loaded',
+  HISTORY_LOADING_START: 'loading:start',
+  HISTORY_LOADING_END: 'loading:end',
+  HISTORY_RESPONSE: 'history:response',
+  HISTORY_REQUESTED: 'history:requested',
+  HISTORY_MERGED: 'history:merged',
+  HISTORY_CACHE_CLEARED: 'history:cache:cleared',
+
+  // WebSocket
+  WS_REGISTERED: 'registered',
+  WS_FORBIDDEN: 'websocket:forbidden',
+  WS_WARNING: 'websocket:warning',
+  WS_DUPLICATE_SESSION: 'websocket:duplicate_session',
+
+  // Errors
+  ERROR: 'error',
+
+  // Metadata
+  METADATA_CHANGED: 'metadata:changed',
+
+  // Page events
+  PAGE_CHANGED: 'page:changed'
+}
+
+export const LOG_LEVELS = {
+  DEBUG: 'debug',
+  INFO: 'info',
+  WARN: 'warn',
+  ERROR: 'error'
+}
+
+export const VERSION = '1.0.0'
+
+export const SERVICE_NAME = '@weni/webchat-service'
+
+

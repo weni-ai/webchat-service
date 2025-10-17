@@ -1,0 +1,29 @@
+# Source files
+src/
+tests/
+
+# Configuration
+tsconfig.json
+rollup.config.js
+jest.config.js
+
+# Development
+.cursor/
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Examples
+examples/
+
+# Misc
+*.log
+.DS_Store
+Thumbs.db
