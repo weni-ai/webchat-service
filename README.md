@@ -328,6 +328,28 @@ const config = service.getFileConfig()
 - **Audio**: MP3, WAV
 - **Documents**: PDF, Word (.docx), Excel (.xls, .xlsx)
 
+---
+
+## Constants
+
+The service exposes important constants for use in templates. These can be accessed as **static properties** or **named exports**.
+
+### Available Constants
+
+| Constant | Description | Values |
+|----------|-------------|--------|
+| `ALLOWED_FILE_TYPES` | Accepted file MIME types | `['image/jpeg', 'image/png', ...]` |
+| `MESSAGE_TYPES` | Message type identifiers | `{ TEXT, IMAGE, VIDEO, AUDIO, ... }` |
+| `MESSAGE_STATUS` | Message delivery status | `{ PENDING, SENT, DELIVERED, READ, ERROR }` |
+| `MESSAGE_DIRECTIONS` | Message direction | `{ INCOMING, OUTGOING }` |
+| `CONNECTION_STATUS` | WebSocket connection states | `{ CONNECTING, CONNECTED, DISCONNECTED, ... }` |
+| `STORAGE_TYPES` | Storage type options | `{ LOCAL, SESSION }` |
+| `ERROR_TYPES` | Error categories | `{ NETWORK, VALIDATION, PERMISSION, ... }` |
+| `QUICK_REPLY_TYPES` | Quick reply types | `{ TEXT, LOCATION, EMAIL, PHONE }` |
+| `SERVICE_EVENTS` | All event names | `{ CONNECTED, MESSAGE_RECEIVED, ... }` |
+| `DEFAULTS` | Default configuration values | `{ MAX_FILE_SIZE: 32MB, ... }` |
+---
+
 ## Events
 
 The service uses EventEmitter to notify state changes:
