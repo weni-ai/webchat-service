@@ -91,6 +91,7 @@ export const DEFAULTS = {
   MESSAGE_DELAY: 1000,
   TYPING_DELAY: 2000,
   ENABLE_TYPING_INDICATOR: true,
+  TYPING_TIMEOUT: 50000, // 50 seconds
 
   // Cache
   AUTO_CLEAR_CACHE: true,
@@ -185,9 +186,11 @@ export const SERVICE_EVENTS = {
   MESSAGE_UNKNOWN: 'message:unknown',
   MESSAGES_CLEARED: 'messages:cleared',
 
-  // Typing
+  // Typing & Thinking
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
+  THINKING_START: 'thinking:start',
+  THINKING_STOP: 'thinking:stop',
 
   // Session
   SESSION_RESTORED: 'session:restored',

@@ -573,6 +573,16 @@ export default class WeniWebchatService extends EventEmitter {
       this.emit(SERVICE_EVENTS.TYPING_STOP)
     })
 
+    this.messageProcessor.on(SERVICE_EVENTS.THINKING_START, () => {
+      this.state.setThinking(true)
+      this.emit(SERVICE_EVENTS.THINKING_START)
+    })
+
+    this.messageProcessor.on(SERVICE_EVENTS.THINKING_STOP, () => {
+      this.state.setThinking(false)
+      this.emit(SERVICE_EVENTS.THINKING_STOP)
+    })
+
     this.messageProcessor.on(SERVICE_EVENTS.ERROR, (error) => {
       this.emit(SERVICE_EVENTS.ERROR, error)
     })
