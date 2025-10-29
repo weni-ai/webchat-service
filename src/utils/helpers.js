@@ -124,7 +124,9 @@ export function throttle(func, limit) {
  * @returns {any}
  */
 export function deepClone(obj) {
-  if (obj === null || typeof obj !== 'object') {
+  const isObject = obj instanceof Object
+
+  if (obj === null || !isObject) {
     return obj
   }
 
@@ -136,15 +138,11 @@ export function deepClone(obj) {
     return obj.map(item => deepClone(item))
   }
 
-  if (obj instanceof Object) {
-    const clonedObj = {}
-    for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        clonedObj[key] = deepClone(obj[key])
-      }
-    }
-    return clonedObj
+  const clonedObj = {}
+  for (const key in obj) {
+    clonedObj[key] = deepClone(obj[key])
   }
+  return clonedObj
 }
 
 /**
