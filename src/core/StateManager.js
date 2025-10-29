@@ -28,6 +28,7 @@ export default class StateManager extends EventEmitter {
       },
       context: '',
       isTyping: false,
+      isThinking: false,
       error: null
     }
   }
@@ -157,6 +158,14 @@ export default class StateManager extends EventEmitter {
   }
 
   /**
+   * Sets thinking indicator
+   * @param {boolean} isThinking
+   */
+  setThinking(isThinking) {
+    this.setState({ isThinking })
+  }
+
+  /**
    * Sets error state
    * @param {Error|string|null} error
    */
@@ -187,6 +196,7 @@ export default class StateManager extends EventEmitter {
       },
       context: '',
       isTyping: false,
+      isThinking: false,
       error: null
     }
     
