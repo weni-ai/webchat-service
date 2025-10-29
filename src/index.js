@@ -8,6 +8,7 @@ import StorageManager from './core/StorageManager'
 
 import HistoryManager from './modules/HistoryManager'
 import FileHandler from './modules/FileHandler'
+import CameraRecorder from './modules/CameraRecorder'
 import AudioRecorder from './modules/AudioRecorder'
 
 import RetryStrategy from './network/RetryStrategy'
@@ -112,6 +113,7 @@ export default class WeniWebchatService extends EventEmitter {
     this.history = new HistoryManager(this.websocket)
     this.fileHandler = new FileHandler(this.config)
     this.audioRecorder = new AudioRecorder(this.config)
+    this.cameraRecorder = new CameraRecorder(this.config)
 
     this._setupEventListeners()
 
@@ -408,6 +410,49 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
+   * Starts camera recording
+   * 
+   * @returns {Promise<void>}
+   */
+  async startCameraRecording() {
+    return this.cameraRecorder.start();
+  }
+
+  /**
+   * Stops camera recording
+   * 
+   * @returns {Promise<void>}
+   */
+  async stopCameraRecording() {
+    return this.cameraRecorder.stop();
+  }
+
+  /**
+   * Checks if camera permission is already granted
+   * @returns {Promise<boolean|undefined>}
+   */
+  async hasCameraPermission() {
+    return await this.cameraRecorder.hasPermission()
+  }
+
+  /**
+   * Requests camera permission and returns the permission state
+   * @returns {Promise<boolean|undefined>}
+   * @throws {Error} If permission is denied or not supported
+   */
+  async requestCameraPermission() {
+    return await this.cameraRecorder.requestPermission()
+  }
+
+  /**
+   * Switches to the next camera device
+   * @returns {Promise<void>}
+   */
+  async switchToNextCameraDevice() {
+    return await this.cameraRecorder.switchToNextDevice();
+  }
+
+  /**
    * Starts audio recording
    * 
    * @returns {Promise<void>}
@@ -594,6 +639,23 @@ export default class WeniWebchatService extends EventEmitter {
     // State manager events
     this.state.on(SERVICE_EVENTS.STATE_CHANGED, (newState, oldState) => {
       this.emit(SERVICE_EVENTS.STATE_CHANGED, newState, oldState)
+    })
+
+    // Camera recorder events
+    this.cameraRecorder.on(SERVICE_EVENTS.CAMERA_STREAM_RECEIVED, (stream) => {
+      this.emit(SERVICE_EVENTS.CAMERA_STREAM_RECEIVED, stream)
+    })
+    
+    this.cameraRecorder.on(SERVICE_EVENTS.CAMERA_RECORDING_STARTED, () => {
+      this.emit(SERVICE_EVENTS.CAMERA_RECORDING_STARTED)
+    })
+
+    this.cameraRecorder.on(SERVICE_EVENTS.CAMERA_RECORDING_STOPPED, () => {
+      this.emit(SERVICE_EVENTS.CAMERA_RECORDING_STOPPED)
+    })
+
+    this.cameraRecorder.on(SERVICE_EVENTS.CAMERA_DEVICES_CHANGED, (devices) => {
+      this.emit(SERVICE_EVENTS.CAMERA_DEVICES_CHANGED, devices)
     })
 
     // Audio recorder events

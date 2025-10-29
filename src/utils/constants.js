@@ -210,6 +210,12 @@ export const SERVICE_EVENTS = {
   RECORDING_CANCELLED: 'recording:cancelled',
   RECORDING_TICK: 'recording:tick',
 
+  // Camera
+  CAMERA_STREAM_RECEIVED: 'camera:stream:received',
+  CAMERA_RECORDING_STARTED: 'camera:recording:started',
+  CAMERA_RECORDING_STOPPED: 'camera:recording:stopped',
+  CAMERA_DEVICES_CHANGED: 'camera:devices:changed',
+
   // Files
   FILE_PROCESSED: 'file:processed',
 
