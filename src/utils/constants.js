@@ -92,6 +92,7 @@ export const DEFAULTS = {
   TYPING_DELAY: 2000,
   ENABLE_TYPING_INDICATOR: true,
   TYPING_TIMEOUT: 50000, // 50 seconds
+  DISPLAY_UNREAD_COUNT: false,
 
   // Cache
   AUTO_CLEAR_CACHE: true,

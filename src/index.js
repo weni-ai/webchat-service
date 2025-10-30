@@ -87,6 +87,7 @@ export default class WeniWebchatService extends EventEmitter {
       typingDelay: config.typingDelay || DEFAULTS.TYPING_DELAY,
       autoClearCache: config.autoClearCache !== false || DEFAULTS.AUTO_CLEAR_CACHE,
       cacheTimeout: config.cacheTimeout || DEFAULTS.CACHE_TIMEOUT,
+      displayUnreadCount: config.displayUnreadCount || DEFAULTS.DISPLAY_UNREAD_COUNT,
       ...config
     }
 
