@@ -38,6 +38,16 @@ export default class HistoryManager extends EventEmitter {
      * @type {import('../types').Message[]}
      */
     this.cachedHistory = []
+
+    this._registerSocketEventListeners();
+  }
+
+  _registerSocketEventListeners() {
+    this.websocket.on(SERVICE_EVENTS.MESSAGE, (message) => {
+      if (message.type === 'history') {
+        this.emit(SERVICE_EVENTS.HISTORY_RESPONSE, message.history);
+      }
+    });
   }
 
   /**
@@ -68,10 +78,6 @@ export default class HistoryManager extends EventEmitter {
 
       this.websocket.send(payload)
 
-      // Wait for history response (will be handled by WebSocketManager's onmessage)
-      // The actual history data will be emitted by the WebSocketManager
-      // This is just the request trigger
-
       this.emit(SERVICE_EVENTS.HISTORY_REQUESTED, payload)
 
       return new Promise((resolve, reject) => {
@@ -81,13 +87,12 @@ export default class HistoryManager extends EventEmitter {
           reject(new Error('History request timeout'))
         }, 30 * 1000)
 
-        // Listen for history response (one-time)
         const handleHistory = (history) => {
           clearTimeout(timeout)
           this.loading = false
           this.emit(SERVICE_EVENTS.HISTORY_LOADING_END)
           this.emit(SERVICE_EVENTS.HISTORY_LOADED, history)
-          resolve(history)
+          resolve(this.processHistory(history))
         }
 
         this.once(SERVICE_EVENTS.HISTORY_RESPONSE, handleHistory)
@@ -117,7 +122,7 @@ export default class HistoryManager extends EventEmitter {
       const message = {
         id: item.ID || item.id,
         type: item.message?.type || 'text',
-        timestamp: item.timestamp || Date.now(),
+        timestamp: (item.timestamp * 1e3) || Date.now(),
         direction: this._normalizeDirection(item.direction),
         sender: item.direction === 'in' ? 'response' : 'client'
       }

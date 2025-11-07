@@ -44,7 +44,7 @@ export default class WebSocketManager extends EventEmitter {
    * Establishes WebSocket connection
    * @returns {Promise<void>}
    */
-  async connect() {
+  async connect(registrationData) {
     if (this.status === 'connected' || this.status === 'connecting') {
       return Promise.resolve()
     }
@@ -65,18 +65,8 @@ export default class WebSocketManager extends EventEmitter {
         this.socket = new WebSocket(url)
 
         this.socket.onopen = () => {
-          this.status = 'connected'
-          this.reconnectAttempts = 0
-
-
-          if (this.retryStrategy) {
-            this.retryStrategy.reset()
-          }
-          
-          this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
-          this.emit(SERVICE_EVENTS.CONNECTED)
-          this._startPingInterval()
-          resolve()
+          this.register(registrationData);
+          this.once(SERVICE_EVENTS.CONNECTED, resolve);
         }
 
         this.socket.onmessage = (event) => {
@@ -132,6 +122,24 @@ export default class WebSocketManager extends EventEmitter {
       this.emit(SERVICE_EVENTS.ERROR, new Error('Registration failed: ' + error.message))
       throw error
     })
+  }
+
+  async _handleReadyForMessage() {
+    this.status = 'connected';
+
+    this.reconnectAttempts = 0
+
+    if (this.retryStrategy) {
+      this.retryStrategy.reset()
+    }
+    
+    this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
+    this.emit(SERVICE_EVENTS.CONNECTED)
+    this._startPingInterval()
+  }
+
+  _getHistory() {
+    return this.history;
   }
 
   /**
@@ -242,6 +250,11 @@ export default class WebSocketManager extends EventEmitter {
 
       if (data.type === 'pong') {
         return
+      }
+
+      if (data.type === 'ready_for_message') {
+        this._handleReadyForMessage();
+        return;
       }
 
       if (data.type === 'error') {
