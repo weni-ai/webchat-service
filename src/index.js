@@ -244,6 +244,16 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
+   * Simulates a message received
+   * 
+   * @param {Object} message Message object
+   * @returns {void}
+   */
+  simulateMessageReceived(message) {
+    this.messageProcessor.process(message);
+  }
+
+  /**
    * Sends a file attachment
    * 
    * @param {File} file File object
