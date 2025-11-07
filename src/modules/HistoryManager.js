@@ -90,9 +90,10 @@ export default class HistoryManager extends EventEmitter {
         const handleHistory = (history) => {
           clearTimeout(timeout)
           this.loading = false
+          const processedHistory = this.processHistory(history)
           this.emit(SERVICE_EVENTS.HISTORY_LOADING_END)
-          this.emit(SERVICE_EVENTS.HISTORY_LOADED, history)
-          resolve(this.processHistory(history))
+          this.emit(SERVICE_EVENTS.HISTORY_LOADED, processedHistory)
+          resolve(processedHistory)
         }
 
         this.once(SERVICE_EVENTS.HISTORY_RESPONSE, handleHistory)
