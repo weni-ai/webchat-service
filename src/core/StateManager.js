@@ -130,7 +130,10 @@ export default class StateManager extends EventEmitter {
    * @param {Object} session
    */
   setSession(session) {
-    this.setState({ session })
+    this.setState({
+      session,
+      messages: session.conversation,
+    })
   }
 
   /**

@@ -19,6 +19,7 @@ export default class SessionManager {
       cacheTimeout: config.cacheTimeout || 30 * 60 * 1000, // 30 minutes
       contactTimeout: config.contactTimeout || 24 * 60 * 60 * 1000, // 24 hours
       clientId: config.clientId || null,
+      sessionId: config.sessionId || null,
     }
     
     this.sessionKey = 'weni:webchat:session'
@@ -52,7 +53,7 @@ export default class SessionManager {
    */
   async restore() {
     const stored = this.storage.get(this.sessionKey)
-    
+
     if (stored && this._isSessionValid(stored)) {
       this.session = stored
       this._updateLastActivity()
@@ -113,12 +114,15 @@ export default class SessionManager {
    */
   _createNewSession() {
     const now = Date.now()
-    
+
+    const id = this.config.sessionId || generateSessionId(this.config.clientId);
+
     this.session = {
-      id: generateSessionId(this.config.clientId),
+      id,
       createdAt: now,
       lastActivity: now,
-      metadata: {}
+      metadata: {},
+      conversation: [],
     }
 
     this._save()
@@ -171,6 +175,47 @@ export default class SessionManager {
     }
 
     this.session.lastActivity = Date.now()
+    this._save()
+  }
+
+  /**
+   * Returns the conversation array from session
+   * @returns {Array}
+   */
+  getConversation() {
+    if (!this.session) return []
+    if (!Array.isArray(this.session.conversation)) {
+      this.session.conversation = []
+    }
+    return this.session.conversation
+  }
+
+  /**
+   * Sets the entire conversation array and persists
+   * @param {Array} messages
+   */
+  setConversation(messages) {
+    if (!this.session) return
+    this.session.conversation = Array.isArray(messages) ? messages : []
+    this._updateLastActivity()
+    this._save()
+  }
+
+  /**
+   * Appends one message to the conversation and persists
+   * @param {any} message
+   * @param {{ limit?: number }} [options]
+   */
+  appendToConversation(message, options = {}) {
+    if (!this.session) return
+    const limit = typeof options.limit === 'number' ? options.limit : undefined
+    const list = this.getConversation()
+    list.push(message)
+    if (limit && limit > 0 && list.length > limit) {
+      list.splice(0, list.length - limit)
+    }
+    this.session.conversation = list
+    this._updateLastActivity()
     this._save()
   }
 

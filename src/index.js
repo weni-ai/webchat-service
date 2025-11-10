@@ -172,17 +172,31 @@ export default class WeniWebchatService extends EventEmitter {
       const sessionId = this.session.getOrCreate()
       this.state.setSession(this.session.getSession())
 
-      await this.websocket.connect()
-
-      await this.websocket.register({
+      await this.websocket.connect({
         from: sessionId,
         callback: this.config.callbackUrl,
         session_type: this.config.storage
-      })
+      });
+
+      const previousLocalMessagesIds = this.session
+        .getConversation()
+        .map(message => message.id)
+        .filter(id => id.startsWith('msg_'));
+
+      this.getHistory({
+        page: 1,
+        limit: 20,
+      }).then(() => {
+        if (previousLocalMessagesIds.length > 0) {
+          const idsToRemove = new Set(previousLocalMessagesIds);
+          const filtered = this.state.getMessages().filter(m => !idsToRemove.has(m?.id));
+          this.state.setState({ messages: filtered });
+          this.session.setConversation(filtered);
+        }
+      });
 
       this._connected = true
       this.emit(SERVICE_EVENTS.CONNECTED)
-
     } catch (error) {
       this.state.setError(error)
       this.emit(SERVICE_EVENTS.ERROR, error)
@@ -219,6 +233,7 @@ export default class WeniWebchatService extends EventEmitter {
 
     // Add to state
     this.state.addMessage(message)
+    this.session.appendToConversation(message)
 
     // Build WebSocket payload
     const payload = buildWebSocketMessage('message',
@@ -245,6 +260,16 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
+   * Simulates a message received
+   * 
+   * @param {Object} message Message object
+   * @returns {void}
+   */
+  simulateMessageReceived(message) {
+    this.messageProcessor.process(message);
+  }
+
+  /**
    * Sends a file attachment
    * 
    * @param {File} file File object
@@ -268,6 +293,7 @@ export default class WeniWebchatService extends EventEmitter {
       })
 
       this.state.addMessage(message)
+      this.session.appendToConversation(message)
 
       const payload = buildWebSocketMessage('message',
         { type: fileData.type, media: fileData.base64 },
@@ -311,6 +337,7 @@ export default class WeniWebchatService extends EventEmitter {
       })
 
       this.state.addMessage(message)
+      this.session.appendToConversation(message)
 
       const payload = buildWebSocketMessage('message',
         { type: 'audio', media: audioData.base64 },
@@ -341,12 +368,13 @@ export default class WeniWebchatService extends EventEmitter {
    */
   async getHistory(options = {}) {
     try {
-      const messages = await this.history.fetch(options)
+      const messages = await this.history.request(options)
 
       const currentMessages = this.state.getMessages()
       const merged = this.history.merge(messages, currentMessages)
 
       this.state.setState({ messages: merged })
+      this.session.setConversation(merged)
 
       return messages
     } catch (error) {
@@ -606,6 +634,7 @@ export default class WeniWebchatService extends EventEmitter {
     // Message processor events
     this.messageProcessor.on(SERVICE_EVENTS.MESSAGE_PROCESSED, (msg) => {
       this.state.addMessage(msg)
+      this.session.appendToConversation(msg)
       this.emit(SERVICE_EVENTS.MESSAGE_RECEIVED, msg)
     })
 
