@@ -219,6 +219,16 @@ export default class SessionManager {
     this._save()
   }
 
+  updateConversation(messageId, update) {
+    if (!this.session) return
+    const list = this.getConversation()
+    const message = list.find(m => m.id === messageId)
+    if (message) {
+      Object.assign(message, update)
+    }
+    this._save()
+  }
+
   /**
    * Saves session to storage
    * @private

@@ -20,8 +20,8 @@ export function validateConfig(config) {
     throw new Error('channelUuid is required and must be a string')
   }
 
-  if (config.connectOn && !['mount', 'open'].includes(config.connectOn)) {
-    throw new Error('connectOn must be "mount" or "open"')
+  if (config.connectOn && !['mount', 'manual', 'demand'].includes(config.connectOn)) {
+    throw new Error('connectOn must be "mount", "manual" or "demand"')
   }
 
   if (config.storage && !['local', 'session'].includes(config.storage)) {
