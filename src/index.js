@@ -33,8 +33,7 @@ import {
 import {
   buildTextMessage,
   buildMediaMessage,
-  buildWebSocketMessage,
-  buildRegistrationMessage
+  buildMessagePayload,
 } from './utils/messageBuilder'
 
 /**
@@ -120,6 +119,8 @@ export default class WeniWebchatService extends EventEmitter {
 
     this._initialized = false
     this._connected = false
+
+    this.messagesQueue = [];
   }
 
   /**
@@ -142,8 +143,18 @@ export default class WeniWebchatService extends EventEmitter {
         this.emit(SERVICE_EVENTS.SESSION_RESTORED, session)
       }
 
-      if (this.config.connectOn === 'mount') {
-        await this.connect()
+      const messages = this.state.getMessages();
+
+      const pendingMessages = messages.filter(({status}) => ['pending'].includes(status));
+      this.enqueueMessages(pendingMessages);
+
+      const shouldConnect = 
+        (this.config.connectOn === 'mount') ||
+        (this.config.connectOn === 'demand' && this.messagesQueue.length >= 1);
+
+      if (shouldConnect) {
+        await this.connect();
+        this.runQueue();
       }
 
       this._initialized = true
@@ -180,8 +191,9 @@ export default class WeniWebchatService extends EventEmitter {
 
       const previousLocalMessagesIds = this.session
         .getConversation()
-        .map(message => message.id)
-        .filter(id => id.startsWith('msg_'));
+        .filter(({status}) => !['pending'].includes(status))
+        .filter(({id}) => id.startsWith('msg_'))
+        .map(message => message.id);
 
       this.getHistory({
         page: 1,
@@ -235,27 +247,39 @@ export default class WeniWebchatService extends EventEmitter {
     this.state.addMessage(message)
     this.session.appendToConversation(message)
 
-    // Build WebSocket payload
-    const payload = buildWebSocketMessage('message',
-      { type: 'text', text },
-      {
-        context: this.state.getContext(),
-        from: this.session.getSessionId()
-      }
-    )
+    this.enqueueMessages([message]);
+    this.runQueue();
+  }
 
-    try {
-      await this.websocket.send(payload)
+  enqueueMessages(messages) {
+    this.messagesQueue.push(...messages);
+  }
 
-      this.messageProcessor.startTypingOnMessageSent()
+  async runQueue() {
+    if (this.isConnected()) {
+      this.messagesQueue.forEach(async (message) => {
+        const payload = buildMessagePayload(
+          this.session.getSessionId(),
+          message,
+          {
+            context: this.state.getContext(),
+          }
+        );
 
-      this.state.updateMessage(message.id, { status: 'sent' })
-      this.emit(SERVICE_EVENTS.MESSAGE_SENT, message)
+        try {
+          await this.websocket.send(payload);
+          this.emit(SERVICE_EVENTS.MESSAGE_SENT, message);
+        } catch (error) {
+          this.state.updateMessage(message.id, { status: 'error' })
+          this.emit(SERVICE_EVENTS.ERROR, error);
+          throw error
+        }
+      });
 
-    } catch (error) {
-      this.state.updateMessage(message.id, { status: 'error' })
-      this.emit(SERVICE_EVENTS.ERROR, error)
-      throw error
+      this.messagesQueue = [];
+    } else if (this.config.connectOn === 'demand') {
+      await this.connect();
+      this.runQueue();
     }
   }
 
@@ -295,21 +319,8 @@ export default class WeniWebchatService extends EventEmitter {
       this.state.addMessage(message)
       this.session.appendToConversation(message)
 
-      const payload = buildWebSocketMessage('message',
-        { type: fileData.type, media: fileData.base64 },
-        {
-          context: this.state.getContext(),
-          from: this.session.getSessionId()
-        }
-      )
-
-      await this.websocket.send(payload)
-
-      this.messageProcessor.startTypingOnMessageSent()
-
-      this.state.updateMessage(message.id, { status: 'sent' })
-      this.emit(SERVICE_EVENTS.MESSAGE_SENT, message)
-
+      this.enqueueMessages([message]);
+      this.runQueue();
     } catch (error) {
       this.emit(SERVICE_EVENTS.ERROR, error)
       throw error
@@ -339,21 +350,8 @@ export default class WeniWebchatService extends EventEmitter {
       this.state.addMessage(message)
       this.session.appendToConversation(message)
 
-      const payload = buildWebSocketMessage('message',
-        { type: 'audio', media: audioData.base64 },
-        {
-          context: this.state.getContext(),
-          from: this.session.getSessionId()
-        }
-      )
-
-      await this.websocket.send(payload)
-
-      this.messageProcessor.startTypingOnMessageSent()
-
-      this.state.updateMessage(message.id, { status: 'sent' })
-      this.emit(SERVICE_EVENTS.MESSAGE_SENT, message)
-
+      this.enqueueMessages([message]);
+      this.runQueue();
     } catch (error) {
       this.emit(SERVICE_EVENTS.ERROR, error)
       throw error
@@ -721,6 +719,12 @@ export default class WeniWebchatService extends EventEmitter {
 
     this.history.on(SERVICE_EVENTS.ERROR, (error) => {
       this.emit(SERVICE_EVENTS.ERROR, error)
+    })
+
+    this.on(SERVICE_EVENTS.MESSAGE_SENT, (message) => {
+      this.state.updateMessage(message.id, { status: 'sent' });
+      this.session.updateConversation(message.id, { status: 'sent' });
+      this.messageProcessor.startTypingOnMessageSent();
     })
   }
 }

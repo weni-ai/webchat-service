@@ -1,6 +1,8 @@
 import EventEmitter from 'eventemitter3'
 
 import { DEFAULTS, SERVICE_EVENTS } from '../utils/constants'
+import { buildRegistrationMessage } from '../utils/messageBuilder'
+
 /**
  * WebSocketManager
  * 
@@ -102,16 +104,12 @@ export default class WebSocketManager extends EventEmitter {
     }
 
     const host = this.config.host || data.host || 'https://flows.weni.ai'
-    const message = {
-      type: 'register',
-      from: data.from,
-      callback: data.callback || `${host}/c/wwc/${this.config.channelUuid}/receive`,
-      session_type: data.session_type || 'local'
-    }
 
-    if (data.token || this.config.sessionToken) {
-      message.token = data.token || this.config.sessionToken
-    }
+    const message = buildRegistrationMessage(data.from, {
+      callback: data.callback || `${host}/c/wwc/${this.config.channelUuid}/receive`,
+      session_type: data.session_type || 'local',
+      token: data.token || this.config.sessionToken || undefined
+    })
 
     this.registrationData = data
 
@@ -311,12 +309,7 @@ export default class WebSocketManager extends EventEmitter {
       this.emit(SERVICE_EVENTS.RECONNECTING, this.reconnectAttempts)
       
       try {
-        await this.connect()
-        
-        // Re-register after successful reconnection
-        if (this.registrationData) {
-          await this.register(this.registrationData)
-        }
+        await this.connect(this.registrationData)
       } catch (error) {
         // Error handled in connect()
       }

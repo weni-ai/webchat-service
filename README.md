@@ -65,7 +65,7 @@ const service = new WeniWebchatService({
   
   // Optional
   host: 'https://flows.weni.ai',          // API host
-  connectOn: 'mount',                      // 'mount' or 'manual'
+  connectOn: 'mount',                      // 'mount', 'manual' or 'demand'
   storage: 'local',                        // 'local' or 'session'
   callbackUrl: '',                         // Callback URL for events
 })
