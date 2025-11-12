@@ -8,7 +8,7 @@ export interface ServiceConfig {
  
   // Connection
   host?: string
-  connectOn?: 'mount' | 'open'
+  connectOn?: 'mount' | 'manual' | 'demand'
   storage?: 'local' | 'session'
   callbackUrl?: string
   autoReconnect?: boolean
