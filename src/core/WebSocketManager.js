@@ -1,6 +1,8 @@
 import EventEmitter from 'eventemitter3'
 
 import { DEFAULTS, SERVICE_EVENTS } from '../utils/constants'
+import { buildRegistrationMessage } from '../utils/messageBuilder'
+
 /**
  * WebSocketManager
  * 
