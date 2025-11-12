@@ -141,6 +141,9 @@ export default class WeniWebchatService extends EventEmitter {
       if (session) {
         this.state.setSession(session)
         this.emit(SERVICE_EVENTS.SESSION_RESTORED, session)
+      } else {
+        this.session.getOrCreate();
+        this.state.setSession(this.session.getSession())
       }
 
       const messages = this.state.getMessages();
@@ -180,8 +183,7 @@ export default class WeniWebchatService extends EventEmitter {
     this._connecting = true
 
     try {
-      const sessionId = this.session.getOrCreate()
-      this.state.setSession(this.session.getSession())
+      const sessionId = this.session.getSessionId();
 
       await this.websocket.connect({
         from: sessionId,
