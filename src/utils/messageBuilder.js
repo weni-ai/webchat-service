@@ -4,6 +4,31 @@
 
 import { generateMessageId } from './helpers'
 
+export function buildMessagePayload(sessionId, message, options = {}) {
+  const from = sessionId;
+  const context = options.context || '';
+
+  if (message.type === 'text') {
+    return buildWebSocketMessage('message',
+      { type: 'text', text: message.text },
+      {
+        context,
+        from,
+      }
+    )
+  } else if (['image','video','audio','file'].includes(message.type)) {
+    return buildWebSocketMessage('message',
+      { type: message.type, media: message.media },
+      {
+        context,
+        from,
+      }
+    )
+  }
+
+  throw new Error('Invalid message type')
+}
+
 /**
  * Builds a text message
  * @param {string} text

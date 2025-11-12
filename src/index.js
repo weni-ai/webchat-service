@@ -33,8 +33,7 @@ import {
 import {
   buildTextMessage,
   buildMediaMessage,
-  buildWebSocketMessage,
-  buildRegistrationMessage
+  buildMessagePayload,
 } from './utils/messageBuilder'
 
 /**
@@ -227,28 +226,6 @@ export default class WeniWebchatService extends EventEmitter {
     this._connected = false
   }
 
-  buildMessagePayload(message) {
-    if (message.type === 'text') {
-      return buildWebSocketMessage('message',
-        { type: 'text', text: message.text },
-        {
-          context: this.state.getContext(),
-          from: this.session.getSessionId()
-        }
-      )
-    } else if (['image','video','audio','file'].includes(message.type)) {
-      return buildWebSocketMessage('message',
-        { type: message.type, media: message.media },
-        {
-          context: this.state.getContext(),
-          from: this.session.getSessionId()
-        }
-      )
-    }
-
-    throw new Error('Invalid message type')
-  }
-
   /**
    * Sends a text message
    * 
@@ -281,7 +258,13 @@ export default class WeniWebchatService extends EventEmitter {
   async runQueue() {
     if (this.isConnected()) {
       this.messagesQueue.forEach(async (message) => {
-        const payload = this.buildMessagePayload(message);
+        const payload = buildMessagePayload(
+          this.session.getSessionId(),
+          message,
+          {
+            context: this.state.getContext(),
+          }
+        );
 
         try {
           await this.websocket.send(payload);

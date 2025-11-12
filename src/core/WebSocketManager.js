@@ -102,16 +102,12 @@ export default class WebSocketManager extends EventEmitter {
     }
 
     const host = this.config.host || data.host || 'https://flows.weni.ai'
-    const message = {
-      type: 'register',
-      from: data.from,
-      callback: data.callback || `${host}/c/wwc/${this.config.channelUuid}/receive`,
-      session_type: data.session_type || 'local'
-    }
 
-    if (data.token || this.config.sessionToken) {
-      message.token = data.token || this.config.sessionToken
-    }
+    const message = buildRegistrationMessage(data.from, {
+      callback: data.callback || `${host}/c/wwc/${this.config.channelUuid}/receive`,
+      session_type: data.session_type || 'local',
+      token: data.token || this.config.sessionToken || undefined
+    })
 
     this.registrationData = data
 
