@@ -311,12 +311,7 @@ export default class WebSocketManager extends EventEmitter {
       this.emit(SERVICE_EVENTS.RECONNECTING, this.reconnectAttempts)
       
       try {
-        await this.connect()
-        
-        // Re-register after successful reconnection
-        if (this.registrationData) {
-          await this.register(this.registrationData)
-        }
+        await this.connect(this.registrationData)
       } catch (error) {
         // Error handled in connect()
       }
