@@ -141,6 +141,9 @@ export default class WeniWebchatService extends EventEmitter {
       if (session) {
         this.state.setSession(session)
         this.emit(SERVICE_EVENTS.SESSION_RESTORED, session)
+      } else {
+        this.session.getOrCreate();
+        this.state.setSession(this.session.getSession())
       }
 
       const messages = this.state.getMessages();
@@ -154,7 +157,6 @@ export default class WeniWebchatService extends EventEmitter {
 
       if (shouldConnect) {
         await this.connect();
-        this.runQueue();
       }
 
       this._initialized = true
@@ -180,31 +182,12 @@ export default class WeniWebchatService extends EventEmitter {
     this._connecting = true
 
     try {
-      const sessionId = this.session.getOrCreate()
-      this.state.setSession(this.session.getSession())
+      const sessionId = this.session.getSessionId();
 
       await this.websocket.connect({
         from: sessionId,
         callback: this.config.callbackUrl,
         session_type: this.config.storage
-      });
-
-      const previousLocalMessagesIds = this.session
-        .getConversation()
-        .filter(({status}) => !['pending'].includes(status))
-        .filter(({id}) => id.startsWith('msg_'))
-        .map(message => message.id);
-
-      this.getHistory({
-        page: 1,
-        limit: 20,
-      }).then(() => {
-        if (previousLocalMessagesIds.length > 0) {
-          const idsToRemove = new Set(previousLocalMessagesIds);
-          const filtered = this.state.getMessages().filter(m => !idsToRemove.has(m?.id));
-          this.state.setState({ messages: filtered });
-          this.session.setConversation(filtered);
-        }
       });
 
       this._connected = true
@@ -256,6 +239,10 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   async runQueue() {
+    if (this.isReconnecting()) {
+      return;
+    }
+    
     if (this.isConnected()) {
       this.messagesQueue.forEach(async (message) => {
         const payload = buildMessagePayload(
@@ -540,6 +527,10 @@ export default class WeniWebchatService extends EventEmitter {
     return this._connected && this.websocket.getStatus() === 'connected'
   }
 
+  isReconnecting() {
+    return this.websocket.getStatus() === 'reconnecting';
+  }
+
   /**
    * Gets retry strategy information
    * 
@@ -594,6 +585,28 @@ export default class WeniWebchatService extends EventEmitter {
     this._connected = false
   }
 
+  async _handleWebSocketConnected() {
+    const previousLocalMessagesIds = this.session
+      .getConversation()
+      .filter(({direction, status}) => direction === 'outgoing' && status === 'sent')
+      .filter(({id}) => id.startsWith('msg_'))
+      .map(message => message.id);
+
+    this.getHistory({
+      page: 1,
+      limit: 20,
+    }).then(() => {
+      if (previousLocalMessagesIds.length > 0) {
+        const idsToRemove = new Set(previousLocalMessagesIds);
+        const filtered = this.state.getMessages().filter(m => !idsToRemove.has(m?.id));
+        this.state.setState({ messages: filtered });
+        this.session.setConversation(filtered);
+      }
+    });
+
+    this.runQueue();
+  }
+
   /**
    * Sets up internal event listeners
    * @private
@@ -602,6 +615,7 @@ export default class WeniWebchatService extends EventEmitter {
     // WebSocket events
     this.websocket.on(SERVICE_EVENTS.CONNECTED, () => {
       this.state.setConnectionStatus('connected')
+      this._handleWebSocketConnected();
     })
 
     this.websocket.on(SERVICE_EVENTS.DISCONNECTED, () => {
