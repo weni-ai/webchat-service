@@ -189,9 +189,6 @@ export default class WeniWebchatService extends EventEmitter {
         callback: this.config.callbackUrl,
         session_type: this.config.storage
       });
-
-      this._connected = true
-      this.emit(SERVICE_EVENTS.CONNECTED)
     } catch (error) {
       this.state.setError(error)
       this.emit(SERVICE_EVENTS.ERROR, error)
@@ -613,25 +610,30 @@ export default class WeniWebchatService extends EventEmitter {
    */
   _setupEventListeners() {
     // WebSocket events
-    this.websocket.on(SERVICE_EVENTS.CONNECTED, () => {
-      this.state.setConnectionStatus('connected')
-      this._handleWebSocketConnected();
-    })
-
-    this.websocket.on(SERVICE_EVENTS.DISCONNECTED, () => {
-      this.state.setConnectionStatus('disconnected')
-      this._connected = false
-      this.emit(SERVICE_EVENTS.DISCONNECTED)
-    })
-
     this.websocket.on(SERVICE_EVENTS.RECONNECTING, (attempts) => {
       this.state.setConnectionStatus('reconnecting', { reconnectAttempts: attempts })
       this.emit(SERVICE_EVENTS.RECONNECTING, attempts)
     })
 
     this.websocket.on(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, (status) => {
-      this.state.setConnectionStatus(status)
-      this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, status)
+      if (status === 'connected') {
+        this._connected = true;
+        this.emit(SERVICE_EVENTS.CONNECTED);
+        this._handleWebSocketConnected();
+      }
+
+      if (status === 'disconnected') {
+        this._connected = false;
+        this.emit(SERVICE_EVENTS.DISCONNECTED);
+      }
+
+      if (status === 'closed') {
+        this._connected = false;
+        this.emit(SERVICE_EVENTS.CLOSED);
+      }
+
+      this.state.setConnectionStatus(status);
+      this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, status);
     })
 
     this.websocket.on(SERVICE_EVENTS.MESSAGE, (msg) => {

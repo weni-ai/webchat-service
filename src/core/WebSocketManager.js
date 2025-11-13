@@ -149,6 +149,26 @@ export default class WebSocketManager extends EventEmitter {
     return this.send(message);
   }
 
+  async _closeOthersConnections() {
+    const message = {
+      type: 'close_session',
+      from: this.registrationData.from,
+    };
+
+    try {
+      await this.send(message);
+
+      this.once(SERVICE_EVENTS.DISCONNECTED, () => {
+        this._scheduleReconnect();
+      });
+
+      this.disconnect();
+    } catch (error) {
+      this.emit(SERVICE_EVENTS.ERROR, new Error('Failed to close connection: ' + error.message));
+      throw error
+    }
+  }
+
   /**
    * Sends a message through WebSocket
    * Waits for connection if socket is connecting
@@ -217,7 +237,7 @@ export default class WebSocketManager extends EventEmitter {
    * Disconnects WebSocket
    * @param {boolean} permanent If true, prevents reconnection
    */
-  disconnect(permanent = true) {
+  disconnect(permanent = true, status = 'disconnected') {
     if (permanent) {
       this.config.autoReconnect = false
     }
@@ -230,7 +250,7 @@ export default class WebSocketManager extends EventEmitter {
       this.socket = null
     }
 
-    this.status = 'disconnected'
+    this.status = status
     this.isRegistered = false
     this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
     
@@ -269,6 +289,16 @@ export default class WebSocketManager extends EventEmitter {
         return;
       }
 
+      if (data.type === 'error' && data.error === 'unable to register: client from already exists') {
+        this._closeOthersConnections();
+        return
+      }
+
+      if (data.type === 'warning' && data.warning === 'Connection closed by request') {
+        this.disconnect(true, 'closed');
+        return
+      }
+
       if (data.type === 'error') {
         const errorMsg = data.error || 'Unknown server error'
         this.emit(SERVICE_EVENTS.ERROR, new Error(errorMsg))
@@ -291,12 +321,16 @@ export default class WebSocketManager extends EventEmitter {
    */
   _handleDisconnect(event) {
     const wasConnected = this.status === 'connected'
+    const wasClosed = this.status === 'closed'
     
     this.status = 'disconnected'
     this.isRegistered = false
     this._stopPingInterval()
-    this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
-    this.emit(SERVICE_EVENTS.DISCONNECTED)
+
+    if (!wasClosed) {
+      this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
+      this.emit(SERVICE_EVENTS.DISCONNECTED)
+    }
 
     // Only attempt reconnection if we were connected and autoReconnect is enabled
     if (wasConnected && this.config.autoReconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
