@@ -155,16 +155,18 @@ export default class WebSocketManager extends EventEmitter {
       from: this.registrationData.from,
     };
 
-    return this.send(message).then(() => {
+    try {
+      await this.send(message);
+
       this.once(SERVICE_EVENTS.DISCONNECTED, () => {
         this._scheduleReconnect();
       });
 
       this.disconnect();
-    }).catch((error) => {
-      this.emit(SERVICE_EVENTS.ERROR, new Error('Failed to close connection: ' + error.message))
+    } catch (error) {
+      this.emit(SERVICE_EVENTS.ERROR, new Error('Failed to close connection: ' + error.message));
       throw error
-    });
+    }
   }
 
   /**
