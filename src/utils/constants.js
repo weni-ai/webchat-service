@@ -187,6 +187,9 @@ export const SERVICE_EVENTS = {
   MESSAGE_UNKNOWN: 'message:unknown',
   MESSAGES_CLEARED: 'messages:cleared',
 
+  // Language
+  LANGUAGE_CHANGED: 'language:changed',
+
   // Typing & Thinking
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',

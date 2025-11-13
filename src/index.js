@@ -643,6 +643,10 @@ export default class WeniWebchatService extends EventEmitter {
       this.emit(SERVICE_EVENTS.ERROR, error)
     })
 
+    this.websocket.on(SERVICE_EVENTS.LANGUAGE_CHANGED, (language) => {
+      this.emit(SERVICE_EVENTS.LANGUAGE_CHANGED, language);
+    });
+
     // Message processor events
     this.messageProcessor.on(SERVICE_EVENTS.MESSAGE_PROCESSED, (msg) => {
       this.state.addMessage(msg)

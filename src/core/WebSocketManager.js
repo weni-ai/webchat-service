@@ -134,10 +134,19 @@ export default class WebSocketManager extends EventEmitter {
     this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
     this.emit(SERVICE_EVENTS.CONNECTED)
     this._startPingInterval()
+    this._requestProjectLanguage();
   }
 
   _getHistory() {
     return this.history;
+  }
+
+  _requestProjectLanguage() {
+    const message = {
+      type: 'get_project_language',
+    };
+
+    return this.send(message);
   }
 
   /**
@@ -252,6 +261,11 @@ export default class WebSocketManager extends EventEmitter {
 
       if (data.type === 'ready_for_message') {
         this._handleReadyForMessage();
+        return;
+      }
+
+      if (data.type === 'project_language') {
+        this.emit(SERVICE_EVENTS.LANGUAGE_CHANGED, data.data.language);
         return;
       }
 

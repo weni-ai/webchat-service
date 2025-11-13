@@ -380,6 +380,9 @@ service.on('disconnected', () => {})
 service.on('reconnecting', (attempts) => {})
 service.on('connection:status:changed', (status) => {})
 
+// Language events
+service.on('language:changed', (language) => {})
+
 // Message events
 service.on('message:received', (message) => {})
 service.on('message:sent', (message) => {})
