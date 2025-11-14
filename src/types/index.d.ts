@@ -60,8 +60,7 @@ export interface Message {
   text?: string
   
   // Media fields
-  media?: string // Base64 for sending
-  media_url?: string // URL for receiving
+  media?: string // Base64 or URL for sending or receiving
   caption?: string // Media caption
   
   // Metadata

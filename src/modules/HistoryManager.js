@@ -133,7 +133,7 @@ export default class HistoryManager extends EventEmitter {
       }
 
       if (item.message?.media_url) {
-        message.media_url = item.message.media_url
+        message.media = item.message.media_url
         message.caption = item.message.caption
       }
 
