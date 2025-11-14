@@ -588,8 +588,8 @@ export default class WeniWebchatService extends EventEmitter {
   async _handleWebSocketConnected() {
     const previousLocalMessagesIds = this.session
       .getConversation()
-      .filter(({direction, status}) => {
-        if (message.persisted) {
+      .filter(({ direction, status, persisted }) => {
+        if (persisted) {
           return false;
         }
 
