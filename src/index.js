@@ -274,7 +274,10 @@ export default class WeniWebchatService extends EventEmitter {
    * @returns {void}
    */
   simulateMessageReceived(message) {
-    this.messageProcessor.process(message);
+    this.messageProcessor.process({
+      ...message,
+      persisted: true,
+    });
   }
 
   /**
@@ -585,7 +588,13 @@ export default class WeniWebchatService extends EventEmitter {
   async _handleWebSocketConnected() {
     const previousLocalMessagesIds = this.session
       .getConversation()
-      .filter(({direction, status}) => direction === 'outgoing' && status === 'sent')
+      .filter(({direction, status}) => {
+        if (message.persisted) {
+          return false;
+        }
+
+        return direction === 'incoming' || (direction === 'outgoing' && status === 'sent');
+      })
       .filter(({id}) => id.startsWith('msg_'))
       .map(message => message.id);
 
