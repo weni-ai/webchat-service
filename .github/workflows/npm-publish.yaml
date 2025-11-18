@@ -1,0 +1,41 @@
+name: Publish to NPM
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+      - '*.*.*-staging'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@weni'
+
+      - run: npm ci
+
+      - name: Publish to NPM
+        run: |
+          if [[ "${{ github.ref_name }}" == *"staging"* ]]; then
+            echo "Detected Staging version. Publishing with tag 'staging'..."
+            npm publish --tag staging
+          else
+            echo "Detected Stable version. Publishing to 'latest'..."
+            npm publish
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref, 'staging') }}
