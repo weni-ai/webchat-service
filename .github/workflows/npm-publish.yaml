@@ -3,7 +3,8 @@ name: Publish to NPM
 on:
   push:
     tags:
-      - '*'
+      - '*.*.*'
+      - '*.*.*-staging'
 
 permissions:
   contents: write
