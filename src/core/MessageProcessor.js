@@ -134,7 +134,8 @@ export default class MessageProcessor extends EventEmitter {
       type: this._getMessageType(raw),
       timestamp: raw.timestamp || Date.now(),
       direction: 'incoming',
-      status: 'delivered'
+      status: 'delivered',
+      persisted: raw.persisted || undefined,
     }
 
     if (raw.message && raw.message.text) {
