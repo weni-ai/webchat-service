@@ -150,7 +150,7 @@ export default class MessageProcessor extends EventEmitter {
       message.quick_replies = raw.message.quick_replies
     }
 
-    if (raw.message && raw.message.list_message) {
+    if (raw.message?.list_message?.list_items?.length >= 1) {
       message.list_message = raw.message.list_message
     }
 
