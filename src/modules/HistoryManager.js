@@ -141,6 +141,10 @@ export default class HistoryManager extends EventEmitter {
         message.quick_replies = item.message.quick_replies
       }
 
+      if (item.message?.list_message?.list_items?.length >= 1) {
+        message.list_message = item.message.list_message
+      }
+
       return message
     })
   }
