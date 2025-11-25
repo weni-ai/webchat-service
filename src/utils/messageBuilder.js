@@ -43,7 +43,8 @@ export function buildTextMessage(text, options = {}) {
     timestamp: options.timestamp || Date.now(),
     direction: options.direction || 'outgoing',
     status: options.status || 'pending',
-    metadata: options.metadata || {}
+    metadata: options.metadata || {},
+    hidden: options.hidden || false,
   }
 }
 
@@ -150,7 +151,7 @@ export function buildWebSocketMessage(type, message, options = {}) {
     session_type: options.session_type,
     callback: options.callback,
     token: options.token,
-    trigger: options.trigger
+    trigger: options.trigger,
   }
 }
 
