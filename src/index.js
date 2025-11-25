@@ -230,7 +230,10 @@ export default class WeniWebchatService extends EventEmitter {
     }
 
     this.enqueueMessages([message]);
-    this.runQueue();
+
+    if (this._initialized) {
+      this.runQueue();
+    }
   }
 
   enqueueMessages(messages) {
