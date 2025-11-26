@@ -223,12 +223,17 @@ export default class WeniWebchatService extends EventEmitter {
       direction: 'outgoing'
     })
 
-    // Add to state
-    this.state.addMessage(message)
-    this.session.appendToConversation(message)
+    if (!options.hidden) {
+      // Add to state
+      this.state.addMessage(message)
+      this.session.appendToConversation(message)
+    }
 
     this.enqueueMessages([message]);
-    this.runQueue();
+
+    if (this._initialized) {
+      this.runQueue();
+    }
   }
 
   enqueueMessages(messages) {
