@@ -8,8 +8,9 @@ Framework-agnostic JavaScript library for Weni WebChat integration. Provides a c
 ## Features
 
 - ✅ **WebSocket Management**: Automatic connection, reconnection, and ping/pong keepalive
+- ✅ **Smart Retry Strategy**: Exponential backoff with jitter for intelligent reconnections
 - ✅ **Session Management**: Persistent sessions with localStorage/sessionStorage
-- ✅ **Message Processing**: Queue management, delays, and typing indicators
+- ✅ **Message Processing**: Queue management, delays, typing & thinking indicators
 - ✅ **File Handling**: Image compression, base64 conversion, multiple file uploads
 - ✅ **Audio Recording**: Built-in audio recording with MP3 conversion
 - ✅ **History Management**: Pagination, deduplication, and timestamp sorting
@@ -64,7 +65,7 @@ const service = new WeniWebchatService({
   
   // Optional
   host: 'https://flows.weni.ai',          // API host
-  connectOn: 'mount',                      // 'mount' or 'manual'
+  connectOn: 'mount',                      // 'mount', 'manual' or 'demand'
   storage: 'local',                        // 'local' or 'session'
   callbackUrl: '',                         // Callback URL for events
 })
@@ -86,13 +87,15 @@ const service = new WeniWebchatService({
   // Message settings
   messageDelay: 1000,                      // Delay between messages (ms)
   typingDelay: 2000,                       // Typing indicator delay (ms)
+  typingTimeout: 50000,                    // Typing timeout (50s)
+  enableTypingIndicator: true,             // Enable typing indicators
   
   // Cache settings
   autoClearCache: true,                    // Auto-clear cache
   cacheTimeout: 1800000,                   // Cache timeout (30 min)
   
   // File settings
-  maxFileSize: 10485760,                   // Max file size (10MB)
+  maxFileSize: 33554432,                   // Max file size (32MB)
   compressImages: true,                    // Compress images
   imageQuality: 0.8,                       // Image quality (0-1)
   
@@ -215,6 +218,23 @@ Cancels recording without sending.
 service.cancelRecording()
 ```
 
+#### `hasAudioPermission()`
+Checks if microphone permission is already granted.
+
+```javascript
+const hasPermission = await service.hasAudioPermission()
+// Returns: true | false | undefined
+```
+
+#### `requestAudioPermission()`
+Requests microphone permission and returns the permission state.
+
+```javascript
+const permissionGranted = await service.requestAudioPermission()
+// Returns: true | false | undefined
+// Throws error if permission is denied or not supported
+```
+
 ### State Management
 
 #### `getState()`
@@ -248,6 +268,107 @@ const status = service.getConnectionStatus()
 // 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error'
 ```
 
+### Retry Strategy
+
+The service includes an intelligent retry strategy with **exponential backoff and jitter** to handle reconnections gracefully.
+
+#### `getRetryInfo()`
+Gets information about the current retry state.
+
+```javascript
+const retryInfo = service.getRetryInfo()
+// {
+//   attempts: 3,           // Current attempt count
+//   nextDelay: 4000,       // Next delay in ms
+//   maxAttempts: 30        // Maximum attempts allowed
+// }
+```
+
+#### `resetRetryStrategy()`
+Resets the retry counter (useful after network changes).
+
+**How it works:**
+- **Attempt 1**: ~1s delay
+- **Attempt 2**: ~2s delay
+- **Attempt 3**: ~4s delay
+- **Attempt 4**: ~8s delay
+- **Attempt 5**: ~16s delay
+- **Attempt 6+**: ~30s delay (capped)
+
+Each delay includes random jitter (up to 1s) to prevent thundering herd problems. The strategy automatically resets on successful connection.
+
+**Benefits:**
+- Reduces server load during outages
+- Better user experience with quick initial retries
+- Prevents all clients from reconnecting simultaneously
+- Follows AWS best practices for retry strategies
+
+### File Configuration
+
+The service exposes file upload configuration to help UI components set appropriate constraints.
+
+#### `getAllowedFileTypes()`
+Gets the array of allowed MIME types.
+
+```javascript
+const types = service.getAllowedFileTypes()
+// ['image/jpeg', 'image/png', 'video/mp4', ...]
+```
+
+#### `getFileConfig()`
+Gets complete file configuration including allowed types, size limits, and a ready-to-use accept attribute.
+
+```javascript
+const config = service.getFileConfig()
+// {
+//   allowedTypes: ['image/jpeg', 'image/png', ...],
+//   maxFileSize: 10485760,  // 10MB in bytes
+//   acceptAttribute: 'image/jpeg,image/png,...'  // Ready for <input accept="">
+// }
+
+// Use in your file input component:
+<input
+  type="file"
+  accept={config.acceptAttribute}
+  onChange={(e) => {
+    const file = e.target.files[0]
+    if (file.size > config.maxFileSize) {
+      alert('File too large!')
+      return
+    }
+    service.sendAttachment(file)
+  }}
+/>
+```
+
+**Supported file types by default**:
+- **Images**: JPEG, PNG, SVG
+- **Videos**: MP4, QuickTime (.mov)
+- **Audio**: MP3, WAV
+- **Documents**: PDF, Word (.docx), Excel (.xls, .xlsx)
+
+---
+
+## Constants
+
+The service exposes important constants for use in templates. These can be accessed as **static properties** or **named exports**.
+
+### Available Constants
+
+| Constant | Description | Values |
+|----------|-------------|--------|
+| `ALLOWED_FILE_TYPES` | Accepted file MIME types | `['image/jpeg', 'image/png', ...]` |
+| `MESSAGE_TYPES` | Message type identifiers | `{ TEXT, IMAGE, VIDEO, AUDIO, ... }` |
+| `MESSAGE_STATUS` | Message delivery status | `{ PENDING, SENT, DELIVERED, READ, ERROR }` |
+| `MESSAGE_DIRECTIONS` | Message direction | `{ INCOMING, OUTGOING }` |
+| `CONNECTION_STATUS` | WebSocket connection states | `{ CONNECTING, CONNECTED, DISCONNECTED, ... }` |
+| `STORAGE_TYPES` | Storage type options | `{ LOCAL, SESSION }` |
+| `ERROR_TYPES` | Error categories | `{ NETWORK, VALIDATION, PERMISSION, ... }` |
+| `QUICK_REPLY_TYPES` | Quick reply types | `{ TEXT, LOCATION, EMAIL, PHONE }` |
+| `SERVICE_EVENTS` | All event names | `{ CONNECTED, MESSAGE_RECEIVED, ... }` |
+| `DEFAULTS` | Default configuration values | `{ MAX_FILE_SIZE: 32MB, ... }` |
+---
+
 ## Events
 
 The service uses EventEmitter to notify state changes:
@@ -259,13 +380,18 @@ service.on('disconnected', () => {})
 service.on('reconnecting', (attempts) => {})
 service.on('connection:status:changed', (status) => {})
 
+// Language events
+service.on('language:changed', (language) => {})
+
 // Message events
 service.on('message:received', (message) => {})
 service.on('message:sent', (message) => {})
 
-// Typing events
-service.on('typing:start', () => {})
-service.on('typing:stop', () => {})
+// Typing & Thinking events
+service.on('typing:start', () => {})          // Human agent typing
+service.on('typing:stop', () => {})           // Human agent stopped typing
+service.on('thinking:start', () => {})        // AI assistant processing
+service.on('thinking:stop', () => {})         // AI assistant finished
 
 // Session events
 service.on('session:restored', (session) => {})
@@ -288,6 +414,49 @@ service.on('history:loaded', (messages) => {})
 
 // Error events
 service.on('error', (error) => {})
+```
+
+### Typing & Thinking Indicators
+
+The service distinguishes between two types of indicators:
+
+#### 🤖 **Thinking Indicator** (`thinking:start` / `thinking:stop`)
+- Triggered when an **AI assistant** is processing a response
+- Activated when `typing_start` message has `from: 'ai-assistant'`
+- Auto-stops after `typingTimeout` (50s default) or when message is received
+- Template can choose to ignore these events if not needed
+
+#### ✍️ **Typing Indicator** (`typing:start` / `typing:stop`)
+- Triggered when a **human agent** is typing
+- Starts after `typingDelay` (2s default) when user sends a message
+- Also activated by server `typing_start` messages (non-AI sources)
+- Auto-stops after `typingTimeout` (50s default) or when message is received
+
+**Flow Diagram:**
+
+```
+User sends message
+        ↓
+Wait typingDelay (2s)
+        ↓
+Emit typing:start
+        ↓
+Server sends typing_start
+        ↓
+    ┌───────────────────────┐
+    │ from: 'ai-assistant'? │
+    └───────────────────────┘
+           /          \
+         Yes           No
+          ↓             ↓
+  thinking:start   typing:start
+          ↓             ↓
+  AI processing    Agent typing
+          ↓             ↓
+  Server message   Server message
+  or 50s timeout   or 50s timeout
+          ↓             ↓
+  thinking:stop    typing:stop
 ```
 
 ## Usage with Frameworks
