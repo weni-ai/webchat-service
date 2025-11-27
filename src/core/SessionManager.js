@@ -1,4 +1,6 @@
 import { generateSessionId } from '../utils/helpers'
+import EventEmitter from 'eventemitter3'
+import { SERVICE_EVENTS } from '../utils/constants'
 
 /**
  * SessionManager
@@ -11,13 +13,14 @@ import { generateSessionId } from '../utils/helpers'
  * - Auto-clear cache after timeout
  * - Contact timeout management
  */
-export default class SessionManager {
+export default class SessionManager extends EventEmitter {
   constructor(storage, config = {}) {
+    super()
     this.storage = storage
     this.config = {
       autoClearCache: config.autoClearCache !== false,
       cacheTimeout: config.cacheTimeout || 30 * 60 * 1000, // 30 minutes
-      contactTimeout: config.contactTimeout || 24 * 60 * 60 * 1000, // 24 hours
+      contactTimeout: config.contactTimeout || 24 * 60, // 24 hours in minutes
       clientId: config.clientId || null,
       sessionId: config.sessionId || null,
     }
@@ -25,6 +28,7 @@ export default class SessionManager {
     this.sessionKey = 'weni:webchat:session'
     this.session = null
     this.clearTimer = null
+    this.contactTimeoutTimer = null
   }
 
   /**
@@ -44,7 +48,7 @@ export default class SessionManager {
       return this.session.id
     }
 
-    return this._createNewSession()
+    return this.createNewSession()
   }
 
   /**
@@ -58,6 +62,7 @@ export default class SessionManager {
       this.session = stored
       this._updateLastActivity()
       this._startAutoClearTimer()
+      this._scheduleContactTimeoutCheck()
       return this.session
     }
 
@@ -105,6 +110,7 @@ export default class SessionManager {
     this.session = null
     this.storage.remove(this.sessionKey)
     this._stopAutoClearTimer()
+    this._clearContactTimeoutTimer()
   }
 
   /**
@@ -112,7 +118,7 @@ export default class SessionManager {
    * @private
    * @returns {string} Session ID
    */
-  _createNewSession() {
+  createNewSession() {
     const now = Date.now()
 
     const id = this.config.sessionId || generateSessionId(this.config.clientId);
@@ -121,14 +127,30 @@ export default class SessionManager {
       id,
       createdAt: now,
       lastActivity: now,
+      lastMessageSentAt: null,
       metadata: {},
       conversation: [],
     }
 
     this._save()
     this._startAutoClearTimer()
+    this._scheduleContactTimeoutCheck()
     
     return this.session.id
+  }
+
+  /**
+   * Sets the timestamp of the last message successfully sent
+   * @param {number} [timestamp]
+   */
+  setLastMessageSentAt(timestamp = Date.now()) {
+    if (!this.session) {
+      return
+    }
+
+    this.session.lastMessageSentAt = timestamp
+    this._save()
+    this._scheduleContactTimeoutCheck()
   }
 
   /**
@@ -146,10 +168,14 @@ export default class SessionManager {
       return false
     }
 
-    const now = Date.now()
-    const elapsed = now - session.lastActivity
+    if (!session.lastMessageSentAt) {
+      return true; // If no message has been sent, the session is valid
+    }
 
-    return elapsed < this.config.contactTimeout
+    const now = Date.now()
+    const elapsedSinceLastMessageSent = now - session.lastMessageSentAt
+
+    return elapsedSinceLastMessageSent < this._getContactTimeoutMs()
   }
 
   /**
@@ -176,6 +202,56 @@ export default class SessionManager {
 
     this.session.lastActivity = Date.now()
     this._save()
+  }
+
+  /**
+   * Calculates contact timeout in milliseconds based on config (minutes)
+   * @private
+   */
+  _getContactTimeoutMs() {
+    return (this.config.contactTimeout || 0) * 60 * 1000
+  }
+
+  /**
+   * Schedules or reschedules the contact-timeout check based on lastMessageSentAt
+   * Emits "maximum contact time atigindo" when reached
+   * @private
+   */
+  _scheduleContactTimeoutCheck() {
+    this._clearContactTimeoutTimer()
+
+    if (!this.session || !this.session.lastMessageSentAt) {
+      return
+    }
+
+    const timeoutMs = this._getContactTimeoutMs()
+    if (!timeoutMs || timeoutMs <= 0) {
+      return
+    }
+
+    const targetAt = this.session.lastMessageSentAt + timeoutMs
+    const delay = targetAt - Date.now()
+
+    if (delay <= 0) {
+      this.emit(SERVICE_EVENTS.CONTACT_TIMEOUT_MAXIMUM_TIME_REACHED)
+      return
+    }
+
+    this.contactTimeoutTimer = setTimeout(() => {
+      this.emit(SERVICE_EVENTS.CONTACT_TIMEOUT_MAXIMUM_TIME_REACHED)
+      this._clearContactTimeoutTimer()
+    }, delay)
+  }
+
+  /**
+   * Clears the contact-timeout timer
+   * @private
+   */
+  _clearContactTimeoutTimer() {
+    if (this.contactTimeoutTimer) {
+      clearTimeout(this.contactTimeoutTimer)
+      this.contactTimeoutTimer = null
+    }
   }
 
   /**

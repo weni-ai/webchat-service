@@ -135,16 +135,7 @@ export default class WeniWebchatService extends EventEmitter {
     }
 
     try {
-      // Restore session from storage
-      const session = await this.session.restore()
-
-      if (session) {
-        this.state.setSession(session)
-        this.emit(SERVICE_EVENTS.SESSION_RESTORED, session)
-      } else {
-        this.session.getOrCreate();
-        this.state.setSession(this.session.getSession())
-      }
+      await this.restoreOrCreateSession();
 
       const messages = this.state.getMessages();
 
@@ -184,11 +175,15 @@ export default class WeniWebchatService extends EventEmitter {
     try {
       const sessionId = this.session.getSessionId();
 
-      await this.websocket.connect({
+      const registrationData = {
         from: sessionId,
         callback: this.config.callbackUrl,
-        session_type: this.config.storage
-      });
+        session_type: this.config.storage,
+      }
+
+      this.websocket.setRegistrationData(registrationData);
+
+      await this.websocket.connect();
     } catch (error) {
       this.state.setError(error)
       this.emit(SERVICE_EVENTS.ERROR, error)
@@ -201,8 +196,8 @@ export default class WeniWebchatService extends EventEmitter {
   /**
    * Disconnects from WebSocket server
    */
-  disconnect() {
-    this.websocket.disconnect()
+  disconnect(permanent = true) {
+    this.websocket.disconnect(permanent);
     this._connected = false
   }
 
@@ -426,6 +421,22 @@ export default class WeniWebchatService extends EventEmitter {
     this.session.clear()
     this.state.reset()
     this.emit(SERVICE_EVENTS.SESSION_CLEARED)
+  }
+
+  async restoreOrCreateSession() {
+    const session = await this.session.restore()
+
+    if (session) {
+      this.state.setSession(session)
+      this.emit(SERVICE_EVENTS.SESSION_RESTORED, session)
+    } else {
+      this.createNewSession();
+    }
+  }
+
+  createNewSession() {
+    this.session.createNewSession();
+    this.state.setSession(this.session.getSession())
   }
 
   /**
@@ -698,6 +709,26 @@ export default class WeniWebchatService extends EventEmitter {
       this.emit(SERVICE_EVENTS.MESSAGE_UNKNOWN, rawMessage)
     })
 
+    this.session.on(SERVICE_EVENTS.CONTACT_TIMEOUT_MAXIMUM_TIME_REACHED, async () => {
+      if (this.websocket.getStatus() === 'disconnected') {
+        await this.connect();
+      }
+
+      this.websocket.isContactAllowedToBeClosed().then(() => {
+        this.clearSession();
+        this.createNewSession();
+
+        const registrationData = {
+          from: this.session.getSessionId(),
+          callback: this.config.callbackUrl,
+          session_type: this.config.storage
+        }
+
+        this.websocket.setRegistrationData(registrationData);
+        this.disconnect(false);
+      }).catch((error) => this.emit(SERVICE_EVENTS.ERROR, error));
+    })
+
     // State manager events
     this.state.on(SERVICE_EVENTS.STATE_CHANGED, (newState, oldState) => {
       this.emit(SERVICE_EVENTS.STATE_CHANGED, newState, oldState)
@@ -758,6 +789,7 @@ export default class WeniWebchatService extends EventEmitter {
     this.on(SERVICE_EVENTS.MESSAGE_SENT, (message) => {
       this.state.updateMessage(message.id, { status: 'sent' });
       this.session.updateConversation(message.id, { status: 'sent' });
+      this.session.setLastMessageSentAt(Date.now());
       this.messageProcessor.startTypingOnMessageSent();
     })
   }

@@ -177,6 +177,11 @@ export const SERVICE_EVENTS = {
   CLOSED: 'closed',
   CONNECTION_STATUS_CHANGED: 'connection:status:changed',
 
+  // Contact timeout
+  CONTACT_TIMEOUT_MAXIMUM_TIME_REACHED: 'contact:timeout:maximum_time_reached',
+  CONTACT_TIMEOUT_ALLOWED_TO_CLOSE: 'contact:timeout:allowed_to_close',
+  CONTACT_TIMEOUT_ERROR: 'contact:timeout:error',
+
   // Messages
   MESSAGE: 'message',
   MESSAGE_RECEIVED: 'message:received',
