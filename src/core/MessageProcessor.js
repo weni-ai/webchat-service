@@ -72,7 +72,7 @@ export default class MessageProcessor extends EventEmitter {
         return
       }
 
-      if (message.direction === 'incoming' && this.isTypingActive) {
+      if (message.direction === 'incoming' && (this.isTypingActive || this.isThinkingActive)) {
         this._stopTyping()
       }
 
