@@ -46,7 +46,7 @@ export default class WebSocketManager extends EventEmitter {
    * Establishes WebSocket connection
    * @returns {Promise<void>}
    */
-  async connect(registrationData) {
+  async connect() {
     if (this.status === 'connected' || this.status === 'connecting') {
       return Promise.resolve()
     }
@@ -67,7 +67,7 @@ export default class WebSocketManager extends EventEmitter {
         this.socket = new WebSocket(url)
 
         this.socket.onopen = () => {
-          this.register(registrationData);
+          this.register();
           this.once(SERVICE_EVENTS.CONNECTED, resolve);
         }
 
@@ -98,20 +98,18 @@ export default class WebSocketManager extends EventEmitter {
    * @param {Object} data Registration data
    * @returns {Promise<void>}
    */
-  async register(data = {}) {
+  async register() {
     if (this.isRegistered && this.socket && this.socket.readyState === WebSocket.OPEN) {
       return Promise.resolve()
     }
 
-    const host = this.config.host || data.host || 'https://flows.weni.ai'
+    const host = this.config.host || this.registrationData.host || 'https://flows.weni.ai'
 
-    const message = buildRegistrationMessage(data.from, {
-      callback: data.callback || `${host}/c/wwc/${this.config.channelUuid}/receive`,
-      session_type: data.session_type || 'local',
-      token: data.token || this.config.sessionToken || undefined
+    const message = buildRegistrationMessage(this.registrationData.from, {
+      callback: this.registrationData.callback || `${host}/c/wwc/${this.config.channelUuid}/receive`,
+      session_type: this.registrationData.session_type || 'local',
+      token: this.registrationData.token || this.config.sessionToken || undefined
     })
-
-    this.registrationData = data
 
     return this.send(message).then(() => {
       this.isRegistered = true
@@ -120,6 +118,34 @@ export default class WebSocketManager extends EventEmitter {
       this.emit(SERVICE_EVENTS.ERROR, new Error('Registration failed: ' + error.message))
       throw error
     })
+  }
+
+  setRegistrationData(data) {
+    this.registrationData = data;
+  }
+
+  isContactAllowedToBeClosed() {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Contact timeout'));
+      }, 30 * 1000)
+
+      this.once(SERVICE_EVENTS.CONTACT_TIMEOUT_ERROR, (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+
+      this.once(SERVICE_EVENTS.CONTACT_TIMEOUT_ALLOWED_TO_CLOSE, () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+
+      const message = {
+        type: 'verify_contact_timeout',
+      };
+
+      this.send(message);
+    });
   }
 
   async _handleReadyForMessage() {
@@ -237,7 +263,7 @@ export default class WebSocketManager extends EventEmitter {
    * Disconnects WebSocket
    * @param {boolean} permanent If true, prevents reconnection
    */
-  disconnect(permanent = true, status = 'disconnected') {
+  disconnect(permanent = true, status = 'disconnecting') {
     if (permanent) {
       this.config.autoReconnect = false
     }
@@ -247,7 +273,6 @@ export default class WebSocketManager extends EventEmitter {
 
     if (this.socket) {
       this.socket.close()
-      this.socket = null
     }
 
     this.status = status
@@ -284,8 +309,22 @@ export default class WebSocketManager extends EventEmitter {
         return;
       }
 
+      if (data.type === 'allow_contact_timeout') {
+        this.emit(SERVICE_EVENTS.CONTACT_TIMEOUT_ALLOWED_TO_CLOSE);
+        return;
+      }
+
       if (data.type === 'project_language') {
         this.emit(SERVICE_EVENTS.LANGUAGE_CHANGED, data.data.language);
+        return;
+      }
+
+      if (data.type === 'error' && String(data.error).startsWith('verify contact timeout: ')) {
+        this.emit(
+          SERVICE_EVENTS.CONTACT_TIMEOUT_ERROR,
+          new Error(data.error.slice('verify contact timeout: '.length))
+        );
+
         return;
       }
 
@@ -321,6 +360,7 @@ export default class WebSocketManager extends EventEmitter {
    */
   _handleDisconnect(event) {
     const wasConnected = this.status === 'connected'
+    const wasDisconnecting = this.status === 'disconnecting'
     const wasClosed = this.status === 'closed'
     
     this.status = 'disconnected'
@@ -332,8 +372,8 @@ export default class WebSocketManager extends EventEmitter {
       this.emit(SERVICE_EVENTS.DISCONNECTED)
     }
 
-    // Only attempt reconnection if we were connected and autoReconnect is enabled
-    if (wasConnected && this.config.autoReconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
+    // Only attempt reconnection if we were connected or disconnecting and autoReconnect is enabled
+    if ((wasConnected || wasDisconnecting) && this.config.autoReconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
       this._scheduleReconnect()
     }
   }
