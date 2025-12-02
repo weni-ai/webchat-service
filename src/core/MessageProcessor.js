@@ -154,6 +154,12 @@ export default class MessageProcessor extends EventEmitter {
       message.list_message = raw.message.list_message
     }
 
+    const CTAMessage = raw.message?.cta_message;
+
+    if (CTAMessage?.url && CTAMessage?.display_text) {
+      message.cta_message = CTAMessage
+    }
+
     if (raw.metadata) {
       message.metadata = raw.metadata
     }
