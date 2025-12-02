@@ -128,6 +128,7 @@ export default class SessionManager extends EventEmitter {
       createdAt: now,
       lastActivity: now,
       lastMessageSentAt: null,
+      isChatOpen: false,
       metadata: {},
       conversation: [],
     }
@@ -314,7 +315,24 @@ export default class SessionManager extends EventEmitter {
       return
     }
 
+    // Backfill missing fields for older sessions
+    if (typeof this.session.isChatOpen === 'undefined') {
+      this.session.isChatOpen = false
+    }
+
     this.storage.set(this.sessionKey, this.session)
+  }
+
+  /**
+   * Sets whether the chat widget is open
+   * @param {boolean} isOpen
+   */
+  setIsChatOpen(isOpen) {
+    if (!this.session) return
+    this.session.isChatOpen = Boolean(isOpen)
+    this._updateLastActivity()
+    this._save()
+    this.emit(SERVICE_EVENTS.CHAT_OPEN_CHANGED, this.session.isChatOpen)
   }
 
   /**
