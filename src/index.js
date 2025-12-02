@@ -397,6 +397,15 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
+   * Gets current session
+   * 
+   * @returns {Object}
+   */
+  getSession() {
+    return this.session.getSession()
+  }
+
+  /**
    * Gets all messages
    * 
    * @returns {Array}
@@ -412,6 +421,14 @@ export default class WeniWebchatService extends EventEmitter {
    */
   getSessionId() {
     return this.session.getSessionId()
+  }
+
+  /**
+   * Sets whether the chat widget is open
+   * @param {boolean} isOpen
+   */
+  setIsChatOpen(isOpen) {
+    this.session.setIsChatOpen(isOpen)
   }
 
   /**
@@ -727,6 +744,10 @@ export default class WeniWebchatService extends EventEmitter {
         this.websocket.setRegistrationData(registrationData);
         this.disconnect(false);
       }).catch((error) => this.emit(SERVICE_EVENTS.ERROR, error));
+    })
+
+    this.session.on(SERVICE_EVENTS.CHAT_OPEN_CHANGED, (isOpen) => {
+      this.emit(SERVICE_EVENTS.CHAT_OPEN_CHANGED, isOpen)
     })
 
     // State manager events

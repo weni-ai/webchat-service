@@ -31,6 +31,7 @@ export const MESSAGE_STATUS = {
   SENT: 'sent',
   DELIVERED: 'delivered',
   READ: 'read',
+  STREAMING: 'streaming',
   ERROR: 'error'
 }
 
@@ -251,7 +252,10 @@ export const SERVICE_EVENTS = {
   METADATA_CHANGED: 'metadata:changed',
 
   // Page events
-  PAGE_CHANGED: 'page:changed'
+  PAGE_CHANGED: 'page:changed',
+
+  // Chat
+  CHAT_OPEN_CHANGED: 'chat:open:changed',
 }
 
 export const LOG_LEVELS = {
