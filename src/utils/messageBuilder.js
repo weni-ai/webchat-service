@@ -24,6 +24,11 @@ export function buildMessagePayload(sessionId, message, options = {}) {
         from,
       }
     )
+  } else if (message.type === 'set_custom_field') {
+    return {
+      type: message.type,
+      data: message.data,
+    };
   }
 
   throw new Error('Invalid message type')
@@ -45,6 +50,24 @@ export function buildTextMessage(text, options = {}) {
     status: options.status || 'pending',
     metadata: options.metadata || {},
     hidden: options.hidden || false,
+  }
+}
+
+/**
+ * Builds a custom field message
+ * @param {string} field
+ * @param {string} value
+ * @param {Object} options
+ * @returns {Object}
+ */
+export function buildCustomFieldMessage(field, value) {
+  return {
+    type: 'set_custom_field',
+    data: {
+      key: field,
+      value,
+    },
+    status: 'pending',
   }
 }
 
@@ -197,5 +220,3 @@ export function buildTypingMessage(isTyping) {
     isTyping
   }
 }
-
-
