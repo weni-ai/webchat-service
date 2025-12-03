@@ -34,6 +34,7 @@ import {
   buildTextMessage,
   buildMediaMessage,
   buildMessagePayload,
+  buildCustomFieldMessage,
 } from './utils/messageBuilder'
 
 /**
@@ -385,6 +386,22 @@ export default class WeniWebchatService extends EventEmitter {
    */
   getContext() {
     return this.state.getContext()
+  }
+
+  /**
+   * Sets a custom field
+   * 
+   * @param {string} field
+   * @param {string} value
+   */
+  setCustomField(field, value) {
+    const message = buildCustomFieldMessage(field, value);
+
+    this.enqueueMessages([message]);
+
+    if (this._initialized) {
+      this.runQueue();
+    }
   }
 
   /**
@@ -808,10 +825,18 @@ export default class WeniWebchatService extends EventEmitter {
     })
 
     this.on(SERVICE_EVENTS.MESSAGE_SENT, (message) => {
-      this.state.updateMessage(message.id, { status: 'sent' });
-      this.session.updateConversation(message.id, { status: 'sent' });
+      const typingTypes = ['text', 'image','video','audio','file'];
+
+      if (message.id) {
+        this.state.updateMessage(message.id, { status: 'sent' });
+        this.session.updateConversation(message.id, { status: 'sent' });
+      }
+
       this.session.setLastMessageSentAt(Date.now());
-      this.messageProcessor.startTypingOnMessageSent();
+
+      if (typingTypes.includes(message.type)) {
+        this.messageProcessor.startTypingOnMessageSent();
+      }
     })
   }
 }
