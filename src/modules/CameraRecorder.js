@@ -6,9 +6,9 @@ export default class CameraRecorder extends EventEmitter {
   constructor() {
     super();
 
-    this.cameraStream = null
-    this.devices = []
-    this.currentDeviceId = null
+    this.cameraStream = null;
+    this.devices = [];
+    this.currentDeviceId = null;
   }
 
   /**
@@ -29,17 +29,21 @@ export default class CameraRecorder extends EventEmitter {
         constraints.video = { deviceId: { exact: deviceId } };
       }
 
-      this.cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
-      this.currentDeviceId = this.cameraStream.getTracks().at(0).getSettings().deviceId;
+      this.cameraStream =
+        await navigator.mediaDevices.getUserMedia(constraints);
+      this.currentDeviceId = this.cameraStream
+        .getTracks()
+        .at(0)
+        .getSettings().deviceId;
 
       this._enumerateDevices();
 
       this.emit(SERVICE_EVENTS.CAMERA_STREAM_RECEIVED, this.cameraStream);
       this.emit(SERVICE_EVENTS.CAMERA_RECORDING_STARTED);
     } catch (error) {
-      this.cameraStream = null
-      this.emit(SERVICE_EVENTS.ERROR, error)
-      throw error
+      this.cameraStream = null;
+      this.emit(SERVICE_EVENTS.ERROR, error);
+      throw error;
     }
   }
 
@@ -52,14 +56,17 @@ export default class CameraRecorder extends EventEmitter {
       throw new Error('No devices found');
     }
 
-    const currentDeviceIndex = this.devices.findIndex((device) => device.id === this.currentDeviceId);
+    const currentDeviceIndex = this.devices.findIndex(
+      (device) => device.id === this.currentDeviceId,
+    );
 
     if (currentDeviceIndex === -1) {
       this.start({ deviceId: this.devices.at(0).id });
       return;
     }
 
-    const nextDevice = this.devices[(currentDeviceIndex + 1) % this.devices.length];
+    const nextDevice =
+      this.devices[(currentDeviceIndex + 1) % this.devices.length];
 
     this.start({ deviceId: nextDevice.id });
   }
@@ -78,7 +85,7 @@ export default class CameraRecorder extends EventEmitter {
    * @returns {boolean}
    */
   static isSupported() {
-    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   }
 
   /**
@@ -87,7 +94,7 @@ export default class CameraRecorder extends EventEmitter {
    */
   async hasPermission() {
     try {
-      const result = await navigator.permissions.query({ name: 'camera' })
+      const result = await navigator.permissions.query({ name: 'camera' });
       if (result.state === 'prompt') return undefined;
       return result.state === 'granted';
     } catch (error) {
@@ -110,22 +117,22 @@ export default class CameraRecorder extends EventEmitter {
         this._stopCameraStream();
       }
 
-      this.cameraStream = await navigator.mediaDevices.getUserMedia({ 
+      this.cameraStream = await navigator.mediaDevices.getUserMedia({
         video: true,
       });
 
       this._stopCameraStream();
     } catch (error) {
-      this.cameraStream = null
-      
+      this.cameraStream = null;
+
       if (error.name === 'NotAllowedError') {
-        throw new Error('Camera permission denied')
+        throw new Error('Camera permission denied');
       } else if (error.name === 'NotFoundError') {
-        throw new Error('No camera found')
+        throw new Error('No camera found');
       } else if (error.name === 'NotReadableError') {
-        throw new Error('Camera is already in use')
+        throw new Error('Camera is already in use');
       } else {
-        throw new Error(`Failed to access camera: ${error.message}`)
+        throw new Error(`Failed to access camera: ${error.message}`);
       }
     } finally {
       return await this.hasPermission();
@@ -138,8 +145,8 @@ export default class CameraRecorder extends EventEmitter {
    */
   _stopCameraStream() {
     if (this.cameraStream) {
-      this.cameraStream.getTracks().forEach(track => track.stop())
-      this.cameraStream = null
+      this.cameraStream.getTracks().forEach((track) => track.stop());
+      this.cameraStream = null;
     }
   }
 
@@ -156,7 +163,7 @@ export default class CameraRecorder extends EventEmitter {
 
       this.emit(SERVICE_EVENTS.CAMERA_DEVICES_CHANGED, this.devices);
     } catch (error) {
-      throw new Error('Failed to enumerate devices:', error)
+      throw new Error('Failed to enumerate devices:', error);
     }
   }
 }

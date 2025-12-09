@@ -1,27 +1,27 @@
 /**
  * RetryStrategy
- * 
+ *
  * Implements exponential backoff with jitter for connection retries:
  * - Exponential delay increase (1s, 2s, 4s, 8s, 16s, 30s max)
  * - Random jitter to prevent thundering herd
  * - Configurable base delay, max delay, and multiplier
  * - Reset after successful connection
- * 
+ *
  * Based on AWS best practices:
  * https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
  */
 export default class RetryStrategy {
   constructor(config = {}) {
     this.config = {
-      baseDelay: config.baseDelay || 1000,      // Initial delay: 1s
-      maxDelay: config.maxDelay || 30000,       // Max delay: 30s
-      factor: config.factor || 2,                // Exponential factor
-      jitter: config.jitter !== false,          // Add random jitter
-      maxJitter: config.maxJitter || 1000,      // Max jitter: 1s
-      ...config
-    }
+      baseDelay: config.baseDelay || 1000, // Initial delay: 1s
+      maxDelay: config.maxDelay || 30000, // Max delay: 30s
+      factor: config.factor || 2, // Exponential factor
+      jitter: config.jitter !== false, // Add random jitter
+      maxJitter: config.maxJitter || 1000, // Max jitter: 1s
+      ...config,
+    };
 
-    this.attempts = 0
+    this.attempts = 0;
   }
 
   /**
@@ -30,20 +30,21 @@ export default class RetryStrategy {
    * @returns {number} Delay in milliseconds
    */
   getDelay(attempt = null) {
-    const attemptNumber = attempt !== null ? attempt : this.attempts
+    const attemptNumber = attempt !== null ? attempt : this.attempts;
 
     // Calculate exponential delay
-    const exponentialDelay = this.config.baseDelay * Math.pow(this.config.factor, attemptNumber)
+    const exponentialDelay =
+      this.config.baseDelay * Math.pow(this.config.factor, attemptNumber);
 
     // Cap at max delay
-    let delay = Math.min(exponentialDelay, this.config.maxDelay)
+    let delay = Math.min(exponentialDelay, this.config.maxDelay);
 
     // Add jitter if enabled
     if (this.config.jitter) {
-      delay = this._addJitter(delay)
+      delay = this._addJitter(delay);
     }
 
-    return Math.floor(delay)
+    return Math.floor(delay);
   }
 
   /**
@@ -51,16 +52,16 @@ export default class RetryStrategy {
    * @returns {number} Delay in milliseconds
    */
   next() {
-    const delay = this.getDelay()
-    this.attempts++
-    return delay
+    const delay = this.getDelay();
+    this.attempts++;
+    return delay;
   }
 
   /**
    * Resets retry attempts counter
    */
   reset() {
-    this.attempts = 0
+    this.attempts = 0;
   }
 
   /**
@@ -68,7 +69,7 @@ export default class RetryStrategy {
    * @returns {number}
    */
   getAttempts() {
-    return this.attempts
+    return this.attempts;
   }
 
   /**
@@ -77,7 +78,7 @@ export default class RetryStrategy {
    * @returns {boolean}
    */
   shouldRetry(maxAttempts) {
-    return this.attempts < maxAttempts
+    return this.attempts < maxAttempts;
   }
 
   /**
@@ -86,11 +87,11 @@ export default class RetryStrategy {
    * @returns {Array<number>}
    */
   getDelaySequence(maxAttempts) {
-    const sequence = []
+    const sequence = [];
     for (let i = 0; i < maxAttempts; i++) {
-      sequence.push(this.getDelay(i))
+      sequence.push(this.getDelay(i));
     }
-    return sequence
+    return sequence;
   }
 
   /**
@@ -102,7 +103,7 @@ export default class RetryStrategy {
   _addJitter(delay) {
     // Full jitter: random value between 0 and delay
     // This spreads out retries across time
-    const jitterAmount = Math.random() * Math.min(delay, this.config.maxJitter)
-    return delay + jitterAmount
+    const jitterAmount = Math.random() * Math.min(delay, this.config.maxJitter);
+    return delay + jitterAmount;
   }
 }

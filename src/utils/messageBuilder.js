@@ -2,28 +2,30 @@
  * Message builder utility functions
  */
 
-import { generateMessageId } from './helpers'
+import { generateMessageId } from './helpers';
 
 export function buildMessagePayload(sessionId, message, options = {}) {
   const from = sessionId;
   const context = options.context || '';
 
   if (message.type === 'text') {
-    return buildWebSocketMessage('message',
+    return buildWebSocketMessage(
+      'message',
       { type: 'text', text: message.text },
       {
         context,
         from,
-      }
-    )
-  } else if (['image','video','audio','file'].includes(message.type)) {
-    return buildWebSocketMessage('message',
+      },
+    );
+  } else if (['image', 'video', 'audio', 'file'].includes(message.type)) {
+    return buildWebSocketMessage(
+      'message',
       { type: message.type, media: message.media },
       {
         context,
         from,
-      }
-    )
+      },
+    );
   } else if (message.type === 'set_custom_field') {
     return {
       type: message.type,
@@ -31,7 +33,7 @@ export function buildMessagePayload(sessionId, message, options = {}) {
     };
   }
 
-  throw new Error('Invalid message type')
+  throw new Error('Invalid message type');
 }
 
 /**
@@ -50,7 +52,7 @@ export function buildTextMessage(text, options = {}) {
     status: options.status || 'pending',
     metadata: options.metadata || {},
     hidden: options.hidden || false,
-  }
+  };
 }
 
 /**
@@ -68,7 +70,7 @@ export function buildCustomFieldMessage(field, value) {
       value,
     },
     status: 'pending',
-  }
+  };
 }
 
 /**
@@ -87,8 +89,8 @@ export function buildMediaMessage(type, media, options = {}) {
     timestamp: options.timestamp || Date.now(),
     direction: options.direction || 'outgoing',
     status: options.status || 'pending',
-    metadata: options.metadata || {}
-  }
+    metadata: options.metadata || {},
+  };
 }
 
 /**
@@ -110,9 +112,9 @@ export function buildFileMessage(media, options = {}) {
       filename: options.filename,
       size: options.size,
       mimeType: options.mimeType,
-      ...options.metadata
-    }
-  }
+      ...options.metadata,
+    },
+  };
 }
 
 /**
@@ -133,9 +135,9 @@ export function buildLocationMessage(latitude, longitude, options = {}) {
       latitude,
       longitude,
       address: options.address,
-      ...options.metadata
-    }
-  }
+      ...options.metadata,
+    },
+  };
 }
 
 /**
@@ -154,8 +156,8 @@ export function buildQuickReplyMessage(text, quickReplies, options = {}) {
     timestamp: options.timestamp || Date.now(),
     direction: options.direction || 'incoming',
     status: options.status || 'delivered',
-    metadata: options.metadata || {}
-  }
+    metadata: options.metadata || {},
+  };
 }
 
 /**
@@ -175,7 +177,7 @@ export function buildWebSocketMessage(type, message, options = {}) {
     callback: options.callback,
     token: options.token,
     trigger: options.trigger,
-  }
+  };
 }
 
 /**
@@ -190,8 +192,8 @@ export function buildRegistrationMessage(sessionId, options = {}) {
     from: sessionId,
     callback: options.callback || '',
     session_type: options.session_type || 'local',
-    token: options.token
-  }
+    token: options.token,
+  };
 }
 
 /**
@@ -205,8 +207,8 @@ export function buildHistoryRequest(options = {}) {
     limit: options.limit || 20,
     page: options.page || 1,
     before: options.before,
-    after: options.after
-  }
+    after: options.after,
+  };
 }
 
 /**
@@ -217,6 +219,6 @@ export function buildHistoryRequest(options = {}) {
 export function buildTypingMessage(isTyping) {
   return {
     type: 'typing',
-    isTyping
-  }
+    isTyping,
+  };
 }

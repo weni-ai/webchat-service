@@ -1,36 +1,36 @@
-import EventEmitter from 'eventemitter3'
+import EventEmitter from 'eventemitter3';
 
-import { SERVICE_EVENTS } from '../utils/constants'
+import { SERVICE_EVENTS } from '../utils/constants';
 
 /**
  * StateManager
- * 
+ *
  * Manages global application state:
  * - Messages array
  * - Session data
  * - Connection state
  * - Context string
  * - UI state (typing, etc.)
- * 
+ *
  * Uses EventEmitter to notify subscribers of state changes
  */
 export default class StateManager extends EventEmitter {
   constructor() {
-    super()
-    
+    super();
+
     this.state = {
       messages: [],
       session: {},
       connection: {
         status: 'disconnected',
         reconnectAttempts: 0,
-        lastError: null
+        lastError: null,
       },
       context: '',
       isTyping: false,
       isThinking: false,
-      error: null
-    }
+      error: null,
+    };
   }
 
   /**
@@ -38,17 +38,17 @@ export default class StateManager extends EventEmitter {
    * @param {Object} updates Partial state updates
    */
   setState(updates) {
-    const oldState = { ...this.state }
-    this.state = { ...this.state, ...updates }
-    
-    this.emit(SERVICE_EVENTS.STATE_CHANGED, this.state, oldState)
-    
+    const oldState = { ...this.state };
+    this.state = { ...this.state, ...updates };
+
+    this.emit(SERVICE_EVENTS.STATE_CHANGED, this.state, oldState);
+
     // Emit specific change events
-    Object.keys(updates).forEach(key => {
+    Object.keys(updates).forEach((key) => {
       if (oldState[key] !== this.state[key]) {
-        this.emit(`state:${key}:changed`, this.state[key], oldState[key])
+        this.emit(`state:${key}:changed`, this.state[key], oldState[key]);
       }
-    })
+    });
   }
 
   /**
@@ -56,7 +56,7 @@ export default class StateManager extends EventEmitter {
    * @returns {Object}
    */
   getState() {
-    return { ...this.state }
+    return { ...this.state };
   }
 
   /**
@@ -65,7 +65,7 @@ export default class StateManager extends EventEmitter {
    * @returns {any}
    */
   get(key) {
-    return this.state[key]
+    return this.state[key];
   }
 
   /**
@@ -73,9 +73,9 @@ export default class StateManager extends EventEmitter {
    * @param {Object} message
    */
   addMessage(message) {
-    const messages = [...this.state.messages, message]
-    this.setState({ messages })
-    this.emit(SERVICE_EVENTS.MESSAGE_ADDED, message)
+    const messages = [...this.state.messages, message];
+    this.setState({ messages });
+    this.emit(SERVICE_EVENTS.MESSAGE_ADDED, message);
   }
 
   /**
@@ -84,12 +84,12 @@ export default class StateManager extends EventEmitter {
    * @param {Object} updates
    */
   updateMessage(messageId, updates) {
-    const messages = this.state.messages.map(msg =>
-      msg.id === messageId ? { ...msg, ...updates } : msg
-    )
-    
-    this.setState({ messages })
-    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, updates)
+    const messages = this.state.messages.map((msg) =>
+      msg.id === messageId ? { ...msg, ...updates } : msg,
+    );
+
+    this.setState({ messages });
+    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, updates);
   }
 
   /**
@@ -97,17 +97,17 @@ export default class StateManager extends EventEmitter {
    * @param {string} messageId
    */
   removeMessage(messageId) {
-    const messages = this.state.messages.filter(msg => msg.id !== messageId)
-    this.setState({ messages })
-    this.emit(SERVICE_EVENTS.MESSAGE_REMOVED, messageId)
+    const messages = this.state.messages.filter((msg) => msg.id !== messageId);
+    this.setState({ messages });
+    this.emit(SERVICE_EVENTS.MESSAGE_REMOVED, messageId);
   }
 
   /**
    * Clears all messages
    */
   clearMessages() {
-    this.setState({ messages: [] })
-    this.emit(SERVICE_EVENTS.MESSAGES_CLEARED)
+    this.setState({ messages: [] });
+    this.emit(SERVICE_EVENTS.MESSAGES_CLEARED);
   }
 
   /**
@@ -119,10 +119,10 @@ export default class StateManager extends EventEmitter {
     const connection = {
       ...this.state.connection,
       status,
-      ...details
-    }
-    
-    this.setState({ connection })
+      ...details,
+    };
+
+    this.setState({ connection });
   }
 
   /**
@@ -133,7 +133,7 @@ export default class StateManager extends EventEmitter {
     this.setState({
       session,
       messages: session.conversation,
-    })
+    });
   }
 
   /**
@@ -141,7 +141,7 @@ export default class StateManager extends EventEmitter {
    * @param {string} context
    */
   setContext(context) {
-    this.setState({ context })
+    this.setState({ context });
   }
 
   /**
@@ -149,7 +149,7 @@ export default class StateManager extends EventEmitter {
    * @returns {string}
    */
   getContext() {
-    return this.state.context
+    return this.state.context;
   }
 
   /**
@@ -157,7 +157,7 @@ export default class StateManager extends EventEmitter {
    * @param {boolean} isTyping
    */
   setTyping(isTyping) {
-    this.setState({ isTyping })
+    this.setState({ isTyping });
   }
 
   /**
@@ -165,7 +165,7 @@ export default class StateManager extends EventEmitter {
    * @param {boolean} isThinking
    */
   setThinking(isThinking) {
-    this.setState({ isThinking })
+    this.setState({ isThinking });
   }
 
   /**
@@ -173,16 +173,16 @@ export default class StateManager extends EventEmitter {
    * @param {Error|string|null} error
    */
   setError(error) {
-    this.setState({ 
-      error: error instanceof Error ? error : error ? new Error(error) : null 
-    })
+    this.setState({
+      error: error instanceof Error ? error : error ? new Error(error) : null,
+    });
   }
 
   /**
    * Clears error state
    */
   clearError() {
-    this.setState({ error: null })
+    this.setState({ error: null });
   }
 
   /**
@@ -195,15 +195,15 @@ export default class StateManager extends EventEmitter {
       connection: {
         status: 'disconnected',
         reconnectAttempts: 0,
-        lastError: null
+        lastError: null,
       },
       context: '',
       isTyping: false,
       isThinking: false,
-      error: null
-    }
-    
-    this.emit(SERVICE_EVENTS.STATE_RESET)
+      error: null,
+    };
+
+    this.emit(SERVICE_EVENTS.STATE_RESET);
   }
 
   /**
@@ -211,7 +211,7 @@ export default class StateManager extends EventEmitter {
    * @returns {Array}
    */
   getMessages() {
-    return [...this.state.messages]
+    return [...this.state.messages];
   }
 
   /**
@@ -220,8 +220,6 @@ export default class StateManager extends EventEmitter {
    * @returns {Object|undefined}
    */
   getMessage(messageId) {
-    return this.state.messages.find(msg => msg.id === messageId)
+    return this.state.messages.find((msg) => msg.id === messageId);
   }
 }
-
-

@@ -7,8 +7,8 @@ export const CONNECTION_STATUS = {
   CONNECTED: 'connected',
   DISCONNECTED: 'disconnected',
   RECONNECTING: 'reconnecting',
-  ERROR: 'error'
-}
+  ERROR: 'error',
+};
 
 export const MESSAGE_TYPES = {
   TEXT: 'text',
@@ -18,13 +18,13 @@ export const MESSAGE_TYPES = {
   FILE: 'file',
   LOCATION: 'location',
   INTERACTIVE: 'interactive',
-  TYPING: 'typing'
-}
+  TYPING: 'typing',
+};
 
 export const MESSAGE_DIRECTIONS = {
   INCOMING: 'incoming',
-  OUTGOING: 'outgoing'
-}
+  OUTGOING: 'outgoing',
+};
 
 export const MESSAGE_STATUS = {
   PENDING: 'pending',
@@ -32,8 +32,8 @@ export const MESSAGE_STATUS = {
   DELIVERED: 'delivered',
   READ: 'read',
   STREAMING: 'streaming',
-  ERROR: 'error'
-}
+  ERROR: 'error',
+};
 
 export const WS_MESSAGE_TYPES = {
   REGISTER: 'register',
@@ -45,20 +45,20 @@ export const WS_MESSAGE_TYPES = {
   ACK: 'ack',
   ERROR: 'error',
   WARNING: 'warning',
-  FORBIDDEN: 'forbidden'
-}
+  FORBIDDEN: 'forbidden',
+};
 
 export const STORAGE_KEYS = {
   SESSION: 'weni:webchat:session',
   STATE: 'weni:webchat:state',
   MESSAGES: 'weni:webchat:messages',
-  CONFIG: 'weni:webchat:config'
-}
+  CONFIG: 'weni:webchat:config',
+};
 
 export const STORAGE_TYPES = {
   LOCAL: 'local',
-  SESSION: 'session'
-}
+  SESSION: 'session',
+};
 
 export const ERROR_TYPES = {
   NETWORK: 'network',
@@ -67,16 +67,16 @@ export const ERROR_TYPES = {
   STORAGE: 'storage',
   SERVER: 'server',
   WEBSOCKET: 'websocket',
-  UNKNOWN: 'unknown'
-}
+  UNKNOWN: 'unknown',
+};
 
 export const WS_ERROR_TYPES = {
   FORBIDDEN: 'forbidden',
   WARNING: 'warning',
   ERROR: 'error',
   CONNECTION_CLOSED: 'connection_closed',
-  DUPLICATE_SESSION: 'duplicate_session'
-}
+  DUPLICATE_SESSION: 'duplicate_session',
+};
 
 export const DEFAULTS = {
   // Connection
@@ -117,54 +117,54 @@ export const DEFAULTS = {
 
   // Logging
   LOG_LEVEL: 'info',
-  LOG_ENABLED: true
-}
+  LOG_ENABLED: true,
+};
 
 export const ALLOWED_IMAGE_TYPES = [
   'image/jpeg',
   'image/jpg',
   'image/png',
-  'image/svg+xml'
-]
+  'image/svg+xml',
+];
 
 export const ALLOWED_VIDEO_TYPES = [
   'video/mp4',
-  'video/quicktime' // .mov
-]
+  'video/quicktime', // .mov
+];
 
 export const ALLOWED_AUDIO_TYPES = [
   'audio/mpeg', // .mp3
-  'audio/wav'
-]
+  'audio/wav',
+];
 
 export const ALLOWED_DOCUMENT_TYPES = [
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
   'application/vnd.ms-excel', // .xls
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' // .xlsx
-]
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+];
 
 export const ALLOWED_FILE_TYPES = [
   ...ALLOWED_IMAGE_TYPES,
   ...ALLOWED_VIDEO_TYPES,
   ...ALLOWED_AUDIO_TYPES,
-  ...ALLOWED_DOCUMENT_TYPES
-]
+  ...ALLOWED_DOCUMENT_TYPES,
+];
 
 export const AUDIO_MIME_TYPES = [
   'audio/webm',
   'audio/mp4',
   'audio/ogg',
   'audio/wav',
-  'audio/mpeg'
-]
+  'audio/mpeg',
+];
 
 export const QUICK_REPLY_TYPES = {
   TEXT: 'text',
   LOCATION: 'location',
   EMAIL: 'email',
-  PHONE: 'phone'
-}
+  PHONE: 'phone',
+};
 
 export const SERVICE_EVENTS = {
   // Lifecycle
@@ -256,17 +256,15 @@ export const SERVICE_EVENTS = {
 
   // Chat
   CHAT_OPEN_CHANGED: 'chat:open:changed',
-}
+};
 
 export const LOG_LEVELS = {
   DEBUG: 'debug',
   INFO: 'info',
   WARN: 'warn',
-  ERROR: 'error'
-}
+  ERROR: 'error',
+};
 
-export const VERSION = '1.0.0'
+export const VERSION = '1.0.0';
 
-export const SERVICE_NAME = '@weni/webchat-service'
-
-
+export const SERVICE_NAME = '@weni/webchat-service';

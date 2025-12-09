@@ -1,9 +1,9 @@
-import * as helpers from "../helpers";
+import * as helpers from '../helpers';
 
 describe('Helpers', () => {
   describe('generateUUID', () => {
     const cryptoGetSpy = jest.spyOn(global, 'crypto', 'get');
-    
+
     afterEach(() => {
       cryptoGetSpy.mockReset();
     });
@@ -26,7 +26,8 @@ describe('Helpers', () => {
 
         const generatedUUID = helpers.generateUUID();
 
-        const UUIDRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        const UUIDRegex =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         expect(generatedUUID).toMatch(UUIDRegex);
       });
     });
@@ -38,7 +39,7 @@ describe('Helpers', () => {
     const fixedRandomValue = 12.3;
     const fixedDateNowValue = 1234;
     const fixedRandomIdValue = 15178;
-    
+
     const mathGetSpy = jest.spyOn(global.Math, 'random');
     const dateNowSpy = jest.spyOn(global.Date, 'now');
 
@@ -76,7 +77,7 @@ describe('Helpers', () => {
     const mathGetSpy = jest.spyOn(global.Math, 'random');
 
     const fixedDateNowValue = 1234;
-    const fixedRandomValue = 0.34567890;
+    const fixedRandomValue = 0.3456789;
     const fixedMessageIdValue = 'msg_1234_cfzzt7g4h';
 
     beforeEach(() => {
@@ -111,10 +112,13 @@ describe('Helpers', () => {
       [1024, '1 KB'],
       [1024 * 1024, '1 MB'],
       [1024 * 1024 * 1024, '1 GB'],
-    ])('should format the file size %s to a %s string', (fileSize, expected) => {
-      const formattedFileSize = helpers.formatFileSize(fileSize);
-      expect(formattedFileSize).toBe(expected);
-    });
+    ])(
+      'should format the file size %s to a %s string',
+      (fileSize, expected) => {
+        const formattedFileSize = helpers.formatFileSize(fileSize);
+        expect(formattedFileSize).toBe(expected);
+      },
+    );
   });
 
   describe('debounce', () => {
@@ -125,7 +129,7 @@ describe('Helpers', () => {
     afterEach(() => {
       jest.useRealTimers();
     });
-    
+
     it('should debounce a function and call it after the delay', () => {
       const func = jest.fn();
       const debouncedFunc = helpers.debounce(func, 1000);
@@ -183,7 +187,7 @@ describe('Helpers', () => {
           e: [1, 2, 3],
           f: null,
           g: undefined,
-        }
+        },
       };
 
       const clonedObj = helpers.deepClone(obj);
@@ -193,15 +197,21 @@ describe('Helpers', () => {
   });
 
   describe('isEmpty', () => {
-    it.each([null, undefined, '', ' ', [], {}])('should return true if the value is \'%s\'', (value) => {
-      const isEmpty = helpers.isEmpty(value);
-      expect(isEmpty).toBeTruthy();
-    });
+    it.each([null, undefined, '', ' ', [], {}])(
+      "should return true if the value is '%s'",
+      (value) => {
+        const isEmpty = helpers.isEmpty(value);
+        expect(isEmpty).toBeTruthy();
+      },
+    );
 
-    it.each([1, 'hello', [1, 2, 3], { a: 1, b: 2 }])('should return false if the value is \'%s\'', (value) => {
-      const isEmpty = helpers.isEmpty(value);
-      expect(isEmpty).toBeFalsy();
-    });
+    it.each([1, 'hello', [1, 2, 3], { a: 1, b: 2 }])(
+      "should return false if the value is '%s'",
+      (value) => {
+        const isEmpty = helpers.isEmpty(value);
+        expect(isEmpty).toBeFalsy();
+      },
+    );
   });
 
   describe('safeJsonParse', () => {
@@ -239,10 +249,11 @@ describe('Helpers', () => {
 
     describe('when the function fails 1 time', () => {
       it('should retry the function and return the result', async () => {
-        const func = jest.fn()
+        const func = jest
+          .fn()
           .mockRejectedValueOnce(new Error('1st fail'))
           .mockResolvedValueOnce(42);
-        
+
         const promise = helpers.retry(func, 2, 1000);
         expect(func).toHaveBeenCalledTimes(1);
 
@@ -255,11 +266,12 @@ describe('Helpers', () => {
 
     describe('when the function fails less than the retries', () => {
       it('should retry the function and return the result', async () => {
-        const func = jest.fn()
+        const func = jest
+          .fn()
           .mockRejectedValueOnce(new Error('1st fail'))
           .mockRejectedValueOnce(new Error('2nd fail'))
           .mockResolvedValueOnce(42);
-        
+
         const promise = helpers.retry(func, 2, 1000);
         expect(func).toHaveBeenCalledTimes(1);
 
@@ -277,15 +289,15 @@ describe('Helpers', () => {
       it('should retry the function and throw an error', async () => {
         expect.assertions(5);
 
-        const func = jest.fn()
+        const func = jest
+          .fn()
           .mockRejectedValueOnce(new Error('1st fail'))
           .mockRejectedValueOnce(new Error('2nd fail'))
           .mockRejectedValueOnce(new Error('3rd fail'));
-        
-        const promise = helpers.retry(func, 2, 1000)
-          .catch(error => {
-            expect(error.message).toBe('3rd fail');
-          });
+
+        const promise = helpers.retry(func, 2, 1000).catch((error) => {
+          expect(error.message).toBe('3rd fail');
+        });
 
         expect(func).toHaveBeenCalledTimes(1);
 
@@ -304,16 +316,16 @@ describe('Helpers', () => {
       it('should use the default retries and delay', async () => {
         expect.assertions(6);
 
-        const func = jest.fn()
+        const func = jest
+          .fn()
           .mockRejectedValueOnce(new Error('1st fail'))
           .mockRejectedValueOnce(new Error('2nd fail'))
           .mockRejectedValueOnce(new Error('3rd fail'))
           .mockRejectedValueOnce(new Error('4th fail'));
-        
-        const promise = helpers.retry(func)
-          .catch(error => {
-            expect(error.message).toBe('4th fail');
-          });
+
+        const promise = helpers.retry(func).catch((error) => {
+          expect(error.message).toBe('4th fail');
+        });
 
         expect(func).toHaveBeenCalledTimes(1);
 
@@ -340,10 +352,13 @@ describe('Helpers', () => {
     afterEach(() => {
       jest.useRealTimers();
     });
-    
+
     describe('when the promise is resolved in time', () => {
       it('should return the result of the promise', async () => {
-        const promise = helpers.withTimeout(new Promise(resolve => setTimeout(() => resolve(42), 900)), 1000);
+        const promise = helpers.withTimeout(
+          new Promise((resolve) => setTimeout(() => resolve(42), 900)),
+          1000,
+        );
 
         await jest.advanceTimersByTimeAsync(1000);
 
@@ -355,8 +370,12 @@ describe('Helpers', () => {
       it('should reject the promise', async () => {
         expect.assertions(2);
 
-        const promise = helpers.withTimeout(new Promise(resolve => setTimeout(() => resolve(42), 1100)), 1000)
-          .catch(error => {
+        const promise = helpers
+          .withTimeout(
+            new Promise((resolve) => setTimeout(() => resolve(42), 1100)),
+            1000,
+          )
+          .catch((error) => {
             expect(error.message).toBe('Operation timed out');
           });
 

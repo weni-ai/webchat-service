@@ -1,11 +1,11 @@
-import EventEmitter from 'eventemitter3'
+import EventEmitter from 'eventemitter3';
 
-import { generateMessageId } from '../utils/helpers'
-import { DEFAULTS, SERVICE_EVENTS } from '../utils/constants'
+import { generateMessageId } from '../utils/helpers';
+import { DEFAULTS, SERVICE_EVENTS } from '../utils/constants';
 
 /**
  * MessageProcessor
- * 
+ *
  * Processes incoming and outgoing messages:
  * - Handles different message types (text, image, video, audio, file)
  * - Manages message queue with configurable delays
@@ -15,21 +15,23 @@ import { DEFAULTS, SERVICE_EVENTS } from '../utils/constants'
  */
 export default class MessageProcessor extends EventEmitter {
   constructor(config = {}) {
-    super()
-    
+    super();
+
     this.config = {
       messageDelay: config.messageDelay || DEFAULTS.MESSAGE_DELAY,
       typingDelay: config.typingDelay || DEFAULTS.TYPING_DELAY,
-      enableTypingIndicator: config.enableTypingIndicator !== false || DEFAULTS.ENABLE_TYPING_INDICATOR,
+      enableTypingIndicator:
+        config.enableTypingIndicator !== false ||
+        DEFAULTS.ENABLE_TYPING_INDICATOR,
       typingTimeout: config.typingTimeout || DEFAULTS.TYPING_TIMEOUT,
-      ...config
-    }
+      ...config,
+    };
 
-    this.queue = []
-    this.isProcessing = false
-    this.typingTimer = null
-    this.isTypingActive = false
-    this.isThinkingActive = false
+    this.queue = [];
+    this.isProcessing = false;
+    this.typingTimer = null;
+    this.isTypingActive = false;
+    this.isThinkingActive = false;
   }
 
   /**
@@ -39,21 +41,20 @@ export default class MessageProcessor extends EventEmitter {
    */
   process(rawMessage) {
     try {
-      const messageType = this._extractMessageType(rawMessage)
+      const messageType = this._extractMessageType(rawMessage);
 
       switch (messageType) {
         case 'message':
-          this._processUserMessage(rawMessage)
-          break
+          this._processUserMessage(rawMessage);
+          break;
         case 'typing_start':
-          this._handleTypingIndicator(rawMessage)
-          break
+          this._handleTypingIndicator(rawMessage);
+          break;
         default:
-          this.emit(SERVICE_EVENTS.MESSAGE_UNKNOWN, rawMessage)
+          this.emit(SERVICE_EVENTS.MESSAGE_UNKNOWN, rawMessage);
       }
-
     } catch (error) {
-      this.emit(SERVICE_EVENTS.ERROR, error)
+      this.emit(SERVICE_EVENTS.ERROR, error);
     }
   }
 
@@ -65,22 +66,24 @@ export default class MessageProcessor extends EventEmitter {
    */
   _processUserMessage(rawMessage) {
     try {
-      const message = this._normalizeMessage(rawMessage)
-      
+      const message = this._normalizeMessage(rawMessage);
+
       if (!this._validateMessage(message)) {
-        this.emit(SERVICE_EVENTS.ERROR, new Error('Invalid message format'))
-        return
+        this.emit(SERVICE_EVENTS.ERROR, new Error('Invalid message format'));
+        return;
       }
 
-      if (message.direction === 'incoming' && (this.isTypingActive || this.isThinkingActive)) {
-        this._stopTyping()
+      if (
+        message.direction === 'incoming' &&
+        (this.isTypingActive || this.isThinkingActive)
+      ) {
+        this._stopTyping();
       }
 
-      this.queue.push(message)
-      this._processQueue()
-
+      this.queue.push(message);
+      this._processQueue();
     } catch (error) {
-      this.emit(SERVICE_EVENTS.ERROR, error)
+      this.emit(SERVICE_EVENTS.ERROR, error);
     }
   }
 
@@ -92,18 +95,18 @@ export default class MessageProcessor extends EventEmitter {
    */
   _extractMessageType(raw) {
     if (!raw || typeof raw !== 'object') {
-      return 'unknown'
+      return 'unknown';
     }
 
     if (raw.type) {
-      return raw.type
+      return raw.type;
     }
 
     if (raw.message && raw.message.type) {
-      return raw.message.type
+      return raw.message.type;
     }
 
-    return 'unknown'
+    return 'unknown';
   }
 
   /**
@@ -111,15 +114,15 @@ export default class MessageProcessor extends EventEmitter {
    * @param {Array} messages
    */
   processBatch(messages = []) {
-    messages.forEach(msg => this.process(msg))
+    messages.forEach((msg) => this.process(msg));
   }
 
   /**
    * Clears the message queue
    */
   clearQueue() {
-    this.queue = []
-    this.isProcessing = false
+    this.queue = [];
+    this.isProcessing = false;
   }
 
   /**
@@ -136,35 +139,35 @@ export default class MessageProcessor extends EventEmitter {
       direction: 'incoming',
       status: 'delivered',
       persisted: raw.persisted || undefined,
-    }
+    };
 
     if (raw.message && raw.message.text) {
-      message.text = raw.message.text
+      message.text = raw.message.text;
     }
 
     if (raw.message && raw.message.media) {
-      message.media = raw.message.media
+      message.media = raw.message.media;
     }
 
     if (raw.message && raw.message.quick_replies) {
-      message.quick_replies = raw.message.quick_replies
+      message.quick_replies = raw.message.quick_replies;
     }
 
     if (raw.message?.list_message?.list_items?.length >= 1) {
-      message.list_message = raw.message.list_message
+      message.list_message = raw.message.list_message;
     }
 
     const CTAMessage = raw.message?.cta_message;
 
     if (CTAMessage?.url && CTAMessage?.display_text) {
-      message.cta_message = CTAMessage
+      message.cta_message = CTAMessage;
     }
 
     if (raw.metadata) {
-      message.metadata = raw.metadata
+      message.metadata = raw.metadata;
     }
 
-    return message
+    return message;
   }
 
   /**
@@ -175,24 +178,24 @@ export default class MessageProcessor extends EventEmitter {
    */
   _getMessageType(raw) {
     if (raw.type) {
-      return raw.type
+      return raw.type;
     }
 
     if (raw.message) {
       if (raw.message.type) {
-        return raw.message.type
+        return raw.message.type;
       }
-      
+
       if (raw.message.text) {
-        return 'text'
+        return 'text';
       }
-      
+
       if (raw.message.media) {
-        return 'media'
+        return 'media';
       }
     }
 
-    return 'text'
+    return 'text';
   }
 
   /**
@@ -203,14 +206,14 @@ export default class MessageProcessor extends EventEmitter {
    */
   _validateMessage(message) {
     if (!message || typeof message !== 'object') {
-      return false
+      return false;
     }
 
     if (!message.type) {
-      return false
+      return false;
     }
 
-    return true
+    return true;
   }
 
   /**
@@ -219,23 +222,23 @@ export default class MessageProcessor extends EventEmitter {
    */
   async _processQueue() {
     if (this.isProcessing || this.queue.length === 0) {
-      return
+      return;
     }
 
-    this.isProcessing = true
+    this.isProcessing = true;
 
     while (this.queue.length > 0) {
-      const message = this.queue.shift()
+      const message = this.queue.shift();
 
-      this.emit(SERVICE_EVENTS.MESSAGE_PROCESSED, message)
+      this.emit(SERVICE_EVENTS.MESSAGE_PROCESSED, message);
 
       // Delay between messages
       if (this.queue.length > 0) {
-        await this._delay(this.config.messageDelay)
+        await this._delay(this.config.messageDelay);
       }
     }
 
-    this.isProcessing = false
+    this.isProcessing = false;
   }
 
   /**
@@ -246,27 +249,27 @@ export default class MessageProcessor extends EventEmitter {
    */
   _handleTypingIndicator(rawMessage) {
     if (!this.config.enableTypingIndicator) {
-      return
+      return;
     }
 
     if (this.typingTimer) {
-      clearTimeout(this.typingTimer)
-      this.typingTimer = null
+      clearTimeout(this.typingTimer);
+      this.typingTimer = null;
     }
 
-    const isAiAssistant = rawMessage.from === 'ai-assistant'
+    const isAiAssistant = rawMessage.from === 'ai-assistant';
 
     if (isAiAssistant) {
-      this.isThinkingActive = true
-      this.emit(SERVICE_EVENTS.THINKING_START)
+      this.isThinkingActive = true;
+      this.emit(SERVICE_EVENTS.THINKING_START);
     } else {
-      this.isTypingActive = true
-      this.emit(SERVICE_EVENTS.TYPING_START)
+      this.isTypingActive = true;
+      this.emit(SERVICE_EVENTS.TYPING_START);
     }
 
     this.typingTimer = setTimeout(() => {
-      this._stopTyping()
-    }, this.config.typingTimeout)
+      this._stopTyping();
+    }, this.config.typingTimeout);
   }
 
   /**
@@ -276,19 +279,19 @@ export default class MessageProcessor extends EventEmitter {
    */
   startTypingOnMessageSent() {
     if (!this.config.enableTypingIndicator) {
-      return
+      return;
     }
 
     if (this.typingTimer) {
-      clearTimeout(this.typingTimer)
+      clearTimeout(this.typingTimer);
     }
 
     this.typingTimer = setTimeout(() => {
       if (!this.isTypingActive && !this.isThinkingActive) {
-        this.isTypingActive = true
-        this.emit(SERVICE_EVENTS.TYPING_START)
+        this.isTypingActive = true;
+        this.emit(SERVICE_EVENTS.TYPING_START);
       }
-    }, this.config.typingDelay)
+    }, this.config.typingDelay);
   }
 
   /**
@@ -297,18 +300,18 @@ export default class MessageProcessor extends EventEmitter {
    */
   _stopTyping() {
     if (this.typingTimer) {
-      clearTimeout(this.typingTimer)
-      this.typingTimer = null
+      clearTimeout(this.typingTimer);
+      this.typingTimer = null;
     }
 
     if (this.isTypingActive) {
-      this.isTypingActive = false
-      this.emit(SERVICE_EVENTS.TYPING_STOP)
+      this.isTypingActive = false;
+      this.emit(SERVICE_EVENTS.TYPING_STOP);
     }
 
     if (this.isThinkingActive) {
-      this.isThinkingActive = false
-      this.emit(SERVICE_EVENTS.THINKING_STOP)
+      this.isThinkingActive = false;
+      this.emit(SERVICE_EVENTS.THINKING_STOP);
     }
   }
 
@@ -319,8 +322,6 @@ export default class MessageProcessor extends EventEmitter {
    * @returns {Promise}
    */
   _delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms))
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
-
-
