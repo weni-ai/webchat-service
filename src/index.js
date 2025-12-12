@@ -224,6 +224,14 @@ export default class WeniWebchatService extends EventEmitter {
       direction: 'outgoing',
     });
 
+    if (!this.session.hasUserSentAnyMessage()) {
+      const pendingFields = this.session.getPendingCustomFields();
+      if (pendingFields && Object.keys(pendingFields).length > 0) {
+        message.__customFields = { ...pendingFields };
+        message.__includesPendingCustomFields = true;
+      }
+    }
+
     if (!options.hidden) {
       // Add to state
       this.state.addMessage(message);
@@ -309,6 +317,14 @@ export default class WeniWebchatService extends EventEmitter {
         },
       });
 
+      if (!this.session.hasUserSentAnyMessage()) {
+        const pendingFields = this.session.getPendingCustomFields();
+        if (pendingFields && Object.keys(pendingFields).length > 0) {
+          message.__customFields = { ...pendingFields };
+          message.__includesPendingCustomFields = true;
+        }
+      }
+
       this.state.addMessage(message);
       this.session.appendToConversation(message);
 
@@ -339,6 +355,14 @@ export default class WeniWebchatService extends EventEmitter {
           mimeType: audioData.mimeType,
         },
       });
+
+      if (!this.session.hasUserSentAnyMessage()) {
+        const pendingFields = this.session.getPendingCustomFields();
+        if (pendingFields && Object.keys(pendingFields).length > 0) {
+          message.__customFields = { ...pendingFields };
+          message.__includesPendingCustomFields = true;
+        }
+      }
 
       this.state.addMessage(message);
       this.session.appendToConversation(message);
@@ -400,12 +424,14 @@ export default class WeniWebchatService extends EventEmitter {
    * @param {string} value
    */
   setCustomField(field, value) {
-    const message = buildCustomFieldMessage(field, value);
-
-    this.enqueueMessages([message]);
-
-    if (this._initialized) {
-      this.runQueue();
+    if (this.session.hasUserSentAnyMessage()) {
+      const message = buildCustomFieldMessage(field, value);
+      this.enqueueMessages([message]);
+      if (this._initialized) {
+        this.runQueue();
+      }
+    } else {
+      this.session.addPendingCustomField(field, value);
     }
   }
 
@@ -851,6 +877,10 @@ export default class WeniWebchatService extends EventEmitter {
       }
 
       this.session.setLastMessageSentAt(Date.now());
+
+      if (message.__includesPendingCustomFields) {
+        this.session.clearPendingCustomFields();
+      }
 
       if (typingTypes.includes(message.type)) {
         this.messageProcessor.startTypingOnMessageSent();
