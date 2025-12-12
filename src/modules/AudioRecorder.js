@@ -1,10 +1,10 @@
-import EventEmitter from 'eventemitter3'
+import EventEmitter from 'eventemitter3';
 
-import { DEFAULTS, AUDIO_MIME_TYPES, SERVICE_EVENTS } from '../utils/constants'
+import { DEFAULTS, AUDIO_MIME_TYPES, SERVICE_EVENTS } from '../utils/constants';
 
 /**
  * AudioRecorder
- * 
+ *
  * Handles audio recording:
  * - Records audio using MediaRecorder API
  * - Converts to MP3 format
@@ -13,21 +13,22 @@ import { DEFAULTS, AUDIO_MIME_TYPES, SERVICE_EVENTS } from '../utils/constants'
  */
 export default class AudioRecorder extends EventEmitter {
   constructor(config = {}) {
-    super()
-    
+    super();
+
     this.config = {
       maxDuration: config.maxDuration || DEFAULTS.MAX_RECORDING_DURATION,
       mimeType: config.mimeType || AUDIO_MIME_TYPES[0],
-      audioBitsPerSecond: config.audioBitsPerSecond || DEFAULTS.AUDIO_BITS_PER_SECOND,
-      ...config
-    }
-    
-    this.mediaRecorder = null
-    this.audioStream = null
-    this.audioChunks = []
-    this.startTime = null
-    this.timerInterval = null
-    this.isRecording = false
+      audioBitsPerSecond:
+        config.audioBitsPerSecond || DEFAULTS.AUDIO_BITS_PER_SECOND,
+      ...config,
+    };
+
+    this.mediaRecorder = null;
+    this.audioStream = null;
+    this.audioChunks = [];
+    this.startTime = null;
+    this.timerInterval = null;
+    this.isRecording = false;
   }
 
   /**
@@ -36,55 +37,54 @@ export default class AudioRecorder extends EventEmitter {
    */
   async start() {
     if (this.isRecording) {
-      throw new Error('Recording already in progress')
+      throw new Error('Recording already in progress');
     }
 
     try {
-      this.audioStream = await navigator.mediaDevices.getUserMedia({ 
-        audio: true 
-      })
+      this.audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
 
-      const mimeType = this._getSupportedMimeType()
+      const mimeType = this._getSupportedMimeType();
 
       this.mediaRecorder = new MediaRecorder(this.audioStream, {
         mimeType,
-        audioBitsPerSecond: this.config.audioBitsPerSecond
-      })
+        audioBitsPerSecond: this.config.audioBitsPerSecond,
+      });
 
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          this.audioChunks.push(event.data)
+          this.audioChunks.push(event.data);
         }
-      }
+      };
 
       this.mediaRecorder.onstop = () => {
-        this._handleRecordingStop()
-      }
+        this._handleRecordingStop();
+      };
 
       this.mediaRecorder.onerror = (error) => {
-        this.emit(SERVICE_EVENTS.ERROR, error)
-      }
+        this.emit(SERVICE_EVENTS.ERROR, error);
+      };
 
       // Start recording
-      this.audioChunks = []
-      this.startTime = Date.now()
-      this.isRecording = true
-      
-      this.mediaRecorder.start()
-      this._startTimer()
-      
-      this.emit(SERVICE_EVENTS.RECORDING_STARTED)
+      this.audioChunks = [];
+      this.startTime = Date.now();
+      this.isRecording = true;
+
+      this.mediaRecorder.start();
+      this._startTimer();
+
+      this.emit(SERVICE_EVENTS.RECORDING_STARTED);
 
       setTimeout(() => {
         if (this.isRecording) {
-          this.stop()
+          this.stop();
         }
-      }, this.config.maxDuration)
-
+      }, this.config.maxDuration);
     } catch (error) {
-      this.isRecording = false
-      this.emit(SERVICE_EVENTS.ERROR, error)
-      throw error
+      this.isRecording = false;
+      this.emit(SERVICE_EVENTS.ERROR, error);
+      throw error;
     }
   }
 
@@ -94,19 +94,19 @@ export default class AudioRecorder extends EventEmitter {
    */
   async stop() {
     if (!this.isRecording) {
-      throw new Error('No recording in progress')
+      throw new Error('No recording in progress');
     }
 
     return new Promise((resolve) => {
-      this._stopCompleteCallback = resolve
-      
+      this._stopCompleteCallback = resolve;
+
       if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-        this.mediaRecorder.stop()
+        this.mediaRecorder.stop();
       }
-      
-      this._stopTimer()
-      this._stopAudioStream()
-    })
+
+      this._stopTimer();
+      this._stopAudioStream();
+    });
   }
 
   /**
@@ -114,20 +114,20 @@ export default class AudioRecorder extends EventEmitter {
    */
   cancel() {
     if (!this.isRecording) {
-      return
+      return;
     }
 
-    this.isRecording = false
-    this.audioChunks = []
-    
+    this.isRecording = false;
+    this.audioChunks = [];
+
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      this.mediaRecorder.stop()
+      this.mediaRecorder.stop();
     }
 
-    this._stopTimer()
-    this._stopAudioStream()
-    
-    this.emit(SERVICE_EVENTS.RECORDING_CANCELLED)
+    this._stopTimer();
+    this._stopAudioStream();
+
+    this.emit(SERVICE_EVENTS.RECORDING_CANCELLED);
   }
 
   /**
@@ -136,10 +136,10 @@ export default class AudioRecorder extends EventEmitter {
    */
   getDuration() {
     if (!this.startTime) {
-      return 0
+      return 0;
     }
-    
-    return Date.now() - this.startTime
+
+    return Date.now() - this.startTime;
   }
 
   /**
@@ -147,7 +147,7 @@ export default class AudioRecorder extends EventEmitter {
    * @returns {boolean}
    */
   static isSupported() {
-    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   }
 
   /**
@@ -156,13 +156,13 @@ export default class AudioRecorder extends EventEmitter {
    */
   async hasPermission() {
     try {
-      const result = await navigator.permissions.query({ name: 'microphone' })
+      const result = await navigator.permissions.query({ name: 'microphone' });
 
-      if (result.state === 'prompt') return undefined
+      if (result.state === 'prompt') return undefined;
 
-      return result.state === 'granted'
+      return result.state === 'granted';
     } catch (error) {
-      return undefined
+      return undefined;
     }
   }
 
@@ -173,44 +173,46 @@ export default class AudioRecorder extends EventEmitter {
    */
   async requestPermission() {
     if (!AudioRecorder.isSupported()) {
-      throw new Error('Audio recording is not supported in this browser')
+      throw new Error('Audio recording is not supported in this browser');
     }
 
     try {
       if (this.audioStream) {
-        this._stopAudioStream()
+        this._stopAudioStream();
       }
 
-      this.audioStream = await navigator.mediaDevices.getUserMedia({ 
+      this.audioStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
-        }
-      })
+          autoGainControl: true,
+        },
+      });
     } catch (error) {
-      this.audioStream = null
-      
+      this.audioStream = null;
+
       if (error.name === 'NotAllowedError') {
         try {
-          const permissionResult = await navigator.permissions.query({ name: 'microphone' })
+          const permissionResult = await navigator.permissions.query({
+            name: 'microphone',
+          });
           if (permissionResult.state === 'denied') {
-            throw new Error('Microphone permission denied')
+            throw new Error('Microphone permission denied');
           } else {
-            throw new Error('Microphone permission dismissed')
+            throw new Error('Microphone permission dismissed');
           }
         } catch (permissionError) {
-          throw new Error('Microphone permission denied')
+          throw new Error('Microphone permission denied');
         }
       } else if (error.name === 'NotFoundError') {
-        throw new Error('No microphone found')
+        throw new Error('No microphone found');
       } else if (error.name === 'NotReadableError') {
-        throw new Error('Microphone is already in use')
+        throw new Error('Microphone is already in use');
       } else {
-        throw new Error(`Failed to access microphone: ${error.message}`)
+        throw new Error(`Failed to access microphone: ${error.message}`);
       }
     } finally {
-      return await this.hasPermission()
+      return await this.hasPermission();
     }
   }
 
@@ -219,34 +221,35 @@ export default class AudioRecorder extends EventEmitter {
    * @private
    */
   async _handleRecordingStop() {
-    this.isRecording = false
-    
+    this.isRecording = false;
+
     try {
-      const blob = new Blob(this.audioChunks, { type: this.mediaRecorder.mimeType })
-      const duration = this.getDuration()
-      const base64 = await this._blobToBase64(blob)
+      const blob = new Blob(this.audioChunks, {
+        type: this.mediaRecorder.mimeType,
+      });
+      const duration = this.getDuration();
+      const base64 = await this._blobToBase64(blob);
 
       const result = {
         type: 'audio',
         base64,
         duration,
         mimeType: this.mediaRecorder.mimeType,
-        size: blob.size
-      }
+        size: blob.size,
+      };
 
-      this.emit(SERVICE_EVENTS.RECORDING_STOPPED, result)
-      
+      this.emit(SERVICE_EVENTS.RECORDING_STOPPED, result);
+
       if (this._stopCompleteCallback) {
-        this._stopCompleteCallback(result)
-        this._stopCompleteCallback = null
+        this._stopCompleteCallback(result);
+        this._stopCompleteCallback = null;
       }
-
     } catch (error) {
-      this.emit(SERVICE_EVENTS.ERROR, error)
-      
+      this.emit(SERVICE_EVENTS.ERROR, error);
+
       if (this._stopCompleteCallback) {
-        this._stopCompleteCallback(null)
-        this._stopCompleteCallback = null
+        this._stopCompleteCallback(null);
+        this._stopCompleteCallback = null;
       }
     }
   }
@@ -256,12 +259,12 @@ export default class AudioRecorder extends EventEmitter {
    * @private
    */
   _startTimer() {
-    this._stopTimer()
-    
+    this._stopTimer();
+
     this.timerInterval = setInterval(() => {
-      const duration = this.getDuration()
-      this.emit(SERVICE_EVENTS.RECORDING_TICK, duration)
-    }, 100)
+      const duration = this.getDuration();
+      this.emit(SERVICE_EVENTS.RECORDING_TICK, duration);
+    }, 100);
   }
 
   /**
@@ -270,8 +273,8 @@ export default class AudioRecorder extends EventEmitter {
    */
   _stopTimer() {
     if (this.timerInterval) {
-      clearInterval(this.timerInterval)
-      this.timerInterval = null
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
     }
   }
 
@@ -281,8 +284,8 @@ export default class AudioRecorder extends EventEmitter {
    */
   _stopAudioStream() {
     if (this.audioStream) {
-      this.audioStream.getTracks().forEach(track => track.stop())
-      this.audioStream = null
+      this.audioStream.getTracks().forEach((track) => track.stop());
+      this.audioStream = null;
     }
   }
 
@@ -294,16 +297,16 @@ export default class AudioRecorder extends EventEmitter {
    */
   _blobToBase64(blob) {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      
+      const reader = new FileReader();
+
       reader.onloadend = () => {
-        resolve(reader.result)
-      }
-      
-      reader.onerror = reject
-      
-      reader.readAsDataURL(blob)
-    })
+        resolve(reader.result);
+      };
+
+      reader.onerror = reject;
+
+      reader.readAsDataURL(blob);
+    });
   }
 
   /**
@@ -312,16 +315,14 @@ export default class AudioRecorder extends EventEmitter {
    * @returns {string}
    */
   _getSupportedMimeType() {
-    const types = AUDIO_MIME_TYPES
+    const types = AUDIO_MIME_TYPES;
 
     for (const type of types) {
       if (MediaRecorder.isTypeSupported(type)) {
-        return type
+        return type;
       }
     }
 
-    return this.config.mimeType
+    return this.config.mimeType;
   }
 }
-
-

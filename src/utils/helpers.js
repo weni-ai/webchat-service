@@ -8,15 +8,15 @@
  */
 export function generateUUID() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID()
+    return crypto.randomUUID();
   }
 
   // Fallback for older browsers
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0
-    const v = c === 'x' ? r : (r & 0x3) | 0x8
-    return v.toString(16)
-  })
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 /**
@@ -26,17 +26,22 @@ export function generateUUID() {
  * @returns {string}
  */
 export function generateSessionId(clientId = null) {
-  let validClientId
+  let validClientId;
 
-  if (clientId === null || clientId === undefined || clientId.trim === undefined || clientId.trim() === '') {
-    validClientId = window.location.hostname
+  if (
+    clientId === null ||
+    clientId === undefined ||
+    clientId.trim === undefined ||
+    clientId.trim() === ''
+  ) {
+    validClientId = window.location.hostname;
   } else {
-    validClientId = clientId
+    validClientId = clientId;
   }
 
-  const randomId = Math.floor(Math.random() * Date.now())
-  
-  return `${randomId}@${validClientId}`
+  const randomId = Math.floor(Math.random() * Date.now());
+
+  return `${randomId}@${validClientId}`;
 }
 
 /**
@@ -44,7 +49,7 @@ export function generateSessionId(clientId = null) {
  * @returns {string}
  */
 export function generateMessageId() {
-  return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
 /**
@@ -54,15 +59,15 @@ export function generateMessageId() {
  * @returns {string}
  */
 export function formatTimestamp(timestamp, locale = 'en-US') {
-  const date = new Date(timestamp)
-  
+  const date = new Date(timestamp);
+
   return date.toLocaleString(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
-  })
+    minute: '2-digit',
+  });
 }
 
 /**
@@ -71,13 +76,13 @@ export function formatTimestamp(timestamp, locale = 'en-US') {
  * @returns {string}
  */
 export function formatFileSize(bytes) {
-  if (bytes === 0) return '0 Bytes'
+  if (bytes === 0) return '0 Bytes';
 
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }
 
 /**
@@ -87,17 +92,17 @@ export function formatFileSize(bytes) {
  * @returns {Function}
  */
 export function debounce(func, wait) {
-  let timeout
-  
+  let timeout;
+
   return function executedFunction(...args) {
     const later = () => {
-      clearTimeout(timeout)
-      func(...args)
-    }
+      clearTimeout(timeout);
+      func(...args);
+    };
 
-    clearTimeout(timeout)
-    timeout = setTimeout(later, wait)
-  }
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
 }
 
 /**
@@ -107,15 +112,15 @@ export function debounce(func, wait) {
  * @returns {Function}
  */
 export function throttle(func, limit) {
-  let inThrottle
-  
+  let inThrottle;
+
   return function executedFunction(...args) {
     if (!inThrottle) {
-      func(...args)
-      inThrottle = true
-      setTimeout(() => (inThrottle = false), limit)
+      func(...args);
+      inThrottle = true;
+      setTimeout(() => (inThrottle = false), limit);
     }
-  }
+  };
 }
 
 /**
@@ -124,25 +129,25 @@ export function throttle(func, limit) {
  * @returns {any}
  */
 export function deepClone(obj) {
-  const isObject = obj instanceof Object
+  const isObject = obj instanceof Object;
 
   if (obj === null || !isObject) {
-    return obj
+    return obj;
   }
 
   if (obj instanceof Date) {
-    return new Date(obj.getTime())
+    return new Date(obj.getTime());
   }
 
   if (obj instanceof Array) {
-    return obj.map(item => deepClone(item))
+    return obj.map((item) => deepClone(item));
   }
 
-  const clonedObj = {}
+  const clonedObj = {};
   for (const key in obj) {
-    clonedObj[key] = deepClone(obj[key])
+    clonedObj[key] = deepClone(obj[key]);
   }
-  return clonedObj
+  return clonedObj;
 }
 
 /**
@@ -151,11 +156,11 @@ export function deepClone(obj) {
  * @returns {boolean}
  */
 export function isEmpty(value) {
-  if (value == null) return true
-  if (typeof value === 'string') return value.trim().length === 0
-  if (Array.isArray(value)) return value.length === 0
-  if (typeof value === 'object') return Object.keys(value).length === 0
-  return false
+  if (value == null) return true;
+  if (typeof value === 'string') return value.trim().length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'object') return Object.keys(value).length === 0;
+  return false;
 }
 
 /**
@@ -166,9 +171,9 @@ export function isEmpty(value) {
  */
 export function safeJsonParse(json, defaultValue = null) {
   try {
-    return JSON.parse(json)
+    return JSON.parse(json);
   } catch {
-    return defaultValue
+    return defaultValue;
   }
 }
 
@@ -181,14 +186,14 @@ export function safeJsonParse(json, defaultValue = null) {
  */
 export async function retry(fn, retries = 3, delay = 1000) {
   try {
-    return await fn()
+    return await fn();
   } catch (error) {
     if (retries <= 0) {
-      throw error
+      throw error;
     }
-    
-    await new Promise(resolve => setTimeout(resolve, delay))
-    return retry(fn, retries - 1, delay)
+
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    return retry(fn, retries - 1, delay);
   }
 }
 
@@ -202,9 +207,7 @@ export function withTimeout(promise, ms) {
   return Promise.race([
     promise,
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Operation timed out')), ms)
-    )
-  ])
+      setTimeout(() => reject(new Error('Operation timed out')), ms),
+    ),
+  ]);
 }
-
-

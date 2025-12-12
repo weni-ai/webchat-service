@@ -1,10 +1,10 @@
-import { generateSessionId } from '../utils/helpers'
-import EventEmitter from 'eventemitter3'
-import { SERVICE_EVENTS } from '../utils/constants'
+import { generateSessionId } from '../utils/helpers';
+import EventEmitter from 'eventemitter3';
+import { SERVICE_EVENTS } from '../utils/constants';
 
 /**
  * SessionManager
- * 
+ *
  * Manages user sessions with features:
  * - Generate unique session IDs in format: timestamp@hostname
  * - Persist sessions in localStorage/sessionStorage
@@ -15,20 +15,20 @@ import { SERVICE_EVENTS } from '../utils/constants'
  */
 export default class SessionManager extends EventEmitter {
   constructor(storage, config = {}) {
-    super()
-    this.storage = storage
+    super();
+    this.storage = storage;
     this.config = {
       autoClearCache: config.autoClearCache !== false,
       cacheTimeout: config.cacheTimeout || 30 * 60 * 1000, // 30 minutes
       contactTimeout: config.contactTimeout || 24 * 60, // 24 hours in minutes
       clientId: config.clientId || null,
       sessionId: config.sessionId || null,
-    }
-    
-    this.sessionKey = 'weni:webchat:session'
-    this.session = null
-    this.clearTimer = null
-    this.contactTimeoutTimer = null
+    };
+
+    this.sessionKey = 'weni:webchat:session';
+    this.session = null;
+    this.clearTimer = null;
+    this.contactTimeoutTimer = null;
   }
 
   /**
@@ -37,18 +37,18 @@ export default class SessionManager extends EventEmitter {
    */
   getOrCreate() {
     if (this.session && this.session.id) {
-      return this.session.id
+      return this.session.id;
     }
 
-    const stored = this.storage.get(this.sessionKey)
-    
+    const stored = this.storage.get(this.sessionKey);
+
     if (stored && this._isSessionValid(stored)) {
-      this.session = stored
-      this._updateLastActivity()
-      return this.session.id
+      this.session = stored;
+      this._updateLastActivity();
+      return this.session.id;
     }
 
-    return this.createNewSession()
+    return this.createNewSession();
   }
 
   /**
@@ -56,17 +56,17 @@ export default class SessionManager extends EventEmitter {
    * @returns {Promise<Object|null>}
    */
   async restore() {
-    const stored = this.storage.get(this.sessionKey)
+    const stored = this.storage.get(this.sessionKey);
 
     if (stored && this._isSessionValid(stored)) {
-      this.session = stored
-      this._updateLastActivity()
-      this._startAutoClearTimer()
-      this._scheduleContactTimeoutCheck()
-      return this.session
+      this.session = stored;
+      this._updateLastActivity();
+      this._startAutoClearTimer();
+      this._scheduleContactTimeoutCheck();
+      return this.session;
     }
 
-    return null
+    return null;
   }
 
   /**
@@ -74,7 +74,7 @@ export default class SessionManager extends EventEmitter {
    * @returns {Object|null}
    */
   getSession() {
-    return this.session
+    return this.session;
   }
 
   /**
@@ -82,7 +82,7 @@ export default class SessionManager extends EventEmitter {
    * @returns {string|null}
    */
   getSessionId() {
-    return this.session ? this.session.id : null
+    return this.session ? this.session.id : null;
   }
 
   /**
@@ -91,26 +91,26 @@ export default class SessionManager extends EventEmitter {
    */
   updateMetadata(metadata = {}) {
     if (!this.session) {
-      return
+      return;
     }
 
     this.session.metadata = {
       ...this.session.metadata,
-      ...metadata
-    }
+      ...metadata,
+    };
 
-    this._updateLastActivity()
-    this._save()
+    this._updateLastActivity();
+    this._save();
   }
 
   /**
    * Clears current session
    */
   clear() {
-    this.session = null
-    this.storage.remove(this.sessionKey)
-    this._stopAutoClearTimer()
-    this._clearContactTimeoutTimer()
+    this.session = null;
+    this.storage.remove(this.sessionKey);
+    this._stopAutoClearTimer();
+    this._clearContactTimeoutTimer();
   }
 
   /**
@@ -119,7 +119,7 @@ export default class SessionManager extends EventEmitter {
    * @returns {string} Session ID
    */
   createNewSession() {
-    const now = Date.now()
+    const now = Date.now();
 
     const id = this.config.sessionId || generateSessionId(this.config.clientId);
 
@@ -131,13 +131,13 @@ export default class SessionManager extends EventEmitter {
       isChatOpen: false,
       metadata: {},
       conversation: [],
-    }
+    };
 
-    this._save()
-    this._startAutoClearTimer()
-    this._scheduleContactTimeoutCheck()
-    
-    return this.session.id
+    this._save();
+    this._startAutoClearTimer();
+    this._scheduleContactTimeoutCheck();
+
+    return this.session.id;
   }
 
   /**
@@ -146,12 +146,12 @@ export default class SessionManager extends EventEmitter {
    */
   setLastMessageSentAt(timestamp = Date.now()) {
     if (!this.session) {
-      return
+      return;
     }
 
-    this.session.lastMessageSentAt = timestamp
-    this._save()
-    this._scheduleContactTimeoutCheck()
+    this.session.lastMessageSentAt = timestamp;
+    this._save();
+    this._scheduleContactTimeoutCheck();
   }
 
   /**
@@ -162,21 +162,21 @@ export default class SessionManager extends EventEmitter {
    */
   _isSessionValid(session) {
     if (!session || !session.id || !session.lastActivity) {
-      return false
+      return false;
     }
 
     if (!this._isValidSessionIdFormat(session.id)) {
-      return false
+      return false;
     }
 
     if (!session.lastMessageSentAt) {
       return true; // If no message has been sent, the session is valid
     }
 
-    const now = Date.now()
-    const elapsedSinceLastMessageSent = now - session.lastMessageSentAt
+    const now = Date.now();
+    const elapsedSinceLastMessageSent = now - session.lastMessageSentAt;
 
-    return elapsedSinceLastMessageSent < this._getContactTimeoutMs()
+    return elapsedSinceLastMessageSent < this._getContactTimeoutMs();
   }
 
   /**
@@ -188,8 +188,8 @@ export default class SessionManager extends EventEmitter {
   _isValidSessionIdFormat(sessionId) {
     // Valid format: {number}@{string}
     // Example: 1544648616824@localhost
-    const pattern = /^\d+@.+$/
-    return pattern.test(sessionId)
+    const pattern = /^\d+@.+$/;
+    return pattern.test(sessionId);
   }
 
   /**
@@ -198,11 +198,11 @@ export default class SessionManager extends EventEmitter {
    */
   _updateLastActivity() {
     if (!this.session) {
-      return
+      return;
     }
 
-    this.session.lastActivity = Date.now()
-    this._save()
+    this.session.lastActivity = Date.now();
+    this._save();
   }
 
   /**
@@ -210,7 +210,7 @@ export default class SessionManager extends EventEmitter {
    * @private
    */
   _getContactTimeoutMs() {
-    return (this.config.contactTimeout || 0) * 60 * 1000
+    return (this.config.contactTimeout || 0) * 60 * 1000;
   }
 
   /**
@@ -219,29 +219,29 @@ export default class SessionManager extends EventEmitter {
    * @private
    */
   _scheduleContactTimeoutCheck() {
-    this._clearContactTimeoutTimer()
+    this._clearContactTimeoutTimer();
 
     if (!this.session || !this.session.lastMessageSentAt) {
-      return
+      return;
     }
 
-    const timeoutMs = this._getContactTimeoutMs()
+    const timeoutMs = this._getContactTimeoutMs();
     if (!timeoutMs || timeoutMs <= 0) {
-      return
+      return;
     }
 
-    const targetAt = this.session.lastMessageSentAt + timeoutMs
-    const delay = targetAt - Date.now()
+    const targetAt = this.session.lastMessageSentAt + timeoutMs;
+    const delay = targetAt - Date.now();
 
     if (delay <= 0) {
-      this.emit(SERVICE_EVENTS.CONTACT_TIMEOUT_MAXIMUM_TIME_REACHED)
-      return
+      this.emit(SERVICE_EVENTS.CONTACT_TIMEOUT_MAXIMUM_TIME_REACHED);
+      return;
     }
 
     this.contactTimeoutTimer = setTimeout(() => {
-      this.emit(SERVICE_EVENTS.CONTACT_TIMEOUT_MAXIMUM_TIME_REACHED)
-      this._clearContactTimeoutTimer()
-    }, delay)
+      this.emit(SERVICE_EVENTS.CONTACT_TIMEOUT_MAXIMUM_TIME_REACHED);
+      this._clearContactTimeoutTimer();
+    }, delay);
   }
 
   /**
@@ -250,8 +250,8 @@ export default class SessionManager extends EventEmitter {
    */
   _clearContactTimeoutTimer() {
     if (this.contactTimeoutTimer) {
-      clearTimeout(this.contactTimeoutTimer)
-      this.contactTimeoutTimer = null
+      clearTimeout(this.contactTimeoutTimer);
+      this.contactTimeoutTimer = null;
     }
   }
 
@@ -260,11 +260,11 @@ export default class SessionManager extends EventEmitter {
    * @returns {Array}
    */
   getConversation() {
-    if (!this.session) return []
+    if (!this.session) return [];
     if (!Array.isArray(this.session.conversation)) {
-      this.session.conversation = []
+      this.session.conversation = [];
     }
-    return this.session.conversation
+    return this.session.conversation;
   }
 
   /**
@@ -272,10 +272,10 @@ export default class SessionManager extends EventEmitter {
    * @param {Array} messages
    */
   setConversation(messages) {
-    if (!this.session) return
-    this.session.conversation = Array.isArray(messages) ? messages : []
-    this._updateLastActivity()
-    this._save()
+    if (!this.session) return;
+    this.session.conversation = Array.isArray(messages) ? messages : [];
+    this._updateLastActivity();
+    this._save();
   }
 
   /**
@@ -284,26 +284,26 @@ export default class SessionManager extends EventEmitter {
    * @param {{ limit?: number }} [options]
    */
   appendToConversation(message, options = {}) {
-    if (!this.session) return
-    const limit = typeof options.limit === 'number' ? options.limit : undefined
-    const list = this.getConversation()
-    list.push(message)
+    if (!this.session) return;
+    const limit = typeof options.limit === 'number' ? options.limit : undefined;
+    const list = this.getConversation();
+    list.push(message);
     if (limit && limit > 0 && list.length > limit) {
-      list.splice(0, list.length - limit)
+      list.splice(0, list.length - limit);
     }
-    this.session.conversation = list
-    this._updateLastActivity()
-    this._save()
+    this.session.conversation = list;
+    this._updateLastActivity();
+    this._save();
   }
 
   updateConversation(messageId, update) {
-    if (!this.session) return
-    const list = this.getConversation()
-    const message = list.find(m => m.id === messageId)
+    if (!this.session) return;
+    const list = this.getConversation();
+    const message = list.find((m) => m.id === messageId);
     if (message) {
-      Object.assign(message, update)
+      Object.assign(message, update);
     }
-    this._save()
+    this._save();
   }
 
   /**
@@ -312,15 +312,15 @@ export default class SessionManager extends EventEmitter {
    */
   _save() {
     if (!this.session) {
-      return
+      return;
     }
 
     // Backfill missing fields for older sessions
     if (typeof this.session.isChatOpen === 'undefined') {
-      this.session.isChatOpen = false
+      this.session.isChatOpen = false;
     }
 
-    this.storage.set(this.sessionKey, this.session)
+    this.storage.set(this.sessionKey, this.session);
   }
 
   /**
@@ -328,11 +328,11 @@ export default class SessionManager extends EventEmitter {
    * @param {boolean} isOpen
    */
   setIsChatOpen(isOpen) {
-    if (!this.session) return
-    this.session.isChatOpen = Boolean(isOpen)
-    this._updateLastActivity()
-    this._save()
-    this.emit(SERVICE_EVENTS.CHAT_OPEN_CHANGED, this.session.isChatOpen)
+    if (!this.session) return;
+    this.session.isChatOpen = Boolean(isOpen);
+    this._updateLastActivity();
+    this._save();
+    this.emit(SERVICE_EVENTS.CHAT_OPEN_CHANGED, this.session.isChatOpen);
   }
 
   /**
@@ -341,14 +341,14 @@ export default class SessionManager extends EventEmitter {
    */
   _startAutoClearTimer() {
     if (!this.config.autoClearCache) {
-      return
+      return;
     }
 
-    this._stopAutoClearTimer()
+    this._stopAutoClearTimer();
 
     this.clearTimer = setTimeout(() => {
-      this.clear()
-    }, this.config.cacheTimeout)
+      this.clear();
+    }, this.config.cacheTimeout);
   }
 
   /**
@@ -357,10 +357,8 @@ export default class SessionManager extends EventEmitter {
    */
   _stopAutoClearTimer() {
     if (this.clearTimer) {
-      clearTimeout(this.clearTimer)
-      this.clearTimer = null
+      clearTimeout(this.clearTimer);
+      this.clearTimer = null;
     }
   }
 }
-
-

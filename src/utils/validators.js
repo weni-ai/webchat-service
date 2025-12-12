@@ -9,31 +9,37 @@
  */
 export function validateConfig(config) {
   if (!config) {
-    throw new Error('Configuration is required')
+    throw new Error('Configuration is required');
   }
 
   if (!config.socketUrl || typeof config.socketUrl !== 'string') {
-    throw new Error('socketUrl is required and must be a string')
+    throw new Error('socketUrl is required and must be a string');
   }
 
   if (!config.channelUuid || typeof config.channelUuid !== 'string') {
-    throw new Error('channelUuid is required and must be a string')
+    throw new Error('channelUuid is required and must be a string');
   }
 
-  if (config.connectOn && !['mount', 'manual', 'demand'].includes(config.connectOn)) {
-    throw new Error('connectOn must be "mount", "manual" or "demand"')
+  if (
+    config.connectOn &&
+    !['mount', 'manual', 'demand'].includes(config.connectOn)
+  ) {
+    throw new Error('connectOn must be "mount", "manual" or "demand"');
   }
 
   if (config.storage && !['local', 'session'].includes(config.storage)) {
-    throw new Error('storage must be "local" or "session"')
+    throw new Error('storage must be "local" or "session"');
   }
 
-  if (config.maxReconnectAttempts && typeof config.maxReconnectAttempts !== 'number') {
-    throw new Error('maxReconnectAttempts must be a number')
+  if (
+    config.maxReconnectAttempts &&
+    typeof config.maxReconnectAttempts !== 'number'
+  ) {
+    throw new Error('maxReconnectAttempts must be a number');
   }
 
   if (config.pingInterval && typeof config.pingInterval !== 'number') {
-    throw new Error('pingInterval must be a number')
+    throw new Error('pingInterval must be a number');
   }
 }
 
@@ -44,14 +50,14 @@ export function validateConfig(config) {
  */
 export function validateMessage(message) {
   if (!message || typeof message !== 'object') {
-    return false
+    return false;
   }
 
   if (!message.type || typeof message.type !== 'string') {
-    return false
+    return false;
   }
 
-  return true
+  return true;
 }
 
 /**
@@ -61,10 +67,10 @@ export function validateMessage(message) {
  */
 export function validateUrl(url) {
   try {
-    new URL(url)
-    return true
+    new URL(url);
+    return true;
   } catch {
-    return false
+    return false;
   }
 }
 
@@ -75,10 +81,10 @@ export function validateUrl(url) {
  */
 export function validateWebSocketUrl(url) {
   if (!url || typeof url !== 'string') {
-    return false
+    return false;
   }
 
-  return url.startsWith('ws://') || url.startsWith('wss://')
+  return url.startsWith('ws://') || url.startsWith('wss://');
 }
 
 /**
@@ -87,8 +93,9 @@ export function validateWebSocketUrl(url) {
  * @returns {boolean}
  */
 export function validateUUID(uuid) {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  return uuidRegex.test(uuid)
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
 }
 
 /**
@@ -97,8 +104,8 @@ export function validateUUID(uuid) {
  * @returns {boolean}
  */
 export function validateEmail(email) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return emailRegex.test(email)
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
 }
 
 /**
@@ -107,8 +114,8 @@ export function validateEmail(email) {
  * @returns {boolean}
  */
 export function validatePhone(phone) {
-  const phoneRegex = /^\+?[\d\s\-()]+$/
-  return phoneRegex.test(phone)
+  const phoneRegex = /^\+?[\d\s\-()]+$/;
+  return phoneRegex.test(phone);
 }
 
 /**
@@ -118,13 +125,13 @@ export function validatePhone(phone) {
  */
 export function sanitizeText(text) {
   if (typeof text !== 'string') {
-    return ''
+    return '';
   }
 
   return text
     .trim()
     .replace(/[<>]/g, '') // Remove < and >
-    .substring(0, 5000) // Limit length
+    .substring(0, 5000); // Limit length
 }
 
 /**
@@ -135,10 +142,10 @@ export function sanitizeText(text) {
  */
 export function validateFileType(mimeType, allowedTypes) {
   if (!mimeType || !Array.isArray(allowedTypes)) {
-    return false
+    return false;
   }
 
-  return allowedTypes.includes(mimeType)
+  return allowedTypes.includes(mimeType);
 }
 
 /**
@@ -149,10 +156,8 @@ export function validateFileType(mimeType, allowedTypes) {
  */
 export function validateFileSize(size, maxSize) {
   if (typeof size !== 'number' || typeof maxSize !== 'number') {
-    return false
+    return false;
   }
 
-  return size > 0 && size <= maxSize
+  return size > 0 && size <= maxSize;
 }
-
-

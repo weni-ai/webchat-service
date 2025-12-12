@@ -1,6 +1,6 @@
 /**
  * StorageManager
- * 
+ *
  * Abstraction layer for browser storage:
  * - localStorage / sessionStorage support
  * - JSON serialization/deserialization
@@ -9,10 +9,10 @@
  */
 export default class StorageManager {
   constructor(type = 'local') {
-    this.type = type
-    this.storage = type === 'session' ? sessionStorage : localStorage
-    this.version = '1.0.0'
-    this.prefix = 'weni:webchat:'
+    this.type = type;
+    this.storage = type === 'session' ? sessionStorage : localStorage;
+    this.version = '1.0.0';
+    this.prefix = 'weni:webchat:';
   }
 
   /**
@@ -22,24 +22,24 @@ export default class StorageManager {
    */
   get(key) {
     try {
-      const fullKey = this._getFullKey(key)
-      const item = this.storage.getItem(fullKey)
-      
+      const fullKey = this._getFullKey(key);
+      const item = this.storage.getItem(fullKey);
+
       if (!item) {
-        return null
+        return null;
       }
 
-      const parsed = JSON.parse(item)
+      const parsed = JSON.parse(item);
 
       // Check version and migrate if needed
       if (parsed._version && parsed._version !== this.version) {
-        return this._migrate(parsed)
+        return this._migrate(parsed);
       }
 
-      return parsed._data !== undefined ? parsed._data : parsed
+      return parsed._data !== undefined ? parsed._data : parsed;
     } catch (error) {
-      console.error('StorageManager: Failed to get item', error)
-      return null
+      console.error('StorageManager: Failed to get item', error);
+      return null;
     }
   }
 
@@ -50,19 +50,19 @@ export default class StorageManager {
    */
   set(key, value) {
     try {
-      const fullKey = this._getFullKey(key)
+      const fullKey = this._getFullKey(key);
       const data = {
         _version: this.version,
         _timestamp: Date.now(),
-        _data: value
-      }
-      
-      this.storage.setItem(fullKey, JSON.stringify(data))
+        _data: value,
+      };
+
+      this.storage.setItem(fullKey, JSON.stringify(data));
     } catch (error) {
-      console.error('StorageManager: Failed to set item', error)
+      console.error('StorageManager: Failed to set item', error);
 
       if (error.name === 'QuotaExceededError') {
-        this._handleQuotaExceeded()
+        this._handleQuotaExceeded();
       }
     }
   }
@@ -73,10 +73,10 @@ export default class StorageManager {
    */
   remove(key) {
     try {
-      const fullKey = this._getFullKey(key)
-      this.storage.removeItem(fullKey)
+      const fullKey = this._getFullKey(key);
+      this.storage.removeItem(fullKey);
     } catch (error) {
-      console.error('StorageManager: Failed to remove item', error)
+      console.error('StorageManager: Failed to remove item', error);
     }
   }
 
@@ -85,10 +85,10 @@ export default class StorageManager {
    */
   clear() {
     try {
-      const keys = this._getAllKeys()
-      keys.forEach(key => this.storage.removeItem(key))
+      const keys = this._getAllKeys();
+      keys.forEach((key) => this.storage.removeItem(key));
     } catch (error) {
-      console.error('StorageManager: Failed to clear storage', error)
+      console.error('StorageManager: Failed to clear storage', error);
     }
   }
 
@@ -98,8 +98,8 @@ export default class StorageManager {
    * @returns {boolean}
    */
   has(key) {
-    const fullKey = this._getFullKey(key)
-    return this.storage.getItem(fullKey) !== null
+    const fullKey = this._getFullKey(key);
+    return this.storage.getItem(fullKey) !== null;
   }
 
   /**
@@ -107,7 +107,7 @@ export default class StorageManager {
    * @returns {Array<string>}
    */
   keys() {
-    return this._getAllKeys().map(key => key.replace(this.prefix, ''))
+    return this._getAllKeys().map((key) => key.replace(this.prefix, ''));
   }
 
   /**
@@ -115,17 +115,17 @@ export default class StorageManager {
    * @returns {number}
    */
   getSize() {
-    let size = 0
-    const keys = this._getAllKeys()
-    
-    keys.forEach(key => {
-      const item = this.storage.getItem(key)
-      if (item) {
-        size += item.length + key.length
-      }
-    })
+    let size = 0;
+    const keys = this._getAllKeys();
 
-    return size
+    keys.forEach((key) => {
+      const item = this.storage.getItem(key);
+      if (item) {
+        size += item.length + key.length;
+      }
+    });
+
+    return size;
   }
 
   /**
@@ -135,7 +135,7 @@ export default class StorageManager {
    * @returns {string}
    */
   _getFullKey(key) {
-    return key.startsWith(this.prefix) ? key : `${this.prefix}${key}`
+    return key.startsWith(this.prefix) ? key : `${this.prefix}${key}`;
   }
 
   /**
@@ -144,16 +144,16 @@ export default class StorageManager {
    * @returns {Array<string>}
    */
   _getAllKeys() {
-    const keys = []
-    
+    const keys = [];
+
     for (let i = 0; i < this.storage.length; i++) {
-      const key = this.storage.key(i)
+      const key = this.storage.key(i);
       if (key && key.startsWith(this.prefix)) {
-        keys.push(key)
+        keys.push(key);
       }
     }
 
-    return keys
+    return keys;
   }
 
   /**
@@ -165,8 +165,13 @@ export default class StorageManager {
   _migrate(data) {
     // Migration logic for future versions
     // For now, just return the data
-    console.warn('StorageManager: Data migration needed', data._version, '->', this.version)
-    return data._data !== undefined ? data._data : data
+    console.warn(
+      'StorageManager: Data migration needed',
+      data._version,
+      '->',
+      this.version,
+    );
+    return data._data !== undefined ? data._data : data;
   }
 
   /**
@@ -174,26 +179,24 @@ export default class StorageManager {
    * @private
    */
   _handleQuotaExceeded() {
-    console.warn('StorageManager: Quota exceeded, clearing old data')
-    
+    console.warn('StorageManager: Quota exceeded, clearing old data');
+
     try {
-      const keys = this._getAllKeys()
-      const items = keys.map(key => ({
+      const keys = this._getAllKeys();
+      const items = keys.map((key) => ({
         key,
-        data: JSON.parse(this.storage.getItem(key) || '{}')
-      }))
+        data: JSON.parse(this.storage.getItem(key) || '{}'),
+      }));
 
       // Sort by timestamp and remove oldest 25%
-      items.sort((a, b) => (a.data._timestamp || 0) - (b.data._timestamp || 0))
-      const toRemove = Math.ceil(items.length * 0.25)
+      items.sort((a, b) => (a.data._timestamp || 0) - (b.data._timestamp || 0));
+      const toRemove = Math.ceil(items.length * 0.25);
 
       for (let i = 0; i < toRemove; i++) {
-        this.storage.removeItem(items[i].key)
+        this.storage.removeItem(items[i].key);
       }
     } catch (error) {
-      console.error('StorageManager: Failed to handle quota exceeded', error)
+      console.error('StorageManager: Failed to handle quota exceeded', error);
     }
   }
 }
-
-

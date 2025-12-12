@@ -1,45 +1,47 @@
-import EventEmitter from 'eventemitter3'
+import EventEmitter from 'eventemitter3';
 
-import { DEFAULTS, SERVICE_EVENTS } from '../utils/constants'
-import { buildRegistrationMessage } from '../utils/messageBuilder'
+import { DEFAULTS, SERVICE_EVENTS } from '../utils/constants';
+import { buildRegistrationMessage } from '../utils/messageBuilder';
 
 /**
  * WebSocketManager
- * 
+ *
  * Manages WebSocket connection lifecycle, including:
  * - Connection establishment
  * - Automatic reconnection (configurable attempts)
  * - Ping/Pong keepalive mechanism
  * - Message sending and receiving
  * - Connection state management
- * 
+ *
  * States: connecting, connected, disconnected, error, reconnecting
  */
 export default class WebSocketManager extends EventEmitter {
   constructor(config = {}) {
-    super()
-    
+    super();
+
     this.config = {
       socketUrl: config.socketUrl || '',
       channelUuid: config.channelUuid || '',
       host: config.host || '',
       sessionToken: config.sessionToken || null,
       autoReconnect: config.autoReconnect !== false || DEFAULTS.AUTO_RECONNECT,
-      maxReconnectAttempts: config.maxReconnectAttempts || DEFAULTS.MAX_RECONNECT_ATTEMPTS,
-      reconnectInterval: config.reconnectInterval || DEFAULTS.RECONNECT_INTERVAL,
+      maxReconnectAttempts:
+        config.maxReconnectAttempts || DEFAULTS.MAX_RECONNECT_ATTEMPTS,
+      reconnectInterval:
+        config.reconnectInterval || DEFAULTS.RECONNECT_INTERVAL,
       pingInterval: config.pingInterval || DEFAULTS.PING_INTERVAL,
       retryStrategy: config.retryStrategy || null,
-      ...config
-    }
+      ...config,
+    };
 
-    this.socket = null
-    this.status = 'disconnected'
-    this.reconnectAttempts = 0
-    this.reconnectTimer = null
-    this.pingTimer = null
-    this.isRegistered = false
-    this.registrationData = null
-    this.retryStrategy = this.config.retryStrategy
+    this.socket = null;
+    this.status = 'disconnected';
+    this.reconnectAttempts = 0;
+    this.reconnectTimer = null;
+    this.pingTimer = null;
+    this.isRegistered = false;
+    this.registrationData = null;
+    this.retryStrategy = this.config.retryStrategy;
   }
 
   /**
@@ -48,48 +50,47 @@ export default class WebSocketManager extends EventEmitter {
    */
   async connect() {
     if (this.status === 'connected' || this.status === 'connecting') {
-      return Promise.resolve()
+      return Promise.resolve();
     }
 
     if (this.socket) {
-      this.socket.close()
-      this.socket = null
+      this.socket.close();
+      this.socket = null;
     }
 
     return new Promise((resolve, reject) => {
       try {
-        this.status = 'connecting'
-        this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
+        this.status = 'connecting';
+        this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status);
 
-        const socketHost = this.config.socketUrl.replace(/^(https?:|)\/\//, '')
-        const url = `wss://${socketHost}/ws`
+        const socketHost = this.config.socketUrl.replace(/^(https?:|)\/\//, '');
+        const url = `wss://${socketHost}/ws`;
 
-        this.socket = new WebSocket(url)
+        this.socket = new WebSocket(url);
 
         this.socket.onopen = () => {
           this.register();
           this.once(SERVICE_EVENTS.CONNECTED, resolve);
-        }
+        };
 
         this.socket.onmessage = (event) => {
-          this._handleMessage(event)
-        }
+          this._handleMessage(event);
+        };
 
         this.socket.onerror = (error) => {
-          this.emit(SERVICE_EVENTS.ERROR, error)
-        }
+          this.emit(SERVICE_EVENTS.ERROR, error);
+        };
 
         this.socket.onclose = (event) => {
-          this._handleDisconnect(event)
-        }
-
+          this._handleDisconnect(event);
+        };
       } catch (error) {
-        this.status = 'error'
-        this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
-        this.emit(SERVICE_EVENTS.ERROR, error)
-        reject(error)
+        this.status = 'error';
+        this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status);
+        this.emit(SERVICE_EVENTS.ERROR, error);
+        reject(error);
       }
-    })
+    });
   }
 
   /**
@@ -99,25 +100,38 @@ export default class WebSocketManager extends EventEmitter {
    * @returns {Promise<void>}
    */
   async register() {
-    if (this.isRegistered && this.socket && this.socket.readyState === WebSocket.OPEN) {
-      return Promise.resolve()
+    if (
+      this.isRegistered &&
+      this.socket &&
+      this.socket.readyState === WebSocket.OPEN
+    ) {
+      return Promise.resolve();
     }
 
-    const host = this.config.host || this.registrationData.host || 'https://flows.weni.ai'
+    const host =
+      this.config.host || this.registrationData.host || 'https://flows.weni.ai';
 
     const message = buildRegistrationMessage(this.registrationData.from, {
-      callback: this.registrationData.callback || `${host}/c/wwc/${this.config.channelUuid}/receive`,
+      callback:
+        this.registrationData.callback ||
+        `${host}/c/wwc/${this.config.channelUuid}/receive`,
       session_type: this.registrationData.session_type || 'local',
-      token: this.registrationData.token || this.config.sessionToken || undefined
-    })
+      token:
+        this.registrationData.token || this.config.sessionToken || undefined,
+    });
 
-    return this.send(message).then(() => {
-      this.isRegistered = true
-      this.emit(SERVICE_EVENTS.WS_REGISTERED)
-    }).catch((error) => {
-      this.emit(SERVICE_EVENTS.ERROR, new Error('Registration failed: ' + error.message))
-      throw error
-    })
+    return this.send(message)
+      .then(() => {
+        this.isRegistered = true;
+        this.emit(SERVICE_EVENTS.WS_REGISTERED);
+      })
+      .catch((error) => {
+        this.emit(
+          SERVICE_EVENTS.ERROR,
+          new Error('Registration failed: ' + error.message),
+        );
+        throw error;
+      });
   }
 
   setRegistrationData(data) {
@@ -128,7 +142,7 @@ export default class WebSocketManager extends EventEmitter {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error('Contact timeout'));
-      }, 30 * 1000)
+      }, 30 * 1000);
 
       this.once(SERVICE_EVENTS.CONTACT_TIMEOUT_ERROR, (error) => {
         clearTimeout(timeout);
@@ -151,15 +165,15 @@ export default class WebSocketManager extends EventEmitter {
   async _handleReadyForMessage() {
     this.status = 'connected';
 
-    this.reconnectAttempts = 0
+    this.reconnectAttempts = 0;
 
     if (this.retryStrategy) {
-      this.retryStrategy.reset()
+      this.retryStrategy.reset();
     }
-    
-    this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
-    this.emit(SERVICE_EVENTS.CONNECTED)
-    this._startPingInterval()
+
+    this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status);
+    this.emit(SERVICE_EVENTS.CONNECTED);
+    this._startPingInterval();
     this._requestProjectLanguage();
   }
 
@@ -190,8 +204,11 @@ export default class WebSocketManager extends EventEmitter {
 
       this.disconnect();
     } catch (error) {
-      this.emit(SERVICE_EVENTS.ERROR, new Error('Failed to close connection: ' + error.message));
-      throw error
+      this.emit(
+        SERVICE_EVENTS.ERROR,
+        new Error('Failed to close connection: ' + error.message),
+      );
+      throw error;
     }
   }
 
@@ -206,57 +223,57 @@ export default class WebSocketManager extends EventEmitter {
       // If socket is ready, send immediately
       if (this.socket && this.socket.readyState === WebSocket.OPEN) {
         try {
-          this.socket.send(JSON.stringify(message))
-          this.emit(SERVICE_EVENTS.MESSAGE_SENT, message)
-          resolve()
+          this.socket.send(JSON.stringify(message));
+          this.emit(SERVICE_EVENTS.MESSAGE_SENT, message);
+          resolve();
         } catch (error) {
-          this.emit(SERVICE_EVENTS.ERROR, error)
-          reject(error)
+          this.emit(SERVICE_EVENTS.ERROR, error);
+          reject(error);
         }
-        return
+        return;
       }
 
       // If socket is connecting, wait for it to open
       if (this.socket && this.socket.readyState === WebSocket.CONNECTING) {
         const onOpen = () => {
           try {
-            this.socket.send(JSON.stringify(message))
-            this.emit(SERVICE_EVENTS.MESSAGE_SENT, message)
-            cleanup()
-            resolve()
+            this.socket.send(JSON.stringify(message));
+            this.emit(SERVICE_EVENTS.MESSAGE_SENT, message);
+            cleanup();
+            resolve();
           } catch (error) {
-            cleanup()
-            this.emit(SERVICE_EVENTS.ERROR, error)
-            reject(error)
+            cleanup();
+            this.emit(SERVICE_EVENTS.ERROR, error);
+            reject(error);
           }
-        }
+        };
 
         const onError = (error) => {
-          cleanup()
-          this.emit(SERVICE_EVENTS.ERROR, error)
-          reject(error)
-        }
+          cleanup();
+          this.emit(SERVICE_EVENTS.ERROR, error);
+          reject(error);
+        };
 
         const onClose = () => {
-          cleanup()
-          reject(new Error('WebSocket closed before message could be sent'))
-        }
+          cleanup();
+          reject(new Error('WebSocket closed before message could be sent'));
+        };
 
         const cleanup = () => {
-          this.socket?.removeEventListener('open', onOpen)
-          this.socket?.removeEventListener('error', onError)
-          this.socket?.removeEventListener('close', onClose)
-        }
+          this.socket?.removeEventListener('open', onOpen);
+          this.socket?.removeEventListener('error', onError);
+          this.socket?.removeEventListener('close', onClose);
+        };
 
-        this.socket.addEventListener('open', onOpen)
-        this.socket.addEventListener('error', onError)
-        this.socket.addEventListener('close', onClose)
-        return
+        this.socket.addEventListener('open', onOpen);
+        this.socket.addEventListener('error', onError);
+        this.socket.addEventListener('close', onClose);
+        return;
       }
 
       // Socket is closed or doesn't exist
-      reject(new Error('WebSocket not connected'))
-    })
+      reject(new Error('WebSocket not connected'));
+    });
   }
 
   /**
@@ -265,22 +282,22 @@ export default class WebSocketManager extends EventEmitter {
    */
   disconnect(permanent = true, status = 'disconnecting') {
     if (permanent) {
-      this.config.autoReconnect = false
+      this.config.autoReconnect = false;
     }
-    
-    this._stopPingInterval()
-    this._stopReconnectTimer()
+
+    this._stopPingInterval();
+    this._stopReconnectTimer();
 
     if (this.socket) {
-      this.socket.close()
+      this.socket.close();
     }
 
-    this.status = status
-    this.isRegistered = false
-    this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
-    
+    this.status = status;
+    this.isRegistered = false;
+    this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status);
+
     if (permanent) {
-      this.emit(SERVICE_EVENTS.DISCONNECTED)
+      this.emit(SERVICE_EVENTS.DISCONNECTED);
     }
   }
 
@@ -289,7 +306,7 @@ export default class WebSocketManager extends EventEmitter {
    * @returns {string}
    */
   getStatus() {
-    return this.status
+    return this.status;
   }
 
   /**
@@ -298,10 +315,10 @@ export default class WebSocketManager extends EventEmitter {
    */
   _handleMessage(event) {
     try {
-      const data = JSON.parse(event.data)
+      const data = JSON.parse(event.data);
 
       if (data.type === 'pong') {
-        return
+        return;
       }
 
       if (data.type === 'ready_for_message') {
@@ -319,38 +336,53 @@ export default class WebSocketManager extends EventEmitter {
         return;
       }
 
-      if (data.type === 'error' && String(data.error).startsWith('verify contact timeout: ')) {
+      if (
+        data.type === 'error' &&
+        String(data.error).startsWith('verify contact timeout: ')
+      ) {
         this.emit(
           SERVICE_EVENTS.CONTACT_TIMEOUT_ERROR,
-          new Error(data.error.slice('verify contact timeout: '.length))
+          new Error(data.error.slice('verify contact timeout: '.length)),
         );
 
         return;
       }
 
-      if (data.type === 'error' && data.error === 'unable to register: client from already exists') {
+      if (
+        data.type === 'error' &&
+        data.error === 'unable to register: client from already exists'
+      ) {
         this._closeOthersConnections();
-        return
+        return;
       }
 
-      if (data.type === 'warning' && data.warning === 'Connection closed by request') {
+      if (
+        data.type === 'warning' &&
+        data.warning === 'Connection closed by request'
+      ) {
         this.disconnect(true, 'closed');
-        return
+        return;
       }
 
       if (data.type === 'error') {
-        const errorMsg = data.error || 'Unknown server error'
-        this.emit(SERVICE_EVENTS.ERROR, new Error(errorMsg))
-        
-        if (errorMsg.includes('unable to register') || errorMsg.includes('already exists')) {
-          this.isRegistered = false
+        const errorMsg = data.error || 'Unknown server error';
+        this.emit(SERVICE_EVENTS.ERROR, new Error(errorMsg));
+
+        if (
+          errorMsg.includes('unable to register') ||
+          errorMsg.includes('already exists')
+        ) {
+          this.isRegistered = false;
         }
-        return
+        return;
       }
 
-      this.emit(SERVICE_EVENTS.MESSAGE, data)
+      this.emit(SERVICE_EVENTS.MESSAGE, data);
     } catch (error) {
-      this.emit(SERVICE_EVENTS.ERROR, new Error('Failed to parse message: ' + error.message))
+      this.emit(
+        SERVICE_EVENTS.ERROR,
+        new Error('Failed to parse message: ' + error.message),
+      );
     }
   }
 
@@ -359,22 +391,26 @@ export default class WebSocketManager extends EventEmitter {
    * @private
    */
   _handleDisconnect(event) {
-    const wasConnected = this.status === 'connected'
-    const wasDisconnecting = this.status === 'disconnecting'
-    const wasClosed = this.status === 'closed'
-    
-    this.status = 'disconnected'
-    this.isRegistered = false
-    this._stopPingInterval()
+    const wasConnected = this.status === 'connected';
+    const wasDisconnecting = this.status === 'disconnecting';
+    const wasClosed = this.status === 'closed';
+
+    this.status = 'disconnected';
+    this.isRegistered = false;
+    this._stopPingInterval();
 
     if (!wasClosed) {
-      this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
-      this.emit(SERVICE_EVENTS.DISCONNECTED)
+      this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status);
+      this.emit(SERVICE_EVENTS.DISCONNECTED);
     }
 
     // Only attempt reconnection if we were connected or disconnecting and autoReconnect is enabled
-    if ((wasConnected || wasDisconnecting) && this.config.autoReconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
-      this._scheduleReconnect()
+    if (
+      (wasConnected || wasDisconnecting) &&
+      this.config.autoReconnect &&
+      this.reconnectAttempts < this.config.maxReconnectAttempts
+    ) {
+      this._scheduleReconnect();
     }
   }
 
@@ -384,24 +420,24 @@ export default class WebSocketManager extends EventEmitter {
    * @private
    */
   _scheduleReconnect() {
-    this.status = 'reconnecting'
-    this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status)
-    
+    this.status = 'reconnecting';
+    this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status);
+
     // Calculate delay using retry strategy or fallback to fixed interval
-    const delay = this.retryStrategy 
+    const delay = this.retryStrategy
       ? this.retryStrategy.next()
-      : this.config.reconnectInterval
-    
+      : this.config.reconnectInterval;
+
     this.reconnectTimer = setTimeout(async () => {
-      this.reconnectAttempts++
-      this.emit(SERVICE_EVENTS.RECONNECTING, this.reconnectAttempts)
-      
+      this.reconnectAttempts++;
+      this.emit(SERVICE_EVENTS.RECONNECTING, this.reconnectAttempts);
+
       try {
-        await this.connect(this.registrationData)
+        await this.connect(this.registrationData);
       } catch (error) {
         // Error handled in connect()
       }
-    }, delay)
+    }, delay);
   }
 
   /**
@@ -409,13 +445,13 @@ export default class WebSocketManager extends EventEmitter {
    * @private
    */
   _startPingInterval() {
-    this._stopPingInterval()
-    
+    this._stopPingInterval();
+
     this.pingTimer = setInterval(() => {
       if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-        this.socket.send(JSON.stringify({ type: 'ping' }))
+        this.socket.send(JSON.stringify({ type: 'ping' }));
       }
-    }, this.config.pingInterval)
+    }, this.config.pingInterval);
   }
 
   /**
@@ -424,8 +460,8 @@ export default class WebSocketManager extends EventEmitter {
    */
   _stopPingInterval() {
     if (this.pingTimer) {
-      clearInterval(this.pingTimer)
-      this.pingTimer = null
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
     }
   }
 
@@ -435,10 +471,8 @@ export default class WebSocketManager extends EventEmitter {
    */
   _stopReconnectTimer() {
     if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer)
-      this.reconnectTimer = null
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
   }
 }
-
-
