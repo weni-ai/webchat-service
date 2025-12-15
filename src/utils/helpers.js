@@ -61,13 +61,15 @@ export function generateMessageId() {
 export function formatTimestamp(timestamp, locale = 'en-US') {
   const date = new Date(timestamp);
 
-  return date.toLocaleString(locale, {
+  const formatter = new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  return formatter.format(date);
 }
 
 /**
