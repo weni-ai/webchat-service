@@ -58,10 +58,11 @@ export function generateMessageId() {
  * @param {string} locale
  * @returns {string}
  */
-export function formatTimestamp(timestamp, locale = 'en-US') {
+export function formatTimestamp(timestamp, locale = 'en-US', timeZone) {
   const date = new Date(timestamp);
 
-  const formatter = new Intl.DateTimeFormat('en-US', {
+  const formatter = new Intl.DateTimeFormat(locale, {
+    timeZone,
     year: 'numeric',
     month: 'short',
     day: 'numeric',
