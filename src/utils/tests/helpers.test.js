@@ -99,7 +99,11 @@ describe('Helpers', () => {
   describe('formatTimestamp', () => {
     it('should format the timestamp to a readable string', () => {
       const timestamp = 1760697000000;
-      const formattedTimestamp = helpers.formatTimestamp(timestamp, 'en-US', 'UTC');
+      const formattedTimestamp = helpers.formatTimestamp(
+        timestamp,
+        'en-US',
+        'UTC',
+      );
 
       expect(formattedTimestamp).toBe('Oct 17, 2025, 10:30 AM');
     });
