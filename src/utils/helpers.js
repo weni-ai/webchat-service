@@ -58,16 +58,19 @@ export function generateMessageId() {
  * @param {string} locale
  * @returns {string}
  */
-export function formatTimestamp(timestamp, locale = 'en-US') {
+export function formatTimestamp(timestamp, locale = 'en-US', timeZone) {
   const date = new Date(timestamp);
 
-  return date.toLocaleString(locale, {
+  const formatter = new Intl.DateTimeFormat(locale, {
+    timeZone,
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  return formatter.format(date);
 }
 
 /**
