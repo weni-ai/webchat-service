@@ -9,10 +9,11 @@ export function buildMessagePayload(sessionId, message, options = {}) {
   const context = options.context || '';
 
   const hasCustomFields =
-    message && typeof message.__customFields === 'object' &&
+    message &&
+    typeof message.__customFields === 'object' &&
     message.__customFields !== null &&
     Object.keys(message.__customFields).length > 0;
-  
+
   const messageType = hasCustomFields ? 'message_with_fields' : 'message';
   const messageData = hasCustomFields ? message.__customFields : undefined;
 

@@ -371,7 +371,10 @@ export default class SessionManager extends EventEmitter {
    */
   addPendingCustomField(key, value) {
     if (!this.session) return;
-    if (typeof this.session.pendingCustomFields !== 'object' || this.session.pendingCustomFields === null) {
+    if (
+      typeof this.session.pendingCustomFields !== 'object' ||
+      this.session.pendingCustomFields === null
+    ) {
       this.session.pendingCustomFields = {};
     }
     this.session.pendingCustomFields[key] = value;
