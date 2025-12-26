@@ -12,6 +12,7 @@ import { SERVICE_EVENTS } from '../utils/constants';
  * - Clear sessions
  * - Auto-clear cache after timeout
  * - Contact timeout management
+ * - Track whether user has sent any message
  */
 export default class SessionManager extends EventEmitter {
   constructor(storage, config = {}) {
@@ -128,6 +129,8 @@ export default class SessionManager extends EventEmitter {
       createdAt: now,
       lastActivity: now,
       lastMessageSentAt: null,
+      hasSentAnyMessage: false,
+      pendingCustomFields: {},
       isChatOpen: false,
       metadata: {},
       conversation: [],
@@ -150,8 +153,30 @@ export default class SessionManager extends EventEmitter {
     }
 
     this.session.lastMessageSentAt = timestamp;
+    this.session.hasSentAnyMessage = true;
     this._save();
     this._scheduleContactTimeoutCheck();
+  }
+
+  /**
+   * Returns whether the user has sent any message
+   * @returns {boolean}
+   */
+  hasUserSentAnyMessage() {
+    return this.session ? Boolean(this.session.hasSentAnyMessage) : false;
+  }
+
+  /**
+   * Sets whether the user has sent any kind of message (text, audio, file, etc.)
+   * @param {boolean} value
+   */
+  setHasSentAnyMessage(value = true) {
+    if (!this.session) {
+      return;
+    }
+    this.session.hasSentAnyMessage = Boolean(value);
+    this._updateLastActivity();
+    this._save();
   }
 
   /**
@@ -319,8 +344,52 @@ export default class SessionManager extends EventEmitter {
     if (typeof this.session.isChatOpen === 'undefined') {
       this.session.isChatOpen = false;
     }
+    if (typeof this.session.hasSentAnyMessage === 'undefined') {
+      this.session.hasSentAnyMessage = Boolean(this.session.lastMessageSentAt);
+    }
+    if (typeof this.session.pendingCustomFields === 'undefined') {
+      this.session.pendingCustomFields = {};
+    }
 
     this.storage.set(this.sessionKey, this.session);
+  }
+
+  /**
+   * Returns pending custom fields set before first message
+   * @returns {Record<string, any>}
+   */
+  getPendingCustomFields() {
+    if (!this.session) return {};
+    const fields = this.session.pendingCustomFields || {};
+    return typeof fields === 'object' && fields !== null ? fields : {};
+  }
+
+  /**
+   * Adds or updates a pending custom field
+   * @param {string} key
+   * @param {any} value
+   */
+  addPendingCustomField(key, value) {
+    if (!this.session) return;
+    if (
+      typeof this.session.pendingCustomFields !== 'object' ||
+      this.session.pendingCustomFields === null
+    ) {
+      this.session.pendingCustomFields = {};
+    }
+    this.session.pendingCustomFields[key] = value;
+    this._updateLastActivity();
+    this._save();
+  }
+
+  /**
+   * Clears all pending custom fields
+   */
+  clearPendingCustomFields() {
+    if (!this.session) return;
+    this.session.pendingCustomFields = {};
+    this._updateLastActivity();
+    this._save();
   }
 
   /**

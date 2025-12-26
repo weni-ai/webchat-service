@@ -8,22 +8,33 @@ export function buildMessagePayload(sessionId, message, options = {}) {
   const from = sessionId;
   const context = options.context || '';
 
+  const hasCustomFields =
+    message &&
+    typeof message.__customFields === 'object' &&
+    message.__customFields !== null &&
+    Object.keys(message.__customFields).length > 0;
+
+  const messageType = hasCustomFields ? 'message_with_fields' : 'message';
+  const messageData = hasCustomFields ? message.__customFields : undefined;
+
   if (message.type === 'text') {
     return buildWebSocketMessage(
-      'message',
+      messageType,
       { type: 'text', text: message.text },
       {
         context,
         from,
+        data: messageData,
       },
     );
   } else if (['image', 'video', 'audio', 'file'].includes(message.type)) {
     return buildWebSocketMessage(
-      'message',
+      messageType,
       { type: message.type, media: message.media },
       {
         context,
         from,
+        data: messageData,
       },
     );
   } else if (message.type === 'set_custom_field') {
@@ -177,6 +188,7 @@ export function buildWebSocketMessage(type, message, options = {}) {
     callback: options.callback,
     token: options.token,
     trigger: options.trigger,
+    data: options.data,
   };
 }
 
