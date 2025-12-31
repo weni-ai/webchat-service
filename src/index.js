@@ -753,11 +753,14 @@ export default class WeniWebchatService extends EventEmitter {
       this.emit(SERVICE_EVENTS.MESSAGE_RECEIVED, msg);
     });
 
-    this.messageProcessor.on(SERVICE_EVENTS.MESSAGE_UPDATED, (messageId, updates) => {
-      this.state.updateMessage(messageId, updates)
-      this.session.updateConversation(messageId, updates)
-      this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, updates)
-    })
+    this.messageProcessor.on(
+      SERVICE_EVENTS.MESSAGE_UPDATED,
+      (messageId, updates) => {
+        this.state.updateMessage(messageId, updates);
+        this.session.updateConversation(messageId, updates);
+        this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, updates);
+      },
+    );
 
     this.messageProcessor.on(SERVICE_EVENTS.TYPING_START, () => {
       this.state.setTyping(true);

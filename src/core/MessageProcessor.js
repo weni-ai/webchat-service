@@ -32,8 +32,8 @@ export default class MessageProcessor extends EventEmitter {
     this.typingTimer = null;
     this.isTypingActive = false;
     this.isThinkingActive = false;
-    this.streams = new Map()
-    this.recentIncomingTexts = []
+    this.streams = new Map();
+    this.recentIncomingTexts = [];
   }
 
   /**
@@ -50,11 +50,11 @@ export default class MessageProcessor extends EventEmitter {
           this._processUserMessage(rawMessage);
           break;
         case 'delta':
-          this._processStreamingDelta(rawMessage)
-          break
+          this._processStreamingDelta(rawMessage);
+          break;
         case 'completed':
-          this._processStreamingCompleted(rawMessage)
-          break
+          this._processStreamingCompleted(rawMessage);
+          break;
         case 'typing_start':
           this._handleTypingIndicator(rawMessage);
           break;
@@ -94,7 +94,7 @@ export default class MessageProcessor extends EventEmitter {
         typeof message.text === 'string' &&
         this._isDuplicateIncomingText(message.text)
       ) {
-        return
+        return;
       }
 
       this.queue.push(message);
@@ -193,18 +193,19 @@ export default class MessageProcessor extends EventEmitter {
    * @param {Object} raw
    */
   _processStreamingDelta(raw) {
-    const messageId = 'msg_' + this._getMessageIdFromRaw(raw)
+    const messageId = 'msg_' + this._getMessageIdFromRaw(raw);
     if (!messageId) {
-      this.emit(SERVICE_EVENTS.ERROR, new Error('Delta received without messageId'))
-      return
+      this.emit(
+        SERVICE_EVENTS.ERROR,
+        new Error('Delta received without messageId'),
+      );
+      return;
     }
 
-    const chunkText = raw?.message?.text || ''
-    const timestamp = Date.now()
+    const chunkText = raw?.message?.text || '';
+    const timestamp = Date.now();
 
-    if (
-      (this.isTypingActive || this.isThinkingActive)
-    ) {
+    if (this.isTypingActive || this.isThinkingActive) {
       this._stopTyping();
     }
 
@@ -220,21 +221,25 @@ export default class MessageProcessor extends EventEmitter {
         metadata: {
           from: raw.from,
           to: raw.to,
-          channelUuid: raw.channelUuid
-        }
-      }
+          channelUuid: raw.channelUuid,
+        },
+      };
 
-      this.streams.set(messageId, { text: message.text, timestamp })
-      this.queue.push(message)
-      this._processQueue()
-      return
+      this.streams.set(messageId, { text: message.text, timestamp });
+      this.queue.push(message);
+      this._processQueue();
+      return;
     }
 
-    const current = this.streams.get(messageId) || { text: '' }
-    const mergedText = this._mergeText(current.text, chunkText)
-    this.streams.set(messageId, { text: mergedText, timestamp })
+    const current = this.streams.get(messageId) || { text: '' };
+    const mergedText = this._mergeText(current.text, chunkText);
+    this.streams.set(messageId, { text: mergedText, timestamp });
 
-    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, { text: mergedText, status: 'streaming', timestamp })
+    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, {
+      text: mergedText,
+      status: 'streaming',
+      timestamp,
+    });
   }
 
   /**
@@ -243,14 +248,17 @@ export default class MessageProcessor extends EventEmitter {
    * @param {Object} raw
    */
   _processStreamingCompleted(raw) {
-    const messageId = 'msg_' + this._getMessageIdFromRaw(raw)
+    const messageId = 'msg_' + this._getMessageIdFromRaw(raw);
     if (!messageId) {
-      this.emit(SERVICE_EVENTS.ERROR, new Error('Completed received without messageId'))
-      return
+      this.emit(
+        SERVICE_EVENTS.ERROR,
+        new Error('Completed received without messageId'),
+      );
+      return;
     }
 
-    const finalText = raw?.message?.text || ''
-    const timestamp = Date.now()
+    const finalText = raw?.message?.text || '';
+    const timestamp = Date.now();
 
     if (!this.streams.has(messageId)) {
       const message = {
@@ -264,20 +272,24 @@ export default class MessageProcessor extends EventEmitter {
         metadata: {
           from: raw.from,
           to: raw.to,
-          channelUuid: raw.channelUuid
-        }
-      }
+          channelUuid: raw.channelUuid,
+        },
+      };
 
-      this.queue.push(message)
-      this._processQueue()
-      this._rememberIncomingText(finalText)
-      return
+      this.queue.push(message);
+      this._processQueue();
+      this._rememberIncomingText(finalText);
+      return;
     }
 
-    this.streams.delete(messageId)
+    this.streams.delete(messageId);
 
-    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, { text: finalText, status: 'delivered', timestamp })
-    this._rememberIncomingText(finalText)
+    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, {
+      text: finalText,
+      status: 'delivered',
+      timestamp,
+    });
+    this._rememberIncomingText(finalText);
   }
 
   /**
@@ -287,7 +299,7 @@ export default class MessageProcessor extends EventEmitter {
    * @returns {string|undefined}
    */
   _getMessageIdFromRaw(raw) {
-    return raw?.message?.messageId || raw?.id
+    return raw?.message?.messageId || raw?.id;
   }
 
   /**
@@ -298,9 +310,9 @@ export default class MessageProcessor extends EventEmitter {
    * @returns {string}
    */
   _mergeText(previous, incoming) {
-    if (!previous) return incoming || ''
-    if (!incoming) return previous
-    return previous + incoming
+    if (!previous) return incoming || '';
+    if (!incoming) return previous;
+    return previous + incoming;
   }
   /**
    * Gets message type from raw message
@@ -464,8 +476,8 @@ export default class MessageProcessor extends EventEmitter {
    * @returns {boolean}
    */
   _isDuplicateIncomingText(text) {
-    if (!text) return false
-    return this.recentIncomingTexts.includes(text)
+    if (!text) return false;
+    return this.recentIncomingTexts.includes(text);
   }
 
   /**
@@ -474,10 +486,10 @@ export default class MessageProcessor extends EventEmitter {
    * @param {string} text
    */
   _rememberIncomingText(text) {
-    if (typeof text !== 'string' || text.length === 0) return
-    this.recentIncomingTexts.push(text)
+    if (typeof text !== 'string' || text.length === 0) return;
+    this.recentIncomingTexts.push(text);
     if (this.recentIncomingTexts.length > 5) {
-      this.recentIncomingTexts.splice(0, this.recentIncomingTexts.length - 5)
+      this.recentIncomingTexts.splice(0, this.recentIncomingTexts.length - 5);
     }
   }
 }
