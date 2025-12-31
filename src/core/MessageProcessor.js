@@ -260,6 +260,10 @@ export default class MessageProcessor extends EventEmitter {
     const finalText = raw?.message?.text || '';
     const timestamp = Date.now();
 
+    if (this.isTypingActive || this.isThinkingActive) {
+      this._stopTyping();
+    }
+
     if (!this.streams.has(messageId)) {
       const message = {
         id: messageId,
