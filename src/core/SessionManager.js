@@ -321,6 +321,11 @@ export default class SessionManager extends EventEmitter {
     this._save();
   }
 
+  /**
+   * Updates a message in the conversation
+   * @param {string} messageId
+   * @param {Object} update
+   */
   updateConversation(messageId, update) {
     if (!this.session) return;
     const list = this.getConversation();
