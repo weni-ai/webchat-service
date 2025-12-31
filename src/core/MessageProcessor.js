@@ -32,6 +32,8 @@ export default class MessageProcessor extends EventEmitter {
     this.typingTimer = null;
     this.isTypingActive = false;
     this.isThinkingActive = false;
+    this.streams = new Map();
+    this.recentIncomingTexts = [];
   }
 
   /**
@@ -46,6 +48,12 @@ export default class MessageProcessor extends EventEmitter {
       switch (messageType) {
         case 'message':
           this._processUserMessage(rawMessage);
+          break;
+        case 'delta':
+          this._processStreamingDelta(rawMessage);
+          break;
+        case 'completed':
+          this._processStreamingCompleted(rawMessage);
           break;
         case 'typing_start':
           this._handleTypingIndicator(rawMessage);
@@ -78,6 +86,15 @@ export default class MessageProcessor extends EventEmitter {
         (this.isTypingActive || this.isThinkingActive)
       ) {
         this._stopTyping();
+      }
+
+      if (
+        message.type === 'message' &&
+        message.direction === 'incoming' &&
+        typeof message.text === 'string' &&
+        this._isDuplicateIncomingText(message.text)
+      ) {
+        return;
       }
 
       this.queue.push(message);
@@ -133,7 +150,7 @@ export default class MessageProcessor extends EventEmitter {
    */
   _normalizeMessage(raw) {
     const message = {
-      id: raw.id || generateMessageId(),
+      id: raw.message?.messageId || raw.id || generateMessageId(),
       type: this._getMessageType(raw),
       timestamp: raw.timestamp || Date.now(),
       direction: 'incoming',
@@ -170,6 +187,137 @@ export default class MessageProcessor extends EventEmitter {
     return message;
   }
 
+  /**
+   * Processes a streaming delta chunk
+   * @private
+   * @param {Object} raw
+   */
+  _processStreamingDelta(raw) {
+    const messageId = 'msg_' + this._getMessageIdFromRaw(raw);
+    if (!messageId) {
+      this.emit(
+        SERVICE_EVENTS.ERROR,
+        new Error('Delta received without messageId'),
+      );
+      return;
+    }
+
+    const chunkText = raw?.message?.text || '';
+    const timestamp = Date.now();
+
+    if (this.isTypingActive || this.isThinkingActive) {
+      this._stopTyping();
+    }
+
+    if (!this.streams.has(messageId)) {
+      const message = {
+        id: messageId,
+        type: 'text',
+        text: chunkText || '',
+        timestamp,
+        direction: 'incoming',
+        status: 'streaming',
+        persisted: raw.persisted || undefined,
+        metadata: {
+          from: raw.from,
+          to: raw.to,
+          channelUuid: raw.channelUuid,
+        },
+      };
+
+      this.streams.set(messageId, { text: message.text, timestamp });
+      this.queue.push(message);
+      this._processQueue();
+      return;
+    }
+
+    const current = this.streams.get(messageId) || { text: '' };
+    const mergedText = this._mergeText(current.text, chunkText);
+    this.streams.set(messageId, { text: mergedText, timestamp });
+
+    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, {
+      text: mergedText,
+      status: 'streaming',
+      timestamp,
+    });
+  }
+
+  /**
+   * Processes a streaming completed event
+   * @private
+   * @param {Object} raw
+   */
+  _processStreamingCompleted(raw) {
+    const messageId = 'msg_' + this._getMessageIdFromRaw(raw);
+    if (!messageId) {
+      this.emit(
+        SERVICE_EVENTS.ERROR,
+        new Error('Completed received without messageId'),
+      );
+      return;
+    }
+
+    const finalText = raw?.message?.text || '';
+    const timestamp = Date.now();
+
+    if (this.isTypingActive || this.isThinkingActive) {
+      this._stopTyping();
+    }
+
+    if (!this.streams.has(messageId)) {
+      const message = {
+        id: messageId,
+        type: 'text',
+        text: finalText,
+        timestamp,
+        direction: 'incoming',
+        status: 'delivered',
+        persisted: raw.persisted || undefined,
+        metadata: {
+          from: raw.from,
+          to: raw.to,
+          channelUuid: raw.channelUuid,
+        },
+      };
+
+      this.queue.push(message);
+      this._processQueue();
+      this._rememberIncomingText(finalText);
+      return;
+    }
+
+    this.streams.delete(messageId);
+
+    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, {
+      text: finalText,
+      status: 'delivered',
+      timestamp,
+    });
+    this._rememberIncomingText(finalText);
+  }
+
+  /**
+   * Extract messageId from various raw structures
+   * @private
+   * @param {Object} raw
+   * @returns {string|undefined}
+   */
+  _getMessageIdFromRaw(raw) {
+    return raw?.message?.messageId || raw?.id;
+  }
+
+  /**
+   * Merge incremental text with best-effort overlap handling
+   * @private
+   * @param {string} previous
+   * @param {string} incoming
+   * @returns {string}
+   */
+  _mergeText(previous, incoming) {
+    if (!previous) return incoming || '';
+    if (!incoming) return previous;
+    return previous + incoming;
+  }
   /**
    * Gets message type from raw message
    * @private
@@ -323,5 +471,29 @@ export default class MessageProcessor extends EventEmitter {
    */
   _delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Checks if text matches any of the last 5 finalized incoming texts
+   * @private
+   * @param {string} text
+   * @returns {boolean}
+   */
+  _isDuplicateIncomingText(text) {
+    if (!text) return false;
+    return this.recentIncomingTexts.includes(text);
+  }
+
+  /**
+   * Stores a finalized incoming text, keeping only the last 5
+   * @private
+   * @param {string} text
+   */
+  _rememberIncomingText(text) {
+    if (typeof text !== 'string' || text.length === 0) return;
+    this.recentIncomingTexts.push(text);
+    if (this.recentIncomingTexts.length > 5) {
+      this.recentIncomingTexts.splice(0, this.recentIncomingTexts.length - 5);
+    }
   }
 }
