@@ -40,7 +40,7 @@ export default class MessageProcessor extends EventEmitter {
     this.streams = new Map();
     this.recentIncomingTexts = [];
 
-    // Streaming state (new protocol)
+    // Streaming state
     this._resetStreamState();
   }
 
@@ -130,7 +130,6 @@ export default class MessageProcessor extends EventEmitter {
 
   /**
    * Extracts message type from raw WebSocket message
-   * Detects new streaming protocol: delta messages have 'v' and 'seq' but no 'type'
    * @private
    * @param {Object} raw
    * @returns {string}
@@ -140,7 +139,7 @@ export default class MessageProcessor extends EventEmitter {
       return 'unknown';
     }
 
-    // New streaming protocol: delta messages have 'v' and 'seq' but no 'type' field
+    // delta messages have 'v' and 'seq' but no 'type' field
     if ('v' in raw && 'seq' in raw && !('type' in raw)) {
       return 'delta';
     }
@@ -218,7 +217,7 @@ export default class MessageProcessor extends EventEmitter {
   }
 
   /**
-   * Processes a stream_start message (new streaming protocol)
+   * Processes a stream_start message
    * Initializes stream state but does not trigger message emission until first delta
    * This allows typing indicator to be shown while the first delta has not arrived yet
    * @private
@@ -415,7 +414,7 @@ export default class MessageProcessor extends EventEmitter {
   }
 
   /**
-   * Processes a stream_end message (new streaming protocol)
+   * Processes a stream_end message
    * Finalizes the stream and cleans up state
    * @private
    * @param {Object} raw - { type: 'stream_end', id: string }
