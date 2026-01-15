@@ -1,7 +1,12 @@
 import EventEmitter from 'eventemitter3';
 
 import { generateMessageId } from '../utils/helpers';
-import { DEFAULTS, SERVICE_EVENTS } from '../utils/constants';
+import {
+  DEFAULTS,
+  SERVICE_EVENTS,
+  MESSAGE_ID_PREFIX,
+  STREAM_INITIAL_SEQUENCE,
+} from '../utils/constants';
 
 /**
  * MessageProcessor
@@ -34,6 +39,22 @@ export default class MessageProcessor extends EventEmitter {
     this.isThinkingActive = false;
     this.streams = new Map();
     this.recentIncomingTexts = [];
+
+    // Streaming state
+    this._resetStreamState();
+  }
+
+  /**
+   * Resets streaming state to initial values
+   * Used when initializing, starting new stream, or cleaning up after stream end
+   * @private
+   * @param {string|null} [streamId=null] - Optional stream ID to set as active
+   */
+  _resetStreamState(streamId = null) {
+    this.activeStreamId = streamId;
+    this.pendingDeltas = new Map();
+    this.nextExpectedSeq = STREAM_INITIAL_SEQUENCE;
+    this.streamMessageEmitted = false;
   }
 
   /**
@@ -49,11 +70,14 @@ export default class MessageProcessor extends EventEmitter {
         case 'message':
           this._processUserMessage(rawMessage);
           break;
-        case 'delta':
-          this._processStreamingDelta(rawMessage);
+        case 'stream_start':
+          this._processStreamStart(rawMessage);
           break;
-        case 'completed':
-          this._processStreamingCompleted(rawMessage);
+        case 'delta':
+          this._processDelta(rawMessage);
+          break;
+        case 'stream_end':
+          this._processStreamEnd(rawMessage);
           break;
         case 'typing_start':
           this._handleTypingIndicator(rawMessage);
@@ -113,6 +137,11 @@ export default class MessageProcessor extends EventEmitter {
   _extractMessageType(raw) {
     if (!raw || typeof raw !== 'object') {
       return 'unknown';
+    }
+
+    // delta messages have 'v' and 'seq' but no 'type' field
+    if ('v' in raw && 'seq' in raw && !('type' in raw)) {
+      return 'delta';
     }
 
     if (raw.type) {
@@ -188,54 +217,196 @@ export default class MessageProcessor extends EventEmitter {
   }
 
   /**
-   * Processes a streaming delta chunk
+   * Processes a stream_start message
+   * Initializes stream state but does not trigger message emission until first delta
+   * This allows typing indicator to be shown while the first delta has not arrived yet
    * @private
-   * @param {Object} raw
+   * @param {Object} raw - { type: 'stream_start', id: string }
    */
-  _processStreamingDelta(raw) {
-    const messageId = 'msg_' + this._getMessageIdFromRaw(raw);
+  _processStreamStart(raw) {
+    const messageId = this._getMessageIdFromRaw(raw);
     if (!messageId) {
       this.emit(
         SERVICE_EVENTS.ERROR,
-        new Error('Delta received without messageId'),
+        new Error('stream_start received without id'),
       );
       return;
     }
 
-    const chunkText = raw?.message?.text || '';
-    const timestamp = Date.now();
+    this._resetStreamState(messageId);
+    this.streams.set(messageId, { text: '', timestamp: Date.now() });
+  }
 
+  /**
+   * Processes a delta message
+   * Handles sequence-based buffering and reordering
+   * @private
+   * @param {Object} raw - { v: string, seq: number }
+   */
+  _processDelta(raw) {
+    const seq = raw.seq;
+    const content = raw.v || '';
+
+    if (!this._isValidSequenceNumber(seq)) {
+      return;
+    }
+
+    // Create synthetic stream if delta arrives without stream_start
+    if (!this.activeStreamId) {
+      this._initializeSyntheticStream(raw);
+    }
+
+    // Handle first delta of the stream
+    if (this._isFirstDelta(seq)) {
+      this._handleFirstDelta();
+    }
+
+    this._processDeltaSequence(seq, content);
+  }
+
+  /**
+   * Validates that sequence number is a positive integer
+   * @private
+   * @param {number} seq
+   * @returns {boolean}
+   */
+  _isValidSequenceNumber(seq) {
+    return typeof seq === 'number' && seq >= STREAM_INITIAL_SEQUENCE;
+  }
+
+  /**
+   * Checks if this is the first delta of the current stream
+   * @private
+   * @param {number} seq
+   * @returns {boolean}
+   */
+  _isFirstDelta(seq) {
+    return (
+      this.nextExpectedSeq === STREAM_INITIAL_SEQUENCE &&
+      seq >= STREAM_INITIAL_SEQUENCE
+    );
+  }
+
+  /**
+   * Creates a synthetic stream when delta arrives without stream_start
+   * This handles edge cases where stream_start message is lost
+   * @private
+   * @param {Object} raw
+   */
+  _initializeSyntheticStream(raw) {
+    const messageId = this._getMessageIdFromRaw(raw);
+    this._resetStreamState(messageId);
+    this.streamMessageEmitted = true;
+
+    const timestamp = Date.now();
+    this.streams.set(messageId, { text: '', timestamp });
+
+    const message = this._createStreamingMessage(messageId, timestamp);
+    this.queue.push(message);
+    this._processQueue();
+  }
+
+  /**
+   * Handles first delta: stops typing and emits deferred message if needed
+   * @private
+   */
+  _handleFirstDelta() {
     if (this.isTypingActive || this.isThinkingActive) {
       this._stopTyping();
     }
 
-    if (!this.streams.has(messageId)) {
-      const message = {
-        id: messageId,
-        type: 'text',
-        text: chunkText || '',
-        timestamp,
-        direction: 'incoming',
-        status: 'streaming',
-        persisted: raw.persisted || undefined,
-        metadata: {
-          from: raw.from,
-          to: raw.to,
-          channelUuid: raw.channelUuid,
-        },
-      };
-
-      this.streams.set(messageId, { text: message.text, timestamp });
-      this.queue.push(message);
-      this._processQueue();
-      return;
+    if (!this.streamMessageEmitted) {
+      this._emitDeferredStreamMessage();
     }
+  }
 
-    const current = this.streams.get(messageId) || { text: '' };
-    const mergedText = this._mergeText(current.text, chunkText);
-    this.streams.set(messageId, { text: mergedText, timestamp });
+  /**
+   * Emits the deferred initial streaming message
+   * Called when first delta arrives after stream_start
+   * @private
+   */
+  _emitDeferredStreamMessage() {
+    const streamId = this.activeStreamId;
+    const streamData = this.streams.get(streamId);
+    const timestamp = streamData?.timestamp || Date.now();
 
-    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, {
+    const message = this._createStreamingMessage(streamId, timestamp);
+    this.streamMessageEmitted = true;
+    this.queue.push(message);
+    this._processQueue();
+  }
+
+  /**
+   * Creates a streaming message object
+   * @private
+   * @param {string} id
+   * @param {number} timestamp
+   * @returns {Object}
+   */
+  _createStreamingMessage(id, timestamp) {
+    return {
+      id,
+      type: 'text',
+      text: '',
+      timestamp,
+      direction: 'incoming',
+      status: 'streaming',
+    };
+  }
+
+  /**
+   * Processes delta based on sequence number
+   * Applies in-order deltas immediately, buffers out-of-order ones
+   * @private
+   * @param {number} seq
+   * @param {string} content
+   */
+  _processDeltaSequence(seq, content) {
+    const streamId = this.activeStreamId;
+
+    if (seq === this.nextExpectedSeq) {
+      // In order - apply immediately
+      this._appendStreamContent(streamId, content);
+      this.nextExpectedSeq++;
+
+      // Check for buffered deltas and apply them in order
+      this._applyPendingDeltas(streamId);
+    } else if (seq > this.nextExpectedSeq) {
+      // Out of order - buffer for later
+      this.pendingDeltas.set(seq, content);
+    }
+    // Ignore seq < nextExpectedSeq (duplicate)
+  }
+
+  /**
+   * Applies buffered deltas in sequence order
+   * @private
+   * @param {string} streamId
+   */
+  _applyPendingDeltas(streamId) {
+    while (this.pendingDeltas.has(this.nextExpectedSeq)) {
+      const content = this.pendingDeltas.get(this.nextExpectedSeq);
+      this.pendingDeltas.delete(this.nextExpectedSeq);
+      this._appendStreamContent(streamId, content);
+      this.nextExpectedSeq++;
+    }
+  }
+
+  /**
+   * Appends content to an active stream and emits update
+   * @private
+   * @param {string} streamId
+   * @param {string} content
+   */
+  _appendStreamContent(streamId, content) {
+    const current = this.streams.get(streamId);
+    if (!current) return;
+
+    const timestamp = Date.now();
+    const mergedText = current.text + content;
+    this.streams.set(streamId, { text: mergedText, timestamp });
+
+    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
       text: mergedText,
       status: 'streaming',
       timestamp,
@@ -243,81 +414,62 @@ export default class MessageProcessor extends EventEmitter {
   }
 
   /**
-   * Processes a streaming completed event
+   * Processes a stream_end message
+   * Finalizes the stream and cleans up state
    * @private
-   * @param {Object} raw
+   * @param {Object} raw - { type: 'stream_end', id: string }
    */
-  _processStreamingCompleted(raw) {
-    const messageId = 'msg_' + this._getMessageIdFromRaw(raw);
+  _processStreamEnd(raw) {
+    const messageId = this._getMessageIdFromRaw(raw);
     if (!messageId) {
       this.emit(
         SERVICE_EVENTS.ERROR,
-        new Error('Completed received without messageId'),
+        new Error('stream_end received without id'),
       );
       return;
     }
-
-    const finalText = raw?.message?.text || '';
-    const timestamp = Date.now();
 
     if (this.isTypingActive || this.isThinkingActive) {
       this._stopTyping();
     }
 
-    if (!this.streams.has(messageId)) {
-      const message = {
-        id: messageId,
-        type: 'text',
-        text: finalText,
-        timestamp,
-        direction: 'incoming',
-        status: 'delivered',
-        persisted: raw.persisted || undefined,
-        metadata: {
-          from: raw.from,
-          to: raw.to,
-          channelUuid: raw.channelUuid,
-        },
-      };
-
-      this.queue.push(message);
-      this._processQueue();
-      this._rememberIncomingText(finalText);
-      return;
-    }
-
-    this.streams.delete(messageId);
+    const streamData = this.streams.get(messageId);
+    const finalText = streamData?.text || '';
 
     this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, {
       text: finalText,
       status: 'delivered',
-      timestamp,
+      timestamp: Date.now(),
     });
+
+    this._cleanupStream(messageId);
     this._rememberIncomingText(finalText);
   }
 
   /**
-   * Extract messageId from various raw structures
+   * Cleans up stream resources after completion
    * @private
-   * @param {Object} raw
-   * @returns {string|undefined}
+   * @param {string} messageId
    */
-  _getMessageIdFromRaw(raw) {
-    return raw?.message?.messageId || raw?.id;
+  _cleanupStream(messageId) {
+    this.streams.delete(messageId);
+
+    if (this.activeStreamId === messageId) {
+      this._resetStreamState();
+    }
   }
 
   /**
-   * Merge incremental text with best-effort overlap handling
+   * Extracts messageId from various raw message structures
    * @private
-   * @param {string} previous
-   * @param {string} incoming
-   * @returns {string}
+   * @param {Object} raw
+   * @returns {string|null} Prefixed message ID or null if not found
    */
-  _mergeText(previous, incoming) {
-    if (!previous) return incoming || '';
-    if (!incoming) return previous;
-    return previous + incoming;
+  _getMessageIdFromRaw(raw) {
+    const id = raw?.message?.messageId || raw?.id;
+    return id ? MESSAGE_ID_PREFIX + id : null;
   }
+
   /**
    * Gets message type from raw message
    * @private
@@ -392,11 +544,18 @@ export default class MessageProcessor extends EventEmitter {
   /**
    * Handles typing indicator from server
    * Distinguishes between AI thinking and human typing
+   * Allows typing indicator if stream started but no deltas received yet
+   * Does not display typing indicator if streaming has received deltas
    * @private
    * @param {Object} rawMessage
    */
   _handleTypingIndicator(rawMessage) {
     if (!this.config.enableTypingIndicator) {
+      return;
+    }
+
+    // Do not display typing indicator if streaming has already received deltas
+    if (this.activeStreamId && this.nextExpectedSeq > STREAM_INITIAL_SEQUENCE) {
       return;
     }
 

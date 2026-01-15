@@ -268,3 +268,7 @@ export const LOG_LEVELS = {
 export const VERSION = '1.0.0';
 
 export const SERVICE_NAME = '@weni/webchat-service';
+
+export const MESSAGE_ID_PREFIX = 'msg_';
+
+export const STREAM_INITIAL_SEQUENCE = 1;
