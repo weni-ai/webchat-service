@@ -1,6 +1,6 @@
 {
   "name": "@weni/webchat-service",
-  "version": "1.4.5",
+  "version": "1.5.0",
   "description": "Framework-agnostic JavaScript library for Weni WebChat integration",
   "main": "dist/index.cjs.js",
   "module": "dist/index.esm.js",
