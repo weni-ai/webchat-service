@@ -472,11 +472,51 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
+   * Sets session ID
+   * If there's an active session, restarts it with the new ID
+   * @param {string} sessionId
+   * @returns {Promise<void>}
+   */
+  async setSessionId(sessionId) {
+    // Store the new session ID
+    this.session.setSessionId(sessionId);
+
+    // If initialized with active session, restart it
+    if (this._initialized && this.session.getSession()) {
+      const wasConnected = this.isConnected();
+
+      // Disconnect if connected
+      if (wasConnected || this._connecting) {
+        this.disconnect(false);
+      }
+
+      // Clear current session and state
+      this.clearSession();
+
+      // Create new session with the provided ID
+      this.createNewSession();
+
+      // Reconnect if was previously connected
+      if (wasConnected) {
+        await this.connect();
+      }
+    }
+  }
+
+  /**
    * Sets whether the chat widget is open
    * @param {boolean} isOpen
    */
   setIsChatOpen(isOpen) {
     this.session.setIsChatOpen(isOpen);
+  }
+
+  /**
+   * Gets whether the chat widget is open
+   * @returns {boolean}
+   */
+  getIsChatOpen() {
+    return this.session.getIsChatOpen();
   }
 
   /**
@@ -486,6 +526,15 @@ export default class WeniWebchatService extends EventEmitter {
     this.session.clear();
     this.state.reset();
     this.emit(SERVICE_EVENTS.SESSION_CLEARED);
+  }
+
+  /**
+   * Clears messages while keeping the session and connection
+   */
+  clearMessages() {
+    this.state.clearMessages();
+    this.session.setConversation([]);
+    this.emit(SERVICE_EVENTS.MESSAGES_CLEARED);
   }
 
   async restoreOrCreateSession() {
