@@ -213,6 +213,24 @@ export default class MessageProcessor extends EventEmitter {
       message.metadata = raw.metadata;
     }
 
+    const interactive = raw.message?.interactive;
+
+    if (interactive?.type === 'product_list') {
+      message.product_list = {
+        text: raw.message.text,
+        buttonText: interactive.action?.name,
+        sections: interactive.action?.sections,
+      };
+    }
+
+    if (interactive?.header) {
+      message.header = interactive.header.text;
+    }
+
+    if (interactive?.footer) {
+      message.footer = interactive.footer.text;
+    }
+
     return message;
   }
 

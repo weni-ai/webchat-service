@@ -37,6 +37,16 @@ export function buildMessagePayload(sessionId, message, options = {}) {
         data: messageData,
       },
     );
+  } else if (message.type === 'order') {
+    return buildWebSocketMessage(
+      messageType,
+      { type: 'order', timestamp: message.timestamp, order: message.order },
+      {
+        context,
+        from,
+        data: messageData,
+      },
+    );
   } else if (message.type === 'set_custom_field') {
     return {
       type: message.type,
@@ -168,6 +178,25 @@ export function buildQuickReplyMessage(text, quickReplies, options = {}) {
     direction: options.direction || 'incoming',
     status: options.status || 'delivered',
     metadata: options.metadata || {},
+  };
+}
+
+/**
+ * Builds an order message
+ * @param {Array} productItems Array of product items with product_retailer_id, name, price, etc.
+ * @param {Object} options
+ * @returns {Object}
+ */
+export function buildOrderMessage(productItems, options = {}) {
+  return {
+    id: options.id || generateMessageId(),
+    type: 'order',
+    timestamp: (options.timestamp || Date.now()).toString(),
+    direction: options.direction || 'outgoing',
+    status: options.status || 'pending',
+    order: {
+      product_items: productItems,
+    },
   };
 }
 

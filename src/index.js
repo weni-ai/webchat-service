@@ -33,6 +33,7 @@ import {
 import {
   buildTextMessage,
   buildMediaMessage,
+  buildOrderMessage,
   buildMessagePayload,
   buildCustomFieldMessage,
 } from './utils/messageBuilder';
@@ -292,6 +293,36 @@ export default class WeniWebchatService extends EventEmitter {
       ...message,
       persisted: true,
     });
+  }
+
+  /**
+   * Sends an order message with cart product items
+   *
+   * @param {Array} productItems Array of product items
+   * @returns {Promise<void>}
+   */
+  async sendOrder(productItems) {
+    if (
+      !productItems ||
+      !Array.isArray(productItems) ||
+      productItems.length === 0
+    ) {
+      throw new Error('Product items are required');
+    }
+
+    const message = buildOrderMessage(productItems, {
+      direction: 'outgoing',
+    });
+
+    // Add to state so the order appears in the chat
+    this.state.addMessage(message);
+    this.session.appendToConversation(message);
+
+    this.enqueueMessages([message]);
+
+    if (this._initialized) {
+      this.runQueue();
+    }
   }
 
   /**

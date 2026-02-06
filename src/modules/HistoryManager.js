@@ -145,6 +145,33 @@ export default class HistoryManager extends EventEmitter {
         message.list_message = item.message.list_message;
       }
 
+      if (item.message?.type === 'interactive') {
+        const { interactive } = item.message;
+        message.text = item.message.text;
+
+        if (interactive?.header) {
+          message.header = interactive.header.text;
+        }
+
+        if (interactive?.footer) {
+          message.footer = interactive.footer.text;
+        }
+
+        if (interactive?.type === 'product_list') {
+          message.product_list = {
+            text: message.text,
+            buttonText: interactive.action?.name,
+            sections: interactive.action?.sections,
+          };
+        }
+      }
+
+      if (item.message?.type === 'order') {
+        message.order = {
+          product_items: item.message.order.product_items,
+        };
+      }
+
       return message;
     });
   }

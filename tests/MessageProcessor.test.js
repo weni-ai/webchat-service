@@ -840,6 +840,145 @@ describe('MessageProcessor', () => {
 
       expect(normalized.metadata).toEqual({ custom: 'data' });
     });
+
+    it('should normalize message with interactive product_list', () => {
+      const raw = {
+        message: {
+          text: 'Check our products',
+          interactive: {
+            type: 'product_list',
+            action: {
+              name: 'View Products',
+              sections: [
+                {
+                  title: 'Category 1',
+                  product_items: [
+                    { product_retailer_id: 'prod-1' },
+                    { product_retailer_id: 'prod-2' },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.product_list).toEqual({
+        text: 'Check our products',
+        buttonText: 'View Products',
+        sections: [
+          {
+            title: 'Category 1',
+            product_items: [
+              { product_retailer_id: 'prod-1' },
+              { product_retailer_id: 'prod-2' },
+            ],
+          },
+        ],
+      });
+    });
+
+    it('should normalize message with interactive header', () => {
+      const raw = {
+        message: {
+          text: 'Hello',
+          interactive: {
+            header: { text: 'Welcome Header' },
+          },
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.header).toBe('Welcome Header');
+    });
+
+    it('should normalize message with interactive footer', () => {
+      const raw = {
+        message: {
+          text: 'Hello',
+          interactive: {
+            footer: { text: 'Footer text' },
+          },
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.footer).toBe('Footer text');
+    });
+
+    it('should normalize message with interactive header, footer and product_list', () => {
+      const raw = {
+        message: {
+          text: 'Browse our catalog',
+          interactive: {
+            type: 'product_list',
+            header: { text: 'Our Catalog' },
+            footer: { text: 'Tap to view details' },
+            action: {
+              name: 'See Products',
+              sections: [
+                {
+                  title: 'Best Sellers',
+                  product_items: [{ product_retailer_id: 'best-1' }],
+                },
+              ],
+            },
+          },
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.header).toBe('Our Catalog');
+      expect(normalized.footer).toBe('Tap to view details');
+      expect(normalized.product_list).toEqual({
+        text: 'Browse our catalog',
+        buttonText: 'See Products',
+        sections: [
+          {
+            title: 'Best Sellers',
+            product_items: [{ product_retailer_id: 'best-1' }],
+          },
+        ],
+      });
+    });
+
+    it('should not set product_list for non-product_list interactive types', () => {
+      const raw = {
+        message: {
+          text: 'Hello',
+          interactive: {
+            type: 'button',
+            action: { buttons: [{ title: 'Click me' }] },
+          },
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.product_list).toBeUndefined();
+    });
+
+    it('should not set header/footer when interactive has no header/footer', () => {
+      const raw = {
+        message: {
+          text: 'Hello',
+          interactive: {
+            type: 'product_list',
+            action: { name: 'View', sections: [] },
+          },
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.header).toBeUndefined();
+      expect(normalized.footer).toBeUndefined();
+    });
   });
 
   describe('processBatch', () => {
