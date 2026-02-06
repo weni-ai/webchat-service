@@ -87,6 +87,14 @@ export default class SessionManager extends EventEmitter {
   }
 
   /**
+   * Sets session ID for future session creation
+   * @param {string} sessionId
+   */
+  setSessionId(sessionId) {
+    this.config.sessionId = sessionId;
+  }
+
+  /**
    * Updates session metadata
    * @param {Object} metadata
    */
@@ -190,10 +198,6 @@ export default class SessionManager extends EventEmitter {
       return false;
     }
 
-    if (!this._isValidSessionIdFormat(session.id)) {
-      return false;
-    }
-
     if (!session.lastMessageSentAt) {
       return true; // If no message has been sent, the session is valid
     }
@@ -202,19 +206,6 @@ export default class SessionManager extends EventEmitter {
     const elapsedSinceLastMessageSent = now - session.lastMessageSentAt;
 
     return elapsedSinceLastMessageSent < this._getContactTimeoutMs();
-  }
-
-  /**
-   * Checks if session ID has the correct format: timestamp@hostname
-   * @private
-   * @param {string} sessionId
-   * @returns {boolean}
-   */
-  _isValidSessionIdFormat(sessionId) {
-    // Valid format: {number}@{string}
-    // Example: 1544648616824@localhost
-    const pattern = /^\d+@.+$/;
-    return pattern.test(sessionId);
   }
 
   /**
@@ -407,6 +398,14 @@ export default class SessionManager extends EventEmitter {
     this._updateLastActivity();
     this._save();
     this.emit(SERVICE_EVENTS.CHAT_OPEN_CHANGED, this.session.isChatOpen);
+  }
+
+  /**
+   * Returns whether the chat widget is open
+   * @returns {boolean}
+   */
+  getIsChatOpen() {
+    return this.session ? Boolean(this.session.isChatOpen) : false;
   }
 
   /**
