@@ -216,6 +216,86 @@ describe('WeniWebchatService', () => {
     });
   });
 
+  describe('sendOrder', () => {
+    beforeEach(() => {
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+      });
+    });
+
+    it('should throw error when productItems is null', async () => {
+      await expect(service.sendOrder(null)).rejects.toThrow(
+        'Product items are required',
+      );
+    });
+
+    it('should throw error when productItems is undefined', async () => {
+      await expect(service.sendOrder(undefined)).rejects.toThrow(
+        'Product items are required',
+      );
+    });
+
+    it('should throw error when productItems is not an array', async () => {
+      await expect(service.sendOrder('not-an-array')).rejects.toThrow(
+        'Product items are required',
+      );
+    });
+
+    it('should throw error when productItems is an empty array', async () => {
+      await expect(service.sendOrder([])).rejects.toThrow(
+        'Product items are required',
+      );
+    });
+
+    it('should add order message to state and session', async () => {
+      service.session.getOrCreate();
+      const addMessageSpy = jest.spyOn(service.state, 'addMessage');
+      const appendSpy = jest.spyOn(service.session, 'appendToConversation');
+
+      const productItems = [
+        { product_retailer_id: 'prod-1', quantity: 2 },
+        { product_retailer_id: 'prod-2', quantity: 1 },
+      ];
+
+      await service.sendOrder(productItems);
+
+      expect(addMessageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'order',
+          direction: 'outgoing',
+          order: {
+            product_items: productItems,
+          },
+        }),
+      );
+
+      expect(appendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'order',
+          order: {
+            product_items: productItems,
+          },
+        }),
+      );
+    });
+
+    it('should enqueue the order message', async () => {
+      service.session.getOrCreate();
+      const enqueueSpy = jest.spyOn(service, 'enqueueMessages');
+
+      const productItems = [{ product_retailer_id: 'prod-1', quantity: 1 }];
+      await service.sendOrder(productItems);
+
+      expect(enqueueSpy).toHaveBeenCalledWith([
+        expect.objectContaining({
+          type: 'order',
+          order: { product_items: productItems },
+        }),
+      ]);
+    });
+  });
+
   describe('Connection Status', () => {
     beforeEach(() => {
       service = new WeniWebchatService({
