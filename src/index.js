@@ -93,6 +93,7 @@ export default class WeniWebchatService extends EventEmitter {
       cacheTimeout: config.cacheTimeout || DEFAULTS.CACHE_TIMEOUT,
       displayUnreadCount:
         config.displayUnreadCount || DEFAULTS.DISPLAY_UNREAD_COUNT,
+      renderPercentage: config.renderPercentage || DEFAULTS.RENDER_PERCENTAGE,
       ...config,
     };
 
@@ -127,6 +128,7 @@ export default class WeniWebchatService extends EventEmitter {
     this._connected = false;
 
     this.messagesQueue = [];
+    this._renderEnabled = true;
   }
 
   /**
@@ -138,6 +140,13 @@ export default class WeniWebchatService extends EventEmitter {
   async init() {
     if (this._initialized) {
       return;
+    }
+
+    const shouldRender = this._ensureRenderDecision();
+
+    if (!shouldRender) {
+      this._renderEnabled = false;
+      return { shouldRender: false };
     }
 
     try {
@@ -164,6 +173,8 @@ export default class WeniWebchatService extends EventEmitter {
       this.state.setError(error);
       this.emit(SERVICE_EVENTS.ERROR, error);
       throw error;
+    } finally {
+      return { shouldRender: true };
     }
   }
 
@@ -694,6 +705,55 @@ export default class WeniWebchatService extends EventEmitter {
 
   isReconnecting() {
     return this.websocket.getStatus() === 'reconnecting';
+  }
+
+  isRenderEnabled() {
+    return Boolean(this._renderEnabled);
+  }
+
+  /**
+   * Ensures the render decision is persisted and returns it.
+   * Key: weni:webchat:session:[channelUuid]:render
+   * Value format: [renderPercentage]:[boolean]
+   * If the stored percentage differs from current, recalculates and overwrites.
+   * @private
+   * @returns {boolean}
+   */
+  _ensureRenderDecision() {
+    const storageKey = `weni:webchat:session:${this.config.channelUuid}:render`;
+
+    const percentage =
+      typeof this.config.renderPercentage === 'number'
+        ? Math.max(0, Math.min(1, this.config.renderPercentage))
+        : 1;
+
+    const localStorage = typeof window !== 'undefined' && window.localStorage;
+
+    const write = (val) => localStorage?.setItem(storageKey, val);
+    const read = () => localStorage?.getItem(storageKey);
+    const clear = () => localStorage?.removeItem(storageKey);
+
+    if ([1, 0].includes(percentage)) {
+      clear();
+      return percentage === 1;
+    }
+
+    const stored = read();
+    let decision = null;
+
+    if (typeof stored === 'string' && stored.includes(':')) {
+      const [storedPercStr, storedBoolStr] = stored.split(':');
+      if (Number(storedPercStr) === percentage) {
+        decision = storedBoolStr === 'true';
+      }
+    }
+
+    if (decision === null) {
+      decision = Math.random() < percentage;
+      write(`${percentage}:${decision}`);
+    }
+
+    return decision;
   }
 
   /**

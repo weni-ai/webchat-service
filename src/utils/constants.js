@@ -79,6 +79,9 @@ export const WS_ERROR_TYPES = {
 };
 
 export const DEFAULTS = {
+  // Rendering
+  RENDER_PERCENTAGE: 1,
+
   // Connection
   CONNECT_ON: 'mount',
   STORAGE: 'local',
