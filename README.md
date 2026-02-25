@@ -104,6 +104,9 @@ const service = new WeniWebchatService({
 
   // Rendering rollout
   renderPercentage: 100,                   // 0..100: gate whether the chat initializes
+  
+  // Mode
+  mode: 'live',                            // 'live' (default) or 'preview' (no socket)
 })
 ```
 

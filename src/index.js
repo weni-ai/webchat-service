@@ -94,6 +94,7 @@ export default class WeniWebchatService extends EventEmitter {
       displayUnreadCount:
         config.displayUnreadCount || DEFAULTS.DISPLAY_UNREAD_COUNT,
       renderPercentage: config.renderPercentage || DEFAULTS.RENDER_PERCENTAGE,
+      mode: config.mode || DEFAULTS.MODE,
       ...config,
     };
 
@@ -159,9 +160,13 @@ export default class WeniWebchatService extends EventEmitter {
       );
       this.enqueueMessages(pendingMessages);
 
+      const canConnectInMode = this.config.mode === 'live';
+
       const shouldConnect =
-        this.config.connectOn === 'mount' ||
-        (this.config.connectOn === 'demand' && this.messagesQueue.length >= 1);
+        canConnectInMode &&
+        (this.config.connectOn === 'mount' ||
+          (this.config.connectOn === 'demand' &&
+            this.messagesQueue.length >= 1));
 
       if (shouldConnect) {
         await this.connect();
@@ -288,6 +293,9 @@ export default class WeniWebchatService extends EventEmitter {
 
       this.messagesQueue = [];
     } else if (this.config.connectOn === 'demand') {
+      if (this.config.mode === 'preview') {
+        return;
+      }
       await this.connect();
       this.runQueue();
     }
