@@ -103,7 +103,7 @@ const service = new WeniWebchatService({
   maxDuration: 120000,                     // Max recording duration (2 min)
 
   // Rendering rollout
-  renderPercentage: 1,                     // 0..1: gate whether the chat initializes
+  renderPercentage: 100,                   // 0..100: gate whether the chat initializes
 })
 ```
 

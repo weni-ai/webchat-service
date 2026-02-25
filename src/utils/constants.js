@@ -80,7 +80,7 @@ export const WS_ERROR_TYPES = {
 
 export const DEFAULTS = {
   // Rendering
-  RENDER_PERCENTAGE: 1,
+  RENDER_PERCENTAGE: 100,
 
   // Connection
   CONNECT_ON: 'mount',

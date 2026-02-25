@@ -724,8 +724,8 @@ export default class WeniWebchatService extends EventEmitter {
 
     const percentage =
       typeof this.config.renderPercentage === 'number'
-        ? Math.max(0, Math.min(1, this.config.renderPercentage))
-        : 1;
+        ? Math.max(0, Math.min(100, this.config.renderPercentage))
+        : 100;
 
     const localStorage = typeof window !== 'undefined' && window.localStorage;
 
@@ -733,9 +733,9 @@ export default class WeniWebchatService extends EventEmitter {
     const read = () => localStorage?.getItem(storageKey);
     const clear = () => localStorage?.removeItem(storageKey);
 
-    if ([1, 0].includes(percentage)) {
+    if ([100, 0].includes(percentage)) {
       clear();
-      return percentage === 1;
+      return percentage === 100;
     }
 
     const stored = read();
@@ -749,7 +749,7 @@ export default class WeniWebchatService extends EventEmitter {
     }
 
     if (decision === null) {
-      decision = Math.random() < percentage;
+      decision = (Math.random() * 100) < percentage;
       write(`${percentage}:${decision}`);
     }
 
