@@ -101,6 +101,9 @@ const service = new WeniWebchatService({
   
   // Audio settings
   maxDuration: 120000,                     // Max recording duration (2 min)
+
+  // Rendering rollout
+  renderPercentage: 100,                   // 0..100: gate whether the chat initializes
 })
 ```
 
