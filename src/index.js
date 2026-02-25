@@ -749,7 +749,7 @@ export default class WeniWebchatService extends EventEmitter {
     }
 
     if (decision === null) {
-      decision = (Math.random() * 100) < percentage;
+      decision = Math.random() * 100 < percentage;
       write(`${percentage}:${decision}`);
     }
 
