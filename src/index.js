@@ -315,6 +315,55 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
+   * Simulates a message sent locally (not sent to the socket)
+   *
+   * @param {Object|string} input Message object or plain text
+   * @param {Object} [options] Additional options when input is string
+   * @returns {void}
+   */
+  simulateMessageSent(input, options = {}) {
+    let message;
+
+    if (typeof input === 'string') {
+      message = buildTextMessage(input, {
+        ...options,
+        direction: 'outgoing',
+        status: 'sent',
+      });
+    } else if (input && typeof input === 'object') {
+      if (input.type === 'text') {
+        message = buildTextMessage(input.text || '', {
+          ...input,
+          direction: 'outgoing',
+          status: 'sent',
+        });
+      } else if (['image', 'video', 'audio', 'file'].includes(input.type)) {
+        message = buildMediaMessage(input.type, input.media, {
+          ...input,
+          direction: 'outgoing',
+          status: 'sent',
+        });
+      } else {
+        message = buildTextMessage(String(input.text || ''), {
+          ...input,
+          direction: 'outgoing',
+          status: 'sent',
+        });
+      }
+    } else {
+      return;
+    }
+
+    this.state.addMessage(message);
+    this.session.appendToConversation(message);
+    this.session.setLastMessageSentAt(Date.now());
+  }
+
+  simulateTyping() {
+    this.messageProcessor.startTypingOnMessageSent();
+  }
+
+  /**
    * Sends an order message with cart product items
    *
    * @param {Array} productItems Array of product items
