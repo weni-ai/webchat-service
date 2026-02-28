@@ -359,10 +359,6 @@ export default class WeniWebchatService extends EventEmitter {
     this.session.setLastMessageSentAt(Date.now());
   }
 
-  simulateTyping() {
-    this.messageProcessor.startTypingOnMessageSent();
-  }
-
   /**
    * Sends an order message with cart product items
    *
