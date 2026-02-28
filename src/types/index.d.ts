@@ -8,6 +8,7 @@ export interface ServiceConfig {
  
   // Connection
   host?: string
+  mode?: 'preview' | 'live'
   connectOn?: 'mount' | 'manual' | 'demand'
   storage?: 'local' | 'session'
   callbackUrl?: string
@@ -333,6 +334,7 @@ export default class WeniWebchatService {
   getSessionId(): string | null
   getConnectionStatus(): string
   isConnected(): boolean
+  isModeVisible(): boolean
 
   // Session
   clearSession(): void

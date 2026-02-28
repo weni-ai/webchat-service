@@ -83,6 +83,7 @@ export const DEFAULTS = {
   RENDER_PERCENTAGE: 100,
 
   // Connection
+  MODE: 'live', // 'live' | 'preview'
   CONNECT_ON: 'mount',
   STORAGE: 'local',
   AUTO_RECONNECT: true,

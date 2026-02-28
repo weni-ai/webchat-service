@@ -94,6 +94,7 @@ export default class WeniWebchatService extends EventEmitter {
       displayUnreadCount:
         config.displayUnreadCount || DEFAULTS.DISPLAY_UNREAD_COUNT,
       renderPercentage: config.renderPercentage || DEFAULTS.RENDER_PERCENTAGE,
+      mode: config.mode || DEFAULTS.MODE,
       ...config,
     };
 
@@ -159,9 +160,13 @@ export default class WeniWebchatService extends EventEmitter {
       );
       this.enqueueMessages(pendingMessages);
 
+      const canConnectInMode = this.config.mode === 'live';
+
       const shouldConnect =
-        this.config.connectOn === 'mount' ||
-        (this.config.connectOn === 'demand' && this.messagesQueue.length >= 1);
+        canConnectInMode &&
+        (this.config.connectOn === 'mount' ||
+          (this.config.connectOn === 'demand' &&
+            this.messagesQueue.length >= 1));
 
       if (shouldConnect) {
         await this.connect();
@@ -288,6 +293,9 @@ export default class WeniWebchatService extends EventEmitter {
 
       this.messagesQueue = [];
     } else if (this.config.connectOn === 'demand') {
+      if (this.config.mode === 'preview') {
+        return;
+      }
       await this.connect();
       this.runQueue();
     }
@@ -304,6 +312,51 @@ export default class WeniWebchatService extends EventEmitter {
       ...message,
       persisted: true,
     });
+  }
+
+  /**
+   * Simulates a message sent locally (not sent to the socket)
+   *
+   * @param {Object|string} input Message object or plain text
+   * @param {Object} [options] Additional options when input is string
+   * @returns {void}
+   */
+  simulateMessageSent(input, options = {}) {
+    let message;
+
+    if (typeof input === 'string') {
+      message = buildTextMessage(input, {
+        ...options,
+        direction: 'outgoing',
+        status: 'sent',
+      });
+    } else if (input && typeof input === 'object') {
+      if (input.type === 'text') {
+        message = buildTextMessage(input.text || '', {
+          ...input,
+          direction: 'outgoing',
+          status: 'sent',
+        });
+      } else if (['image', 'video', 'audio', 'file'].includes(input.type)) {
+        message = buildMediaMessage(input.type, input.media, {
+          ...input,
+          direction: 'outgoing',
+          status: 'sent',
+        });
+      } else {
+        message = buildTextMessage(String(input.text || ''), {
+          ...input,
+          direction: 'outgoing',
+          status: 'sent',
+        });
+      }
+    } else {
+      return;
+    }
+
+    this.state.addMessage(message);
+    this.session.appendToConversation(message);
+    this.session.setLastMessageSentAt(Date.now());
   }
 
   /**
