@@ -235,7 +235,8 @@ export function buildRegistrationMessage(sessionId, options = {}) {
     session_type: options.session_type || 'local',
     token: options.token,
     params: {
-      preview: options.params.preview || false,
+      ...options.params,
+      preview: options.params?.preview || false,
     },
   };
 }
