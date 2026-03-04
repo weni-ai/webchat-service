@@ -119,7 +119,7 @@ export default class WebSocketManager extends EventEmitter {
       token:
         this.registrationData.token || this.config.sessionToken || undefined,
       params: {
-        preview: this.registrationData.preview || false,
+        preview: this.registrationData.params?.preview || false,
       },
     });
 
