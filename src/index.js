@@ -954,6 +954,10 @@ export default class WeniWebchatService extends EventEmitter {
       this.emit(SERVICE_EVENTS.LANGUAGE_CHANGED, language);
     });
 
+    this.websocket.on(SERVICE_EVENTS.VOICE_ENABLED, () => {
+      this.emit(SERVICE_EVENTS.VOICE_ENABLED);
+    });
+
     this.websocket.on(SERVICE_EVENTS.VOICE_TOKENS_RECEIVED, (data) => {
       this.emit(SERVICE_EVENTS.VOICE_TOKENS_RECEIVED, data);
     });

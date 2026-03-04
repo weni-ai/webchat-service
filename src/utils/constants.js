@@ -245,7 +245,8 @@ export const SERVICE_EVENTS = {
   HISTORY_MERGED: 'history:merged',
   HISTORY_CACHE_CLEARED: 'history:cache:cleared',
 
-  // Voice tokens
+  // Voice
+  VOICE_ENABLED: 'voice:enabled',
   VOICE_TOKENS_RECEIVED: 'voice:tokens:received',
   VOICE_TOKENS_ERROR: 'voice:tokens:error',
 

@@ -213,13 +213,17 @@ export default class WebSocketManager extends EventEmitter {
     });
   }
 
-  async _handleReadyForMessage() {
+  async _handleReadyForMessage(data = {}) {
     this.status = 'connected';
 
     this.reconnectAttempts = 0;
 
     if (this.retryStrategy) {
       this.retryStrategy.reset();
+    }
+
+    if (data.data?.voice_enabled) {
+      this.emit(SERVICE_EVENTS.VOICE_ENABLED);
     }
 
     this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status);
@@ -373,7 +377,7 @@ export default class WebSocketManager extends EventEmitter {
       }
 
       if (data.type === 'ready_for_message') {
-        this._handleReadyForMessage();
+        this._handleReadyForMessage(data);
         return;
       }
 

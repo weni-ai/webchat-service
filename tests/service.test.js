@@ -343,6 +343,86 @@ describe('WeniWebchatService', () => {
     });
   });
 
+  describe('voice:enabled on ready_for_message', () => {
+    let mockSocket;
+
+    beforeEach(() => {
+      mockSocket = {
+        send: jest.fn(),
+        close: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        readyState: WebSocket.OPEN,
+      };
+
+      global.WebSocket = jest.fn().mockImplementation(() => mockSocket);
+
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+      });
+
+      service.websocket.socket = mockSocket;
+    });
+
+    it('should emit voice:enabled when server sends voice_enabled: true', () => {
+      const listener = jest.fn();
+      service.on('voice:enabled', listener);
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'ready_for_message',
+          data: { voice_enabled: true, history: [] },
+        }),
+      });
+
+      expect(listener).toHaveBeenCalled();
+    });
+
+    it('should not emit voice:enabled when server sends voice_enabled: false', () => {
+      const listener = jest.fn();
+      service.on('voice:enabled', listener);
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'ready_for_message',
+          data: { voice_enabled: false, history: [] },
+        }),
+      });
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('should not emit voice:enabled when data is missing', () => {
+      const listener = jest.fn();
+      service.on('voice:enabled', listener);
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'ready_for_message',
+        }),
+      });
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('should emit voice:enabled before connected', () => {
+      const events = [];
+      service.on('voice:enabled', () => events.push('voice:enabled'));
+      service.on('connected', () => events.push('connected'));
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'ready_for_message',
+          data: { voice_enabled: true },
+        }),
+      });
+
+      expect(events[0]).toBe('voice:enabled');
+      expect(events).toContain('connected');
+    });
+  });
+
   describe('requestVoiceTokens', () => {
     let mockSocket;
 
