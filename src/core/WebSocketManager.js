@@ -118,6 +118,7 @@ export default class WebSocketManager extends EventEmitter {
       session_type: this.registrationData.session_type || 'local',
       token:
         this.registrationData.token || this.config.sessionToken || undefined,
+      preview: this.registrationData.preview || false,
     });
 
     return this.send(message)

@@ -234,6 +234,7 @@ export function buildRegistrationMessage(sessionId, options = {}) {
     callback: options.callback || '',
     session_type: options.session_type || 'local',
     token: options.token,
+    preview: options.preview || false,
   };
 }
 
