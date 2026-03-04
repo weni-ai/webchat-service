@@ -95,7 +95,9 @@ export default class WeniWebchatService extends EventEmitter {
         config.displayUnreadCount || DEFAULTS.DISPLAY_UNREAD_COUNT,
       renderPercentage: config.renderPercentage || DEFAULTS.RENDER_PERCENTAGE,
       mode: config.mode || DEFAULTS.MODE,
-      preview: config.preview || false,
+      params: {
+        preview: config.preview || false,
+      },
       ...config,
     };
 
@@ -203,7 +205,9 @@ export default class WeniWebchatService extends EventEmitter {
         from: sessionId,
         callback: this.config.callbackUrl,
         session_type: this.config.storage,
-        preview: this.config.preview,
+        params: {
+          preview: this.config.preview,
+        },
       };
 
       this.websocket.setRegistrationData(registrationData);
@@ -1006,7 +1010,9 @@ export default class WeniWebchatService extends EventEmitter {
               from: this.session.getSessionId(),
               callback: this.config.callbackUrl,
               session_type: this.config.storage,
-              preview: this.config.preview,
+              params: {
+                preview: this.config.preview,
+              },
             };
 
             this.websocket.setRegistrationData(registrationData);
