@@ -336,6 +336,11 @@ export default class WebSocketManager extends EventEmitter {
         return;
       }
 
+      if (data.type === 'starters') {
+        this.emit(SERVICE_EVENTS.STARTERS_RECEIVED, data.data);
+        return;
+      }
+
       if (
         data.type === 'error' &&
         String(data.error).startsWith('verify contact timeout: ')
@@ -366,6 +371,11 @@ export default class WebSocketManager extends EventEmitter {
 
       if (data.type === 'error') {
         const errorMsg = data.error || 'Unknown server error';
+
+        if (errorMsg.includes('starters')) {
+          this.emit(SERVICE_EVENTS.STARTERS_ERROR, { error: errorMsg });
+        }
+
         this.emit(SERVICE_EVENTS.ERROR, new Error(errorMsg));
 
         if (
