@@ -854,6 +854,17 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
+   * Requests single-use ElevenLabs voice tokens from the Weni backend.
+   * The server responds with a `voice_tokens` message containing the tokens.
+   *
+   * @param {number} [timeoutMs=10000] Maximum wait time in milliseconds
+   * @returns {Promise<{ sttToken: string, ttsToken: string }>}
+   */
+  requestVoiceTokens(timeoutMs = 10000) {
+    return this.websocket.requestVoiceTokens(timeoutMs);
+  }
+
+  /**
    * Destroys service instance
    */
   destroy() {
@@ -941,6 +952,18 @@ export default class WeniWebchatService extends EventEmitter {
 
     this.websocket.on(SERVICE_EVENTS.LANGUAGE_CHANGED, (language) => {
       this.emit(SERVICE_EVENTS.LANGUAGE_CHANGED, language);
+    });
+
+    this.websocket.on(SERVICE_EVENTS.VOICE_ENABLED, () => {
+      this.emit(SERVICE_EVENTS.VOICE_ENABLED);
+    });
+
+    this.websocket.on(SERVICE_EVENTS.VOICE_TOKENS_RECEIVED, (data) => {
+      this.emit(SERVICE_EVENTS.VOICE_TOKENS_RECEIVED, data);
+    });
+
+    this.websocket.on(SERVICE_EVENTS.VOICE_TOKENS_ERROR, (data) => {
+      this.emit(SERVICE_EVENTS.VOICE_TOKENS_ERROR, data);
     });
 
     // Message processor events

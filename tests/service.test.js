@@ -343,6 +343,179 @@ describe('WeniWebchatService', () => {
     });
   });
 
+  describe('voice:enabled on ready_for_message', () => {
+    let mockSocket;
+
+    beforeEach(() => {
+      mockSocket = {
+        send: jest.fn(),
+        close: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        readyState: WebSocket.OPEN,
+      };
+
+      global.WebSocket = jest.fn().mockImplementation(() => mockSocket);
+
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+      });
+
+      service.websocket.socket = mockSocket;
+    });
+
+    it('should emit voice:enabled when server sends voice_enabled: true', () => {
+      const listener = jest.fn();
+      service.on('voice:enabled', listener);
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'ready_for_message',
+          data: { voice_enabled: true, history: [] },
+        }),
+      });
+
+      expect(listener).toHaveBeenCalled();
+    });
+
+    it('should not emit voice:enabled when server sends voice_enabled: false', () => {
+      const listener = jest.fn();
+      service.on('voice:enabled', listener);
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'ready_for_message',
+          data: { voice_enabled: false, history: [] },
+        }),
+      });
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('should not emit voice:enabled when data is missing', () => {
+      const listener = jest.fn();
+      service.on('voice:enabled', listener);
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'ready_for_message',
+        }),
+      });
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('should emit voice:enabled before connected', () => {
+      const events = [];
+      service.on('voice:enabled', () => events.push('voice:enabled'));
+      service.on('connected', () => events.push('connected'));
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'ready_for_message',
+          data: { voice_enabled: true },
+        }),
+      });
+
+      expect(events[0]).toBe('voice:enabled');
+      expect(events).toContain('connected');
+    });
+  });
+
+  describe('requestVoiceTokens', () => {
+    let mockSocket;
+
+    beforeEach(() => {
+      mockSocket = {
+        send: jest.fn(),
+        close: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        readyState: WebSocket.OPEN,
+      };
+
+      global.WebSocket = jest.fn().mockImplementation(() => mockSocket);
+
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+      });
+
+      service.websocket.socket = mockSocket;
+      service.websocket.status = 'connected';
+    });
+
+    it('should resolve with sttToken and ttsToken when server responds', async () => {
+      const promise = service.requestVoiceTokens();
+
+      service.websocket.emit('voice:tokens:received', {
+        type: 'voice_tokens',
+        data: {
+          stt_token: 'stt-abc-123',
+          tts_token: 'tts-xyz-789',
+        },
+      });
+
+      await expect(promise).resolves.toEqual({
+        sttToken: 'stt-abc-123',
+        ttsToken: 'tts-xyz-789',
+      });
+    });
+
+    it('should reject when server responds with an error', async () => {
+      const promise = service.requestVoiceTokens();
+
+      service.websocket.emit('voice:tokens:error', {
+        type: 'voice_tokens_error',
+        error: 'Channel not configured for voice',
+      });
+
+      await expect(promise).rejects.toThrow('Channel not configured for voice');
+    });
+
+    it('should reject after timeout if no response is received', async () => {
+      jest.useFakeTimers();
+
+      const promise = service.requestVoiceTokens(5000);
+
+      jest.advanceTimersByTime(5001);
+
+      await expect(promise).rejects.toThrow('Voice tokens request timed out');
+
+      jest.useRealTimers();
+    });
+
+    it('should emit voice:tokens:received event on service when received', async () => {
+      const listener = jest.fn();
+      service.on('voice:tokens:received', listener);
+
+      service.websocket.emit('voice:tokens:received', {
+        type: 'voice_tokens',
+        data: {
+          stt_token: 'stt-token',
+          tts_token: 'tts-token',
+        },
+      });
+
+      expect(listener).toHaveBeenCalledWith({
+        type: 'voice_tokens',
+        data: {
+          stt_token: 'stt-token',
+          tts_token: 'tts-token',
+        },
+      });
+    });
+
+    it('should send request_voice_tokens message through WebSocket', () => {
+      service.requestVoiceTokens();
+
+      expect(mockSocket.send).toHaveBeenCalledWith(
+        JSON.stringify({ type: 'request_voice_tokens' }),
+      );
+    });
+  });
+
   describe('Destroy', () => {
     beforeEach(() => {
       service = new WeniWebchatService({

@@ -162,13 +162,68 @@ export default class WebSocketManager extends EventEmitter {
     });
   }
 
-  async _handleReadyForMessage() {
+  /**
+   * Requests single-use voice tokens from the server.
+   * Resolves with { sttToken, ttsToken } or rejects on error/timeout.
+   *
+   * @param {number} [timeoutMs=10000]
+   * @returns {Promise<{ sttToken: string, ttsToken: string }>}
+   */
+  requestVoiceTokens(timeoutMs = 10000) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error('Voice tokens request timed out'));
+      }, timeoutMs);
+
+      const onReceived = (data) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        const tokens = data.data || data;
+        resolve({ sttToken: tokens.stt_token, ttsToken: tokens.tts_token });
+      };
+
+      const onError = (data) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(new Error(data.error || 'Failed to get voice tokens'));
+      };
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.off(SERVICE_EVENTS.VOICE_TOKENS_RECEIVED, onReceived);
+        this.off(SERVICE_EVENTS.VOICE_TOKENS_ERROR, onError);
+      };
+
+      this.once(SERVICE_EVENTS.VOICE_TOKENS_RECEIVED, onReceived);
+      this.once(SERVICE_EVENTS.VOICE_TOKENS_ERROR, onError);
+
+      this.send({ type: 'request_voice_tokens' }).catch((err) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(err);
+      });
+    });
+  }
+
+  async _handleReadyForMessage(data = {}) {
     this.status = 'connected';
 
     this.reconnectAttempts = 0;
 
     if (this.retryStrategy) {
       this.retryStrategy.reset();
+    }
+
+    if (data.data?.voice_enabled) {
+      this.emit(SERVICE_EVENTS.VOICE_ENABLED);
     }
 
     this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status);
@@ -322,7 +377,7 @@ export default class WebSocketManager extends EventEmitter {
       }
 
       if (data.type === 'ready_for_message') {
-        this._handleReadyForMessage();
+        this._handleReadyForMessage(data);
         return;
       }
 
@@ -333,6 +388,16 @@ export default class WebSocketManager extends EventEmitter {
 
       if (data.type === 'project_language') {
         this.emit(SERVICE_EVENTS.LANGUAGE_CHANGED, data.data.language);
+        return;
+      }
+
+      if (data.type === 'voice_tokens') {
+        this.emit(SERVICE_EVENTS.VOICE_TOKENS_RECEIVED, data);
+        return;
+      }
+
+      if (data.type === 'voice_tokens_error') {
+        this.emit(SERVICE_EVENTS.VOICE_TOKENS_ERROR, data);
         return;
       }
 
