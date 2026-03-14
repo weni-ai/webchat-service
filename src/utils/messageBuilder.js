@@ -222,6 +222,30 @@ export function buildWebSocketMessage(type, message, options = {}) {
 }
 
 /**
+ * Builds a get_pdp_starters request payload.
+ * @param {string} sessionId
+ * @param {Object} productData - Must contain account, linkText. May contain productName, description, brand, attributes.
+ * @returns {Object}
+ */
+export function buildStartersRequest(sessionId, productData) {
+  const data = {
+    account: productData.account,
+    linkText: productData.linkText,
+  };
+
+  if (productData.productName) data.productName = productData.productName;
+  if (productData.description) data.description = productData.description;
+  if (productData.brand) data.brand = productData.brand;
+  if (productData.attributes) data.attributes = productData.attributes;
+
+  return {
+    type: 'get_pdp_starters',
+    from: sessionId,
+    data,
+  };
+}
+
+/**
  * Builds a registration message
  * @param {string} sessionId
  * @param {Object} options
