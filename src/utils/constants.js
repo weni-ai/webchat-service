@@ -48,6 +48,8 @@ export const WS_MESSAGE_TYPES = {
   ERROR: 'error',
   WARNING: 'warning',
   FORBIDDEN: 'forbidden',
+  REQUEST_VOICE_TOKENS: 'request_voice_tokens',
+  VOICE_TOKENS: 'voice_tokens',
 };
 
 export const STORAGE_KEYS = {
@@ -244,6 +246,11 @@ export const SERVICE_EVENTS = {
   HISTORY_REQUESTED: 'history:requested',
   HISTORY_MERGED: 'history:merged',
   HISTORY_CACHE_CLEARED: 'history:cache:cleared',
+
+  // Voice
+  VOICE_ENABLED: 'voice:enabled',
+  VOICE_TOKENS_RECEIVED: 'voice:tokens:received',
+  VOICE_TOKENS_ERROR: 'voice:tokens:error',
 
   // WebSocket
   WS_REGISTERED: 'registered',
