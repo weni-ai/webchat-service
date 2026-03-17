@@ -1,6 +1,7 @@
 import EventEmitter from 'eventemitter3';
 
 import { DEFAULTS, AUDIO_MIME_TYPES, SERVICE_EVENTS } from '../utils/constants';
+import { audioToMp3Blob } from '../utils/MP3Converter';
 
 /**
  * AudioRecorder
@@ -224,18 +225,16 @@ export default class AudioRecorder extends EventEmitter {
     this.isRecording = false;
 
     try {
-      const blob = new Blob(this.audioChunks, {
-        type: this.mediaRecorder.mimeType,
-      });
+      const mp3Blob = await audioToMp3Blob(this.audioChunks);
       const duration = this.getDuration();
-      const base64 = await this._blobToBase64(blob);
+      const base64 = await this._blobToBase64(mp3Blob);
 
       const result = {
         type: 'audio',
         base64,
         duration,
-        mimeType: this.mediaRecorder.mimeType,
-        size: blob.size,
+        mimeType: mp3Blob.type,
+        size: mp3Blob.size,
       };
 
       this.emit(SERVICE_EVENTS.RECORDING_STOPPED, result);
