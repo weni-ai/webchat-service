@@ -149,6 +149,25 @@ export function validateFileType(mimeType, allowedTypes) {
 }
 
 /**
+ * Validates starters product data before sending a get_pdp_starters request.
+ * @param {Object} productData
+ * @throws {Error} If productData is falsy, or account/linkText are missing or empty.
+ */
+export function validateStartersData(productData) {
+  if (!productData) {
+    throw new Error('Product data is required');
+  }
+
+  if (!productData.account || typeof productData.account !== 'string') {
+    throw new Error('account is required and must be a non-empty string');
+  }
+
+  if (!productData.linkText || typeof productData.linkText !== 'string') {
+    throw new Error('linkText is required and must be a non-empty string');
+  }
+}
+
+/**
  * Validates file size
  * @param {number} size
  * @param {number} maxSize

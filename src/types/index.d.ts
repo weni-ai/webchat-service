@@ -133,6 +133,18 @@ export interface WebSocketMessage {
 }
 
 /**
+ * Product data for PDP conversation starters request
+ */
+export interface StartersData {
+  account: string
+  linkText: string
+  productName?: string
+  description?: string
+  brand?: string
+  attributes?: Record<string, string>
+}
+
+/**
  * History request options
  */
 export interface HistoryOptions {
@@ -323,6 +335,10 @@ export default class WeniWebchatService {
 
   // History
   getHistory(options?: any): Promise<Message[]>
+
+  // Starters
+  getStarters(productData: StartersData): void
+  clearStarters(): void
 
   // Context
   setContext(context: string): void

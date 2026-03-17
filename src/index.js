@@ -13,7 +13,7 @@ import AudioRecorder from './modules/AudioRecorder';
 
 import RetryStrategy from './network/RetryStrategy';
 
-import { validateConfig } from './utils/validators';
+import { validateConfig, validateStartersData } from './utils/validators';
 import {
   DEFAULTS,
   SERVICE_EVENTS,
@@ -36,6 +36,7 @@ import {
   buildOrderMessage,
   buildMessagePayload,
   buildCustomFieldMessage,
+  buildStartersRequest,
 } from './utils/messageBuilder';
 
 /**
@@ -127,6 +128,7 @@ export default class WeniWebchatService extends EventEmitter {
 
     this._initialized = false;
     this._connected = false;
+    this._latestStartersFingerprint = null;
 
     this.messagesQueue = [];
     this._renderEnabled = true;
@@ -491,6 +493,41 @@ export default class WeniWebchatService extends EventEmitter {
       this.emit(SERVICE_EVENTS.ERROR, error);
       throw error;
     }
+  }
+
+  /**
+   * Requests PDP conversation starters for a product page.
+   * Sends a get_pdp_starters message via WebSocket. Results arrive
+   * asynchronously through 'starters:received' or 'starters:error' events.
+   *
+   * @param {Object} productData Product data with required account and linkText fields
+   * @throws {Error} If productData is invalid or WebSocket is not connected
+   */
+  getStarters(productData) {
+    validateStartersData(productData);
+
+    if (!this.isConnected()) {
+      throw new Error('WebSocket not connected');
+    }
+
+    this._latestStartersFingerprint =
+      productData.account + ':' + productData.linkText;
+
+    const payload = buildStartersRequest(
+      this.session.getSessionId(),
+      productData,
+    );
+
+    this.websocket.send(payload);
+  }
+
+  /**
+   * Clears the active starters request fingerprint.
+   * Prevents any in-flight starters response from being emitted.
+   * Should be called when navigating away from a product page.
+   */
+  clearStarters() {
+    this._latestStartersFingerprint = null;
   }
 
   /**
@@ -952,6 +989,20 @@ export default class WeniWebchatService extends EventEmitter {
 
     this.websocket.on(SERVICE_EVENTS.LANGUAGE_CHANGED, (language) => {
       this.emit(SERVICE_EVENTS.LANGUAGE_CHANGED, language);
+    });
+
+    this.websocket.on(SERVICE_EVENTS.STARTERS_RECEIVED, (data) => {
+      if (this._latestStartersFingerprint !== null) {
+        this._latestStartersFingerprint = null;
+        this.emit(SERVICE_EVENTS.STARTERS_RECEIVED, data);
+      }
+    });
+
+    this.websocket.on(SERVICE_EVENTS.STARTERS_ERROR, (data) => {
+      if (this._latestStartersFingerprint !== null) {
+        this._latestStartersFingerprint = null;
+        this.emit(SERVICE_EVENTS.STARTERS_ERROR, data);
+      }
     });
 
     this.websocket.on(SERVICE_EVENTS.VOICE_ENABLED, () => {
