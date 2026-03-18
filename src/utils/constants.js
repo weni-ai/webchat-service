@@ -42,6 +42,8 @@ export const WS_MESSAGE_TYPES = {
   PONG: 'pong',
   TYPING: 'typing',
   HISTORY: 'get_history',
+  GET_PDP_STARTERS: 'get_pdp_starters',
+  STARTERS: 'starters',
   ACK: 'ack',
   ERROR: 'error',
   WARNING: 'warning',
@@ -267,6 +269,10 @@ export const SERVICE_EVENTS = {
 
   // Chat
   CHAT_OPEN_CHANGED: 'chat:open:changed',
+
+  // Starters
+  STARTERS_RECEIVED: 'starters:received',
+  STARTERS_ERROR: 'starters:error',
 };
 
 export const LOG_LEVELS = {
