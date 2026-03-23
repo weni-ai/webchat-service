@@ -270,7 +270,7 @@ export default class WeniWebchatService extends EventEmitter {
 
     this.enqueueMessages([message]);
 
-    if (this._initialized) {
+    if (this.isConnected()) {
       this.runQueue();
     }
   }
@@ -280,7 +280,7 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   async runQueue() {
-    if (this.isConnecting() || this.isReconnecting()) {
+    if ((!this.isConnected() && this.isConnecting()) || this.isReconnecting()) {
       return;
     }
 
