@@ -195,10 +195,21 @@ export default class WeniWebchatService extends EventEmitter {
       return;
     }
 
+    if (this.config.mode === 'preview') {
+      return;
+    }
+
     this._connecting = true;
 
     try {
-      const sessionId = this.session.getSessionId();
+      let sessionId = this.session.getSessionId();
+      if (!sessionId) {
+        sessionId = this.session.getOrCreate();
+        const currentSession = this.session.getSession();
+        if (currentSession) {
+          this.state.setSession(currentSession);
+        }
+      }
 
       const registrationData = {
         from: sessionId,
@@ -259,7 +270,7 @@ export default class WeniWebchatService extends EventEmitter {
 
     this.enqueueMessages([message]);
 
-    if (this._initialized) {
+    if (this.isConnected()) {
       this.runQueue();
     }
   }
@@ -269,7 +280,7 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   async runQueue() {
-    if (this.isConnecting() || this.isReconnecting()) {
+    if ((!this.isConnected() && this.isConnecting()) || this.isReconnecting()) {
       return;
     }
 
