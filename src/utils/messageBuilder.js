@@ -252,13 +252,19 @@ export function buildStartersRequest(sessionId, productData) {
  * @returns {Object}
  */
 export function buildRegistrationMessage(sessionId, options = {}) {
-  return {
+  const message = {
     type: 'register',
     from: sessionId,
     callback: options.callback || '',
     session_type: options.session_type || 'local',
     token: options.token,
   };
+
+  if (options.data) {
+    message.data = options.data;
+  }
+
+  return message;
 }
 
 /**
