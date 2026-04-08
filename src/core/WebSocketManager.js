@@ -118,6 +118,11 @@ export default class WebSocketManager extends EventEmitter {
       session_type: this.registrationData.session_type || 'local',
       token:
         this.registrationData.token || this.config.sessionToken || undefined,
+      data: {
+        features: {
+          voiceMode: !!this.config.voiceMode?.enabled,
+        },
+      },
     });
 
     return this.send(message)
