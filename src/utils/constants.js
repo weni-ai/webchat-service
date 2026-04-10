@@ -18,6 +18,7 @@ export const MESSAGE_TYPES = {
   FILE: 'file',
   LOCATION: 'location',
   INTERACTIVE: 'interactive',
+  CONVERSATION_STATUS: 'conversation_status',
   TYPING: 'typing',
 };
 

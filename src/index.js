@@ -37,6 +37,7 @@ import {
   buildMessagePayload,
   buildCustomFieldMessage,
   buildStartersRequest,
+  buildConversationStatusMessage,
 } from './utils/messageBuilder';
 
 /**
@@ -370,6 +371,37 @@ export default class WeniWebchatService extends EventEmitter {
     this.state.addMessage(message);
     this.session.appendToConversation(message);
     this.session.setLastMessageSentAt(Date.now());
+  }
+
+  /**
+   * Adds a local-only conversation status row (stored in session; not sent over WebSocket).
+   * Survives reconnect/history merge like other persisted local rows.
+   * Host apps should render messages with type conversation_status using text and statusType
+   * (semantic strings such as success, info, or any custom value).
+   *
+   * @param {string} text Status text
+   * @param {string} statusType Semantic type for styling (e.g. success, info)
+   * @param {Object} [options] Optional id, timestamp, direction, metadata
+   * @returns {Object} The message object that was appended
+   */
+  addConversationStatus(text, statusType, options = {}) {
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      throw new Error('Status text is required');
+    }
+    if (!statusType || typeof statusType !== 'string' || !statusType.trim()) {
+      throw new Error('Status type is required');
+    }
+
+    const message = buildConversationStatusMessage(
+      text.trim(),
+      statusType.trim(),
+      options,
+    );
+
+    this.state.addMessage(message);
+    this.session.appendToConversation(message);
+
+    return message;
   }
 
   /**

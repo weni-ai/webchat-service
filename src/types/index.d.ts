@@ -48,7 +48,15 @@ export interface ServiceConfig {
 /**
  * Message types
  */
-export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'file' | 'location' | 'interactive'
+export type MessageType =
+  | 'text'
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'file'
+  | 'location'
+  | 'interactive'
+  | 'conversation_status'
 
 /**
  * Message structure
@@ -59,7 +67,9 @@ export interface Message {
   ID?: string // Uppercase for history compatibility
   type: MessageType
   text?: string
-  
+  /** Semantic category for conversation_status rows (e.g. success, info); host-defined */
+  statusType?: string
+
   // Media fields
   media?: string // Base64 or URL for sending or receiving
   caption?: string // Media caption
@@ -76,6 +86,7 @@ export interface Message {
   
   // Additional data
   metadata?: Record<string, any>
+  persisted?: boolean
 }
 
 /**
@@ -337,6 +348,11 @@ export default class WeniWebchatService {
 
   // Messages
   sendMessage(text: string, options?: any): Promise<void>
+  addConversationStatus(
+    text: string,
+    statusType: string,
+    options?: any
+  ): Message
   addProductToCart(
     props: AddProductToCartProps,
     timeoutMs?: number
