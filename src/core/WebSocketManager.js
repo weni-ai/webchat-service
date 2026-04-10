@@ -504,6 +504,23 @@ export default class WebSocketManager extends EventEmitter {
         return;
       }
 
+      if (data.type === 'cart_error') {
+        const itemId = data?.data?.item_id;
+
+        if (itemId && this.pendingAddToCartRequests.has(itemId)) {
+          const pending = this.pendingAddToCartRequests.get(itemId);
+          clearTimeout(pending.timer);
+          this.pendingAddToCartRequests.delete(itemId);
+          const errMsg =
+            typeof data.error === 'string' && data.error.trim()
+              ? data.error.trim()
+              : 'Failed to update cart';
+          pending.reject(new Error(errMsg));
+        }
+
+        return;
+      }
+
       if (
         data.type === 'error' &&
         String(data.error).startsWith('verify contact timeout: ')

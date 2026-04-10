@@ -652,6 +652,57 @@ describe('WeniWebchatService', () => {
       await expect(promise).resolves.toEqual({ id: 'product_456' });
     });
 
+    it('should reject when cart_error arrives with matching item_id', async () => {
+      const promise = service.addProductToCart(validProps);
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'cart_error',
+          error: 'failed to update cart',
+          data: { item_id: 'product_456' },
+        }),
+      });
+
+      await expect(promise).rejects.toThrow('failed to update cart');
+    });
+
+    it('should use fallback message when cart_error has no error string', async () => {
+      const promise = service.addProductToCart(validProps);
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'cart_error',
+          data: { item_id: 'product_456' },
+        }),
+      });
+
+      await expect(promise).rejects.toThrow('Failed to update cart');
+    });
+
+    it('should ignore duplicate cart_error for same item_id', async () => {
+      const promise = service.addProductToCart(validProps);
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'cart_error',
+          error: 'failed to update cart',
+          data: { item_id: 'product_456' },
+        }),
+      });
+
+      await expect(promise).rejects.toThrow('failed to update cart');
+
+      expect(() => {
+        service.websocket._handleMessage({
+          data: JSON.stringify({
+            type: 'cart_error',
+            error: 'failed again',
+            data: { item_id: 'product_456' },
+          }),
+        });
+      }).not.toThrow();
+    });
+
     it('should not resolve for a different item_id', async () => {
       jest.useFakeTimers();
 
