@@ -201,6 +201,29 @@ export function buildOrderMessage(productItems, options = {}) {
 }
 
 /**
+ * Builds a local-only conversation status row (not sent over WebSocket).
+ * Host UIs should render using message.type and statusType (e.g. success, info).
+ * Sets persisted so the row survives history merge after WebSocket connect.
+ *
+ * @param {string} text
+ * @param {string} statusType Semantic category defined by the host (success, info, …)
+ * @param {Object} [options]
+ * @returns {Object}
+ */
+export function buildConversationStatusMessage(text, statusType, options = {}) {
+  return {
+    id: options.id || generateMessageId(),
+    type: 'conversation_status',
+    text,
+    statusType,
+    timestamp: options.timestamp || Date.now(),
+    direction: options.direction || 'incoming',
+    persisted: true,
+    metadata: options.metadata || {},
+  };
+}
+
+/**
  * Builds a WebSocket message payload
  * @param {string} type
  * @param {Object} message

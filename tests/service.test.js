@@ -296,6 +296,82 @@ describe('WeniWebchatService', () => {
     });
   });
 
+  describe('addConversationStatus', () => {
+    beforeEach(() => {
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+      });
+      service.session.getOrCreate();
+    });
+
+    it('should add conversation status to state and session', () => {
+      const addMessageSpy = jest.spyOn(service.state, 'addMessage');
+      const appendSpy = jest.spyOn(service.session, 'appendToConversation');
+      const enqueueSpy = jest.spyOn(service, 'enqueueMessages');
+
+      const returned = service.addConversationStatus(
+        'Meta Quest 2 added to cart',
+        'success',
+      );
+
+      expect(returned).toEqual(
+        expect.objectContaining({
+          type: 'conversation_status',
+          text: 'Meta Quest 2 added to cart',
+          statusType: 'success',
+          direction: 'incoming',
+          persisted: true,
+        }),
+      );
+      expect(returned.id).toBeDefined();
+      expect(addMessageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'conversation_status',
+          text: 'Meta Quest 2 added to cart',
+          statusType: 'success',
+        }),
+      );
+      expect(appendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'conversation_status',
+          statusType: 'success',
+        }),
+      );
+      expect(enqueueSpy).not.toHaveBeenCalled();
+    });
+
+    it('should trim text and statusType', () => {
+      const msg = service.addConversationStatus('  Added  ', '  info  ');
+      expect(msg.text).toBe('Added');
+      expect(msg.statusType).toBe('info');
+    });
+
+    it('should throw when text is missing or empty', () => {
+      expect(() => service.addConversationStatus('', 'success')).toThrow(
+        'Status text is required',
+      );
+      expect(() => service.addConversationStatus('   ', 'success')).toThrow(
+        'Status text is required',
+      );
+      expect(() => service.addConversationStatus(null, 'success')).toThrow(
+        'Status text is required',
+      );
+    });
+
+    it('should throw when statusType is missing or empty', () => {
+      expect(() =>
+        service.addConversationStatus('Added to cart', ''),
+      ).toThrow('Status type is required');
+      expect(() =>
+        service.addConversationStatus('Added to cart', '   '),
+      ).toThrow('Status type is required');
+      expect(() =>
+        service.addConversationStatus('Added to cart', null),
+      ).toThrow('Status type is required');
+    });
+  });
+
   describe('Connection Status', () => {
     beforeEach(() => {
       service = new WeniWebchatService({
