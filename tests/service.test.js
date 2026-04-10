@@ -516,6 +516,159 @@ describe('WeniWebchatService', () => {
     });
   });
 
+  describe('addProductToCart', () => {
+    let mockSocket;
+    const validProps = {
+      VTEXAccountName: 'account-name',
+      orderFormId: '1234567890',
+      seller: 'seller_123',
+      id: 'product_456',
+    };
+
+    beforeEach(() => {
+      mockSocket = {
+        send: jest.fn(),
+        close: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        readyState: WebSocket.OPEN,
+      };
+
+      global.WebSocket = jest.fn().mockImplementation(() => mockSocket);
+
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+      });
+
+      service.websocket.socket = mockSocket;
+      service.websocket.status = 'connected';
+    });
+
+    it('should send add_to_cart payload through WebSocket', () => {
+      service.addProductToCart(validProps);
+
+      expect(mockSocket.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'add_to_cart',
+          data: {
+            vtex_account: 'account-name',
+            order_form_id: '1234567890',
+            item: {
+              seller: 'seller_123',
+              id: 'product_456',
+            },
+          },
+        }),
+      );
+    });
+
+    it('should resolve when cart_updated arrives with matching item_id', async () => {
+      const promise = service.addProductToCart(validProps);
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'cart_updated',
+          data: { item_id: 'product_456' },
+        }),
+      });
+
+      await expect(promise).resolves.toEqual({ id: 'product_456' });
+    });
+
+    it('should not resolve for a different item_id', async () => {
+      jest.useFakeTimers();
+
+      const promise = service.addProductToCart(validProps, 50);
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'cart_updated',
+          data: { item_id: 'another-item' },
+        }),
+      });
+
+      jest.advanceTimersByTime(51);
+
+      await expect(promise).rejects.toThrow(
+        'Add to cart request timed out for item id "product_456"',
+      );
+
+      jest.useRealTimers();
+    });
+
+    it('should resolve concurrent requests by matching each item_id', async () => {
+      const p1 = service.addProductToCart({
+        ...validProps,
+        id: 'product_1',
+      });
+      const p2 = service.addProductToCart({
+        ...validProps,
+        id: 'product_2',
+      });
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'cart_updated',
+          data: { item_id: 'product_2' },
+        }),
+      });
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'cart_updated',
+          data: { item_id: 'product_1' },
+        }),
+      });
+
+      await expect(p2).resolves.toEqual({ id: 'product_2' });
+      await expect(p1).resolves.toEqual({ id: 'product_1' });
+    });
+
+    it('should reject after 30 seconds when no response is received', async () => {
+      jest.useFakeTimers();
+
+      const promise = service.addProductToCart(validProps);
+
+      jest.advanceTimersByTime(30001);
+
+      await expect(promise).rejects.toThrow(
+        'Add to cart request timed out for item id "product_456"',
+      );
+
+      jest.useRealTimers();
+    });
+
+    it('should reject when input is invalid', async () => {
+      await expect(service.addProductToCart(null)).rejects.toThrow(
+        'VTEXAccountName is required',
+      );
+      await expect(
+        service.addProductToCart({
+          ...validProps,
+          VTEXAccountName: '',
+        }),
+      ).rejects.toThrow('VTEXAccountName is required');
+      await expect(
+        service.addProductToCart({
+          ...validProps,
+          orderFormId: '',
+        }),
+      ).rejects.toThrow('orderFormId is required');
+      await expect(
+        service.addProductToCart({
+          ...validProps,
+          seller: '',
+        }),
+      ).rejects.toThrow('seller is required');
+      await expect(
+        service.addProductToCart({
+          ...validProps,
+          id: '',
+        }),
+      ).rejects.toThrow('id is required');
+    });
+  });
+
   describe('Destroy', () => {
     beforeEach(() => {
       service = new WeniWebchatService({

@@ -316,6 +316,13 @@ export interface FileConfig {
   acceptAttribute: string
 }
 
+export interface AddProductToCartProps {
+  VTEXAccountName: string
+  orderFormId: string
+  seller: string
+  id: string
+}
+
 /**
  * Main service class
  */
@@ -330,6 +337,10 @@ export default class WeniWebchatService {
 
   // Messages
   sendMessage(text: string, options?: any): Promise<void>
+  addProductToCart(
+    props: AddProductToCartProps,
+    timeoutMs?: number
+  ): Promise<{ id: string }>
   sendAttachment(file: File): Promise<void>
   sendAudio(audioData: any): Promise<void>
 
