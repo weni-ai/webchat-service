@@ -252,6 +252,9 @@ export const SERVICE_EVENTS = {
   VOICE_TOKENS_RECEIVED: 'voice:tokens:received',
   VOICE_TOKENS_ERROR: 'voice:tokens:error',
 
+  // Cart
+  CART_UPDATED: 'cart:updated',
+
   // WebSocket
   WS_REGISTERED: 'registered',
   WS_FORBIDDEN: 'websocket:forbidden',

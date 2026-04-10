@@ -42,6 +42,7 @@ export default class WebSocketManager extends EventEmitter {
     this.isRegistered = false;
     this.registrationData = null;
     this.retryStrategy = this.config.retryStrategy;
+    this.pendingAddToCartRequests = new Map();
   }
 
   /**
@@ -213,6 +214,84 @@ export default class WebSocketManager extends EventEmitter {
         if (settled) return;
         settled = true;
         cleanup();
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * Requests the backend to add an item to the VTEX cart.
+   * Supports concurrent requests by correlating responses using item id.
+   *
+   * @param {Object} props
+   * @param {string} props.VTEXAccountName
+   * @param {string} props.orderFormId
+   * @param {string} props.seller
+   * @param {string} props.id
+   * @param {number} [timeoutMs=30000]
+   * @returns {Promise<{ id: string }>}
+   */
+  addProductToCart(props, timeoutMs = 30000) {
+    return new Promise((resolve, reject) => {
+      const { VTEXAccountName, orderFormId, seller, id: itemId } = props || {};
+
+      if (!VTEXAccountName || typeof VTEXAccountName !== 'string') {
+        reject(new Error('VTEXAccountName is required'));
+        return;
+      }
+
+      if (!orderFormId || typeof orderFormId !== 'string') {
+        reject(new Error('orderFormId is required'));
+        return;
+      }
+
+      if (!seller || typeof seller !== 'string') {
+        reject(new Error('seller is required'));
+        return;
+      }
+
+      if (!itemId || typeof itemId !== 'string') {
+        reject(new Error('id is required'));
+        return;
+      }
+
+      if (this.pendingAddToCartRequests.has(itemId)) {
+        reject(
+          new Error(
+            `An add-to-cart request is already pending for item id "${itemId}"`,
+          ),
+        );
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        this.pendingAddToCartRequests.delete(itemId);
+        reject(
+          new Error(`Add to cart request timed out for item id "${itemId}"`),
+        );
+      }, timeoutMs);
+
+      this.pendingAddToCartRequests.set(itemId, {
+        resolve,
+        reject,
+        timer,
+      });
+
+      this.send({
+        type: 'add_to_cart',
+        data: {
+          vtex_account: VTEXAccountName,
+          order_form_id: orderFormId,
+          item: {
+            seller,
+            id: itemId,
+          },
+        },
+      }).catch((err) => {
+        const pending = this.pendingAddToCartRequests.get(itemId);
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        this.pendingAddToCartRequests.delete(itemId);
         reject(err);
       });
     });
@@ -408,6 +487,20 @@ export default class WebSocketManager extends EventEmitter {
 
       if (data.type === 'voice_tokens_error') {
         this.emit(SERVICE_EVENTS.VOICE_TOKENS_ERROR, data);
+        return;
+      }
+
+      if (data.type === 'cart_updated') {
+        const itemId = data?.data?.item_id;
+
+        if (itemId && this.pendingAddToCartRequests.has(itemId)) {
+          const pending = this.pendingAddToCartRequests.get(itemId);
+          clearTimeout(pending.timer);
+          this.pendingAddToCartRequests.delete(itemId);
+          pending.resolve({ id: itemId });
+        }
+
+        this.emit(SERVICE_EVENTS.CART_UPDATED, data);
         return;
       }
 

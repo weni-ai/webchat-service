@@ -913,6 +913,21 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
+   * Adds a product to cart through WebSocket and waits for confirmation.
+   *
+   * @param {Object} props
+   * @param {string} props.VTEXAccountName
+   * @param {string} props.orderFormId
+   * @param {string} props.seller
+   * @param {string} props.id
+   * @param {number} [timeoutMs=30000] Maximum wait time in milliseconds
+   * @returns {Promise<{ id: string }>}
+   */
+  addProductToCart(props, timeoutMs = 30000) {
+    return this.websocket.addProductToCart(props, timeoutMs);
+  }
+
+  /**
    * Destroys service instance
    */
   destroy() {
@@ -1026,6 +1041,10 @@ export default class WeniWebchatService extends EventEmitter {
 
     this.websocket.on(SERVICE_EVENTS.VOICE_TOKENS_ERROR, (data) => {
       this.emit(SERVICE_EVENTS.VOICE_TOKENS_ERROR, data);
+    });
+
+    this.websocket.on(SERVICE_EVENTS.CART_UPDATED, (data) => {
+      this.emit(SERVICE_EVENTS.CART_UPDATED, data);
     });
 
     // Message processor events
