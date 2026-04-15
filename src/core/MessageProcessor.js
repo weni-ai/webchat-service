@@ -454,9 +454,7 @@ export default class MessageProcessor extends EventEmitter {
 
     const streamData = this.streams.get(messageId);
     const finalText =
-      typeof raw.content === 'string'
-        ? raw.content
-        : streamData?.text || '';
+      typeof raw.content === 'string' ? raw.content : streamData?.text || '';
 
     const now = Date.now();
 
