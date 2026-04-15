@@ -372,31 +372,40 @@ describe('MessageProcessor', () => {
     });
   });
 
-  describe('_initializeSyntheticStream (delta without stream_start)', () => {
-    it('should create synthetic stream when delta arrives without stream_start', () => {
-      const delta = { v: 'Hello', seq: 1, id: 'synthetic-123' };
+  describe('delta without stream_start (orphan deltas)', () => {
+    it('should ignore deltas when no stream_start registered', () => {
+      processor._processDelta({ v: 'Hello', seq: 1, id: 'orphan-1' });
 
-      processor._processDelta(delta);
-
-      expect(processor.activeStreamId).toBe(
-        MESSAGE_ID_PREFIX + 'synthetic-123',
+      expect(processor.activeStreamId).toBeNull();
+      expect(processor.streams.size).toBe(0);
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.anything(),
       );
-      expect(processor.streams.has(MESSAGE_ID_PREFIX + 'synthetic-123')).toBe(
-        true,
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        expect.anything(),
+        expect.anything(),
       );
-      expect(processor.streamMessageEmitted).toBe(true);
     });
 
-    it('should emit streaming message immediately for synthetic stream', () => {
-      const delta = { v: 'Hello', seq: 1, id: 'synthetic-123' };
+    it('should emit delivered message from stream_end with content only', () => {
+      processor._processDelta({ v: 'ignored', seq: 1 });
 
-      processor._processDelta(delta);
+      processor._processStreamEnd({
+        type: 'stream_end',
+        id: 'recovered-b',
+        content: 'Full reply from server',
+      });
 
       expect(mockEmit).toHaveBeenCalledWith(
         SERVICE_EVENTS.MESSAGE_PROCESSED,
         expect.objectContaining({
-          id: MESSAGE_ID_PREFIX + 'synthetic-123',
-          status: 'streaming',
+          id: MESSAGE_ID_PREFIX + 'recovered-b',
+          type: 'text',
+          text: 'Full reply from server',
+          status: 'delivered',
+          direction: 'incoming',
         }),
       );
     });
@@ -418,6 +427,23 @@ describe('MessageProcessor', () => {
         MESSAGE_ID_PREFIX + 'stream-123',
         expect.objectContaining({
           text: 'Hello World',
+          status: 'delivered',
+        }),
+      );
+    });
+
+    it('should use stream_end content over accumulated stream text when provided', () => {
+      processor._processStreamEnd({
+        type: 'stream_end',
+        id: 'stream-123',
+        content: 'Authoritative final text',
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'stream-123',
+        expect.objectContaining({
+          text: 'Authoritative final text',
           status: 'delivered',
         }),
       );

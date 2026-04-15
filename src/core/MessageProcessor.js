@@ -258,6 +258,7 @@ export default class MessageProcessor extends EventEmitter {
   /**
    * Processes a delta message
    * Handles sequence-based buffering and reordering
+   * Requires stream_start first; deltas without an active stream are ignored
    * @private
    * @param {Object} raw - { v: string, seq: number }
    */
@@ -269,9 +270,8 @@ export default class MessageProcessor extends EventEmitter {
       return;
     }
 
-    // Create synthetic stream if delta arrives without stream_start
     if (!this.activeStreamId) {
-      this._initializeSyntheticStream(raw);
+      return;
     }
 
     // Handle first delta of the stream
@@ -303,25 +303,6 @@ export default class MessageProcessor extends EventEmitter {
       this.nextExpectedSeq === STREAM_INITIAL_SEQUENCE &&
       seq >= STREAM_INITIAL_SEQUENCE
     );
-  }
-
-  /**
-   * Creates a synthetic stream when delta arrives without stream_start
-   * This handles edge cases where stream_start message is lost
-   * @private
-   * @param {Object} raw
-   */
-  _initializeSyntheticStream(raw) {
-    const messageId = this._getMessageIdFromRaw(raw);
-    this._resetStreamState(messageId);
-    this.streamMessageEmitted = true;
-
-    const timestamp = Date.now();
-    this.streams.set(messageId, { text: '', timestamp });
-
-    const message = this._createStreamingMessage(messageId, timestamp);
-    this.queue.push(message);
-    this._processQueue();
   }
 
   /**
@@ -369,6 +350,25 @@ export default class MessageProcessor extends EventEmitter {
       timestamp,
       direction: 'incoming',
       status: 'streaming',
+    };
+  }
+
+  /**
+   * Finalized incoming text message (e.g. stream_end without prior local stream state)
+   * @private
+   * @param {string} id
+   * @param {string} text
+   * @param {number} timestamp
+   * @returns {Object}
+   */
+  _createDeliveredTextMessage(id, text, timestamp) {
+    return {
+      id,
+      type: 'text',
+      text,
+      timestamp,
+      direction: 'incoming',
+      status: 'delivered',
     };
   }
 
@@ -434,8 +434,9 @@ export default class MessageProcessor extends EventEmitter {
   /**
    * Processes a stream_end message
    * Finalizes the stream and cleans up state
+   * When raw.content is a string, it is the authoritative final text (e.g. after missed stream_start)
    * @private
-   * @param {Object} raw - { type: 'stream_end', id: string }
+   * @param {Object} raw - { type: 'stream_end', id: string, content?: string }
    */
   _processStreamEnd(raw) {
     const messageId = this._getMessageIdFromRaw(raw);
@@ -452,13 +453,26 @@ export default class MessageProcessor extends EventEmitter {
     }
 
     const streamData = this.streams.get(messageId);
-    const finalText = streamData?.text || '';
+    const finalText =
+      typeof raw.content === 'string' ? raw.content : streamData?.text || '';
 
-    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, {
-      text: finalText,
-      status: 'delivered',
-      timestamp: Date.now(),
-    });
+    const now = Date.now();
+
+    if (this.streams.has(messageId)) {
+      this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, {
+        text: finalText,
+        status: 'delivered',
+        timestamp: now,
+      });
+    } else {
+      const message = this._createDeliveredTextMessage(
+        messageId,
+        finalText,
+        now,
+      );
+      this.queue.push(message);
+      this._processQueue();
+    }
 
     this._cleanupStream(messageId);
     this._rememberIncomingText(finalText);
