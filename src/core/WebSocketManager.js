@@ -27,6 +27,8 @@ export default class WebSocketManager extends EventEmitter {
       autoReconnect: config.autoReconnect !== false || DEFAULTS.AUTO_RECONNECT,
       maxReconnectAttempts:
         config.maxReconnectAttempts || DEFAULTS.MAX_RECONNECT_ATTEMPTS,
+      maxReclaimAttempts:
+        config.maxReclaimAttempts || DEFAULTS.MAX_RECLAIM_ATTEMPTS,
       reconnectInterval:
         config.reconnectInterval || DEFAULTS.RECONNECT_INTERVAL,
       pingInterval: config.pingInterval || DEFAULTS.PING_INTERVAL,
@@ -43,6 +45,9 @@ export default class WebSocketManager extends EventEmitter {
     this.registrationData = null;
     this.retryStrategy = this.config.retryStrategy;
     this.pendingAddToCartRequests = new Map();
+    // Tracks consecutive "client from already exists" errors so we can stop
+    // the reclaim handshake if the other client never releases the session.
+    this._reclaimAttempts = 0;
   }
 
   /**
@@ -301,6 +306,7 @@ export default class WebSocketManager extends EventEmitter {
     this.status = 'connected';
 
     this.reconnectAttempts = 0;
+    this._reclaimAttempts = 0;
 
     if (this.retryStrategy) {
       this.retryStrategy.reset();
@@ -337,11 +343,11 @@ export default class WebSocketManager extends EventEmitter {
     try {
       await this.send(message);
 
-      this.once(SERVICE_EVENTS.DISCONNECTED, () => {
-        this._scheduleReconnect();
-      });
-
-      this.disconnect();
+      // Non-permanent disconnect keeps autoReconnect=true and sets
+      // status='disconnecting' so _handleDisconnect schedules the reconnect
+      // through the capped path. Avoids the unbounded loop and the latent
+      // side effect of silently turning off autoReconnect forever.
+      this.disconnect(false, 'disconnecting');
     } catch (error) {
       this.emit(
         SERVICE_EVENTS.ERROR,
@@ -537,6 +543,15 @@ export default class WebSocketManager extends EventEmitter {
         data.type === 'error' &&
         data.error === 'unable to register: client from already exists'
       ) {
+        this._reclaimAttempts += 1;
+        if (this._reclaimAttempts > this.config.maxReclaimAttempts) {
+          this.emit(
+            SERVICE_EVENTS.ERROR,
+            new Error('Unable to reclaim session from another active client'),
+          );
+          this.disconnect(true);
+          return;
+        }
         this._closeOthersConnections();
         return;
       }
@@ -546,6 +561,20 @@ export default class WebSocketManager extends EventEmitter {
         data.warning === 'Connection closed by request'
       ) {
         this.disconnect(true, 'closed');
+        return;
+      }
+
+      if (
+        data.type === 'error' &&
+        typeof data.error === 'string' &&
+        data.error.startsWith('unable to register: original handler is dead')
+      ) {
+        // Backend removed the stale record and invites us to retry.
+        // Non-permanent disconnect triggers the capped reconnect path,
+        // which re-registers. If for any reason the record persists,
+        // _scheduleReconnect's cap stops the loop.
+        this.isRegistered = false;
+        this.disconnect(false, 'disconnecting');
         return;
       }
 
@@ -610,6 +639,17 @@ export default class WebSocketManager extends EventEmitter {
    * @private
    */
   _scheduleReconnect() {
+    // Defensive cap: every caller goes through this method, so enforcing the
+    // max-attempts guard here prevents any direct caller (e.g. duplicate
+    // session recovery) from bypassing _handleDisconnect's check and looping.
+    if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
+      this.emit(
+        SERVICE_EVENTS.ERROR,
+        new Error('Max reconnection attempts reached'),
+      );
+      return;
+    }
+
     this.status = 'reconnecting';
     this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status);
 
