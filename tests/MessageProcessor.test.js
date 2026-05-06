@@ -806,6 +806,23 @@ describe('MessageProcessor', () => {
       });
     });
 
+    it('should normalize push envelope file message with media_url and caption', () => {
+      const raw = {
+        type: 'message',
+        message: {
+          type: 'file',
+          media_url: 'https://example.com/bucket/file.pdf',
+          caption: 'Privacy policy and terms.',
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.type).toBe('file');
+      expect(normalized.media).toBe('https://example.com/bucket/file.pdf');
+      expect(normalized.caption).toBe('Privacy policy and terms.');
+    });
+
     it('should normalize message with quick replies', () => {
       const raw = {
         message: {

@@ -193,6 +193,12 @@ export default class MessageProcessor extends EventEmitter {
 
     if (raw.message && raw.message.media) {
       message.media = raw.message.media;
+    } else if (raw.message?.media_url) {
+      message.media = raw.message.media_url;
+    }
+
+    if (typeof raw.message?.caption === 'string') {
+      message.caption = raw.message.caption;
     }
 
     if (raw.message && raw.message.quick_replies) {
@@ -509,6 +515,11 @@ export default class MessageProcessor extends EventEmitter {
    * @returns {string}
    */
   _getMessageType(raw) {
+    // Push envelope: type "message" wraps inner content type (file, image, text, …)
+    if (raw.type === 'message' && raw.message?.type) {
+      return raw.message.type;
+    }
+
     if (raw.type) {
       return raw.type;
     }
