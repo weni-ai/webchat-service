@@ -24,7 +24,10 @@ export default class WebSocketManager extends EventEmitter {
       channelUuid: config.channelUuid || '',
       host: config.host || '',
       sessionToken: config.sessionToken || null,
-      autoReconnect: config.autoReconnect !== false || DEFAULTS.AUTO_RECONNECT,
+      autoReconnect:
+        config.autoReconnect !== undefined
+          ? config.autoReconnect
+          : DEFAULTS.AUTO_RECONNECT,
       maxReconnectAttempts:
         config.maxReconnectAttempts || DEFAULTS.MAX_RECONNECT_ATTEMPTS,
       maxReclaimAttempts:
@@ -182,17 +185,19 @@ export default class WebSocketManager extends EventEmitter {
    */
   requestVoiceTokens(timeoutMs = 10000) {
     return new Promise((resolve, reject) => {
+      // `settled` only guards the send().catch path, which can fire after a
+      // synchronous settle (timeout/event) has already cleaned up. The timer
+      // and once-listeners cannot run after cleanup(), so they don't need
+      // their own guards.
       let settled = false;
 
       const timer = setTimeout(() => {
-        if (settled) return;
         settled = true;
         cleanup();
         reject(new Error('Voice tokens request timed out'));
       }, timeoutMs);
 
       const onReceived = (data) => {
-        if (settled) return;
         settled = true;
         cleanup();
         const tokens = data.data || data;
@@ -200,7 +205,6 @@ export default class WebSocketManager extends EventEmitter {
       };
 
       const onError = (data) => {
-        if (settled) return;
         settled = true;
         cleanup();
         reject(new Error(data.error || 'Failed to get voice tokens'));
@@ -320,10 +324,6 @@ export default class WebSocketManager extends EventEmitter {
     this.emit(SERVICE_EVENTS.CONNECTED);
     this._startPingInterval();
     this._requestProjectLanguage();
-  }
-
-  _getHistory() {
-    return this.history;
   }
 
   _requestProjectLanguage() {
