@@ -6,6 +6,7 @@ import {
   SERVICE_EVENTS,
   MESSAGE_ID_PREFIX,
   STREAM_INITIAL_SEQUENCE,
+  STREAM_START_TIMEOUT_MS,
 } from '../utils/constants';
 
 /**
@@ -39,6 +40,8 @@ export default class MessageProcessor extends EventEmitter {
     this.isThinkingActive = false;
     this.streams = new Map();
     this.recentIncomingTexts = [];
+    this.streamInactivityTimer = null;
+    this.timedOutStreamIds = new Set();
 
     // Streaming state
     this._resetStreamState();
@@ -169,6 +172,7 @@ export default class MessageProcessor extends EventEmitter {
   clearQueue() {
     this.queue = [];
     this.isProcessing = false;
+    this._clearStreamInactivityTimer();
   }
 
   /**
@@ -257,8 +261,75 @@ export default class MessageProcessor extends EventEmitter {
       return;
     }
 
+    this.timedOutStreamIds.delete(messageId);
+    this._clearStreamInactivityTimer();
     this._resetStreamState(messageId);
     this.streams.set(messageId, { text: '', timestamp: Date.now() });
+  }
+
+  /**
+   * Clears the stream inactivity timer
+   * @private
+   */
+  _clearStreamInactivityTimer() {
+    if (this.streamInactivityTimer) {
+      clearTimeout(this.streamInactivityTimer);
+      this.streamInactivityTimer = null;
+    }
+  }
+
+  /**
+   * Starts the stream inactivity timer (first delta only; not started on stream_start)
+   * @private
+   * @param {string} messageId
+   */
+  _startStreamInactivityTimer(messageId) {
+    this._clearStreamInactivityTimer();
+    this.streamInactivityTimer = setTimeout(() => {
+      this.streamInactivityTimer = null;
+      this._handleStreamInactivityTimeout(messageId);
+    }, STREAM_START_TIMEOUT_MS);
+  }
+
+  /**
+   * Starts or resets the inactivity window from the first delta onward
+   * @private
+   * @param {string} messageId
+   */
+  _restartStreamInactivityTimer(messageId) {
+    if (!messageId) {
+      return;
+    }
+    this._startStreamInactivityTimer(messageId);
+  }
+
+  /**
+   * Finalizes the stream after inactivity timeout (same outcome as stream_end without content)
+   * @private
+   * @param {string} messageId
+   */
+  _handleStreamInactivityTimeout(messageId) {
+    if (this.activeStreamId !== messageId) {
+      return;
+    }
+
+    this._stopTyping();
+
+    const streamData = this.streams.get(messageId);
+    const finalText = streamData?.text ?? '';
+    const now = Date.now();
+
+    if (this.streams.has(messageId)) {
+      this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, {
+        text: finalText,
+        status: 'delivered',
+        timestamp: now,
+      });
+    }
+
+    this.timedOutStreamIds.add(messageId);
+    this._rememberIncomingText(finalText);
+    this._cleanupStream(messageId);
   }
 
   /**
@@ -279,6 +350,8 @@ export default class MessageProcessor extends EventEmitter {
     if (!this.activeStreamId) {
       return;
     }
+
+    this._restartStreamInactivityTimer(this.activeStreamId);
 
     // Handle first delta of the stream
     if (this._isFirstDelta(seq)) {
@@ -454,6 +527,12 @@ export default class MessageProcessor extends EventEmitter {
       return;
     }
 
+    if (this.timedOutStreamIds.has(messageId)) {
+      return;
+    }
+
+    this._clearStreamInactivityTimer();
+
     if (this.isTypingActive || this.isThinkingActive) {
       this._stopTyping();
     }
@@ -490,6 +569,10 @@ export default class MessageProcessor extends EventEmitter {
    * @param {string} messageId
    */
   _cleanupStream(messageId) {
+    if (this.activeStreamId === messageId) {
+      this._clearStreamInactivityTimer();
+    }
+
     this.streams.delete(messageId);
 
     if (this.activeStreamId === messageId) {
