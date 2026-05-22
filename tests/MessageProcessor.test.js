@@ -416,8 +416,24 @@ describe('MessageProcessor', () => {
     const streamId = 'timeout-test';
     const prefixedId = MESSAGE_ID_PREFIX + streamId;
 
-    it('should finalize with empty text when no delta arrives within 2s', () => {
+    it('should not timeout while waiting for the first delta after stream_start', () => {
       processor._processStreamStart({ type: 'stream_start', id: streamId });
+
+      jest.advanceTimersByTime(10000);
+
+      expect(processor.activeStreamId).toBe(prefixedId);
+      expect(processor.streams.has(prefixedId)).toBe(true);
+      expect(processor.timedOutStreamIds.has(prefixedId)).toBe(false);
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        prefixedId,
+        expect.objectContaining({ status: 'delivered' }),
+      );
+    });
+
+    it('should finalize when idle for 2s after the first delta', () => {
+      processor._processStreamStart({ type: 'stream_start', id: streamId });
+      processor._processDelta({ v: 'Hi', seq: 1 });
 
       jest.advanceTimersByTime(STREAM_START_TIMEOUT_MS + 1);
 
@@ -425,22 +441,22 @@ describe('MessageProcessor', () => {
         SERVICE_EVENTS.MESSAGE_UPDATED,
         prefixedId,
         expect.objectContaining({
-          text: '',
+          text: 'Hi',
           status: 'delivered',
         }),
       );
       expect(processor.activeStreamId).toBeNull();
-      expect(processor.streams.has(prefixedId)).toBe(false);
       expect(processor.timedOutStreamIds.has(prefixedId)).toBe(true);
     });
 
     it('should ignore deltas after inactivity timeout', () => {
       processor._processStreamStart({ type: 'stream_start', id: streamId });
+      processor._processDelta({ v: 'Hi', seq: 1 });
       jest.advanceTimersByTime(STREAM_START_TIMEOUT_MS + 1);
 
       mockEmit.mockClear();
 
-      processor._processDelta({ v: 'late', seq: 1 });
+      processor._processDelta({ v: 'late', seq: 2 });
 
       expect(mockEmit).not.toHaveBeenCalledWith(
         SERVICE_EVENTS.MESSAGE_UPDATED,
@@ -455,6 +471,7 @@ describe('MessageProcessor', () => {
 
     it('should ignore stream_end after inactivity timeout', () => {
       processor._processStreamStart({ type: 'stream_start', id: streamId });
+      processor._processDelta({ v: 'Hi', seq: 1 });
       jest.advanceTimersByTime(STREAM_START_TIMEOUT_MS + 1);
 
       mockEmit.mockClear();
@@ -479,7 +496,7 @@ describe('MessageProcessor', () => {
     it('should restart idle window on each delta', () => {
       processor._processStreamStart({ type: 'stream_start', id: streamId });
 
-      jest.advanceTimersByTime(1500);
+      jest.advanceTimersByTime(5000);
       processor._processDelta({ v: 'Hi', seq: 1 });
 
       jest.advanceTimersByTime(1500);

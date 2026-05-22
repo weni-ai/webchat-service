@@ -265,7 +265,6 @@ export default class MessageProcessor extends EventEmitter {
     this._clearStreamInactivityTimer();
     this._resetStreamState(messageId);
     this.streams.set(messageId, { text: '', timestamp: Date.now() });
-    this._startStreamInactivityTimer(messageId);
   }
 
   /**
@@ -280,7 +279,7 @@ export default class MessageProcessor extends EventEmitter {
   }
 
   /**
-   * Starts (or schedules) the stream inactivity timer
+   * Starts the stream inactivity timer (first delta only; not started on stream_start)
    * @private
    * @param {string} messageId
    */
@@ -293,7 +292,7 @@ export default class MessageProcessor extends EventEmitter {
   }
 
   /**
-   * Resets the inactivity window (after each delta)
+   * Starts or resets the inactivity window from the first delta onward
    * @private
    * @param {string} messageId
    */

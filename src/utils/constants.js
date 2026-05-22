@@ -295,5 +295,5 @@ export const MESSAGE_ID_PREFIX = 'msg_';
 
 export const STREAM_INITIAL_SEQUENCE = 1;
 
-/** Max idle time after stream_start or last delta before auto-finalizing the stream */
+/** Max idle time after the first delta (and between deltas) before auto-finalizing the stream */
 export const STREAM_START_TIMEOUT_MS = 2000;
