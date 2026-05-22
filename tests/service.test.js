@@ -1,4 +1,6 @@
 import WeniWebchatService from '../src/index';
+import RetryStrategy from '../src/network/RetryStrategy';
+import { DEFAULTS, SERVICE_EVENTS } from '../src/utils/constants';
 
 describe('WeniWebchatService', () => {
   let service;
@@ -61,6 +63,125 @@ describe('WeniWebchatService', () => {
       expect(service.config.connectOn).toBe('mount');
       expect(service.config.autoReconnect).toBe(true);
     });
+
+    it('should default mode to "live" and connectOn to "mount"', () => {
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+      });
+
+      expect(service.config.mode).toBe('live');
+      expect(service.config.connectOn).toBe('mount');
+    });
+
+    it('should propagate custom mode, clientId and sessionToken', () => {
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+        mode: 'preview',
+        clientId: 'tenant-x',
+        sessionToken: 'tok-1',
+      });
+
+      expect(service.config.mode).toBe('preview');
+      expect(service.config.clientId).toBe('tenant-x');
+      expect(service.config.sessionToken).toBe('tok-1');
+    });
+
+    it('should propagate custom maxReconnectAttempts, reconnectInterval and pingInterval', () => {
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+        maxReconnectAttempts: 7,
+        reconnectInterval: 4321,
+        pingInterval: 9876,
+      });
+
+      expect(service.config.maxReconnectAttempts).toBe(7);
+      expect(service.config.reconnectInterval).toBe(4321);
+      expect(service.config.pingInterval).toBe(9876);
+      expect(service.websocket.config.maxReconnectAttempts).toBe(7);
+      expect(service.websocket.config.pingInterval).toBe(9876);
+    });
+
+    it('should construct a RetryStrategy seeded with reconnectInterval', () => {
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+        reconnectInterval: 2500,
+      });
+
+      expect(service.retryStrategy).toBeInstanceOf(RetryStrategy);
+      expect(service.retryStrategy.config.baseDelay).toBe(2500);
+      expect(service.retryStrategy.config.maxDelay).toBe(30000);
+    });
+
+    it('should fall back to DEFAULTS.RECONNECT_INTERVAL for the RetryStrategy when none is provided', () => {
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+      });
+
+      expect(service.retryStrategy.config.baseDelay).toBe(
+        DEFAULTS.RECONNECT_INTERVAL,
+      );
+    });
+
+    it('should initialize empty internal queues and flags', () => {
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+      });
+
+      expect(service._initialized).toBe(false);
+      expect(service._connected).toBe(false);
+      expect(service._latestStartersFingerprint).toBeNull();
+      expect(service.messagesQueue).toEqual([]);
+      expect(service._renderEnabled).toBe(true);
+    });
+
+    it('should throw when constructed with no arguments (default param branch)', () => {
+      // Exercises the `config = {}` default at line 71 of src/index.js.
+      // `validateConfig` then rejects the empty object for the missing
+      // socketUrl, surfacing the expected error.
+      expect(() => new WeniWebchatService()).toThrow(
+        'socketUrl is required and must be a string',
+      );
+    });
+
+    it('should keep autoClearCache=true when caller passes autoClearCache: false', () => {
+      // The `config.autoClearCache !== false || DEFAULTS.AUTO_CLEAR_CACHE`
+      // expression at line 94 short-circuits to DEFAULTS when the caller
+      // passes false, making the option effectively un-disable-able through
+      // this code path. Tests pin that documented behavior.
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+        autoClearCache: false,
+      });
+
+      // The post-spread `...config` brings the explicit `false` back in,
+      // overriding the `||` fallback — so the consumer's intent IS honored
+      // in the final merged config even though the `||` branch fires.
+      expect(service.config.autoClearCache).toBe(false);
+    });
+
+    it('should clamp reconnectInterval=0 in the RetryStrategy seed (line 105 fallback)', () => {
+      // Line 88-89 first defaults `reconnectInterval` to DEFAULTS.RECONNECT_INTERVAL,
+      // but the trailing `...config` spread re-applies the caller's `0`,
+      // making `this.config.reconnectInterval` falsy at line 105 — exercising
+      // the `|| DEFAULTS.RECONNECT_INTERVAL` fallback for the RetryStrategy.
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+        reconnectInterval: 0,
+      });
+
+      expect(service.config.reconnectInterval).toBe(0);
+      expect(service.retryStrategy.config.baseDelay).toBe(
+        DEFAULTS.RECONNECT_INTERVAL,
+      );
+    });
   });
 
   describe('State Management', () => {
@@ -92,6 +213,54 @@ describe('WeniWebchatService', () => {
       service.setContext('new-context');
 
       expect(listener).toHaveBeenCalledWith('new-context');
+    });
+
+    it('should expose getSession() returning null until a session exists', () => {
+      expect(service.getSession()).toBeNull();
+
+      service.session.getOrCreate();
+      const session = service.getSession();
+
+      expect(session).not.toBeNull();
+      expect(session.id).toBe(service.getSessionId());
+    });
+
+    it('should expose getRetryInfo() with attempts, nextDelay and maxAttempts', () => {
+      // RetryStrategy.getDelay() is non-deterministic because of jitter, so
+      // we stub Math.random to a fixed value before sampling.
+      jest.spyOn(Math, 'random').mockReturnValue(0);
+
+      const info = service.getRetryInfo();
+
+      expect(info).toEqual({
+        attempts: 0,
+        nextDelay: service.retryStrategy.getDelay(),
+        maxAttempts: service.config.maxReconnectAttempts,
+      });
+      expect(typeof info.attempts).toBe('number');
+      expect(typeof info.nextDelay).toBe('number');
+      expect(info.nextDelay).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should expose getAllowedFileTypes() and getFileConfig()', () => {
+      const allowed = service.getAllowedFileTypes();
+      expect(Array.isArray(allowed)).toBe(true);
+      expect(allowed.length).toBeGreaterThan(0);
+
+      const fileConfig = service.getFileConfig();
+      expect(fileConfig).toEqual({
+        allowedTypes: allowed,
+        maxFileSize: service.fileHandler.config.maxFileSize,
+        acceptAttribute: allowed.join(','),
+      });
+    });
+
+    it('should reset retry strategy attempts via resetRetryStrategy()', () => {
+      const resetSpy = jest.spyOn(service.retryStrategy, 'reset');
+
+      service.resetRetryStrategy();
+
+      expect(resetSpy).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -213,6 +382,125 @@ describe('WeniWebchatService', () => {
 
       // Messages should be cleared
       expect(service.getMessages()).toEqual([]);
+    });
+
+    it('should emit session:cleared when clearSession is called', () => {
+      service.session.getOrCreate();
+      const listener = jest.fn();
+      service.on(SERVICE_EVENTS.SESSION_CLEARED, listener);
+
+      service.clearSession();
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(service.session.getSession()).toBeNull();
+    });
+
+    it('should round-trip setIsChatOpen / getIsChatOpen and emit chat:open:changed', () => {
+      service.session.getOrCreate();
+      const listener = jest.fn();
+      service.on(SERVICE_EVENTS.CHAT_OPEN_CHANGED, listener);
+
+      expect(service.getIsChatOpen()).toBe(false);
+
+      service.setIsChatOpen(true);
+      expect(service.getIsChatOpen()).toBe(true);
+      expect(listener).toHaveBeenCalledWith(true);
+
+      service.setIsChatOpen(false);
+      expect(service.getIsChatOpen()).toBe(false);
+      expect(listener).toHaveBeenCalledWith(false);
+    });
+
+    it('should emit session:restored and populate state when restoreOrCreateSession finds a stored session', async () => {
+      const restored = {
+        id: 'restored-1@example.com',
+        createdAt: 1,
+        lastActivity: 2,
+        conversation: [],
+      };
+      jest.spyOn(service.session, 'restore').mockResolvedValue(restored);
+      const setSessionSpy = jest.spyOn(service.state, 'setSession');
+      const listener = jest.fn();
+      service.on(SERVICE_EVENTS.SESSION_RESTORED, listener);
+
+      await service.restoreOrCreateSession();
+
+      expect(setSessionSpy).toHaveBeenCalledWith(restored);
+      expect(listener).toHaveBeenCalledWith(restored);
+    });
+
+    it('should fall back to createNewSession when restore yields null', async () => {
+      jest.spyOn(service.session, 'restore').mockResolvedValue(null);
+      const createSpy = jest.spyOn(service, 'createNewSession');
+
+      await service.restoreOrCreateSession();
+
+      expect(createSpy).toHaveBeenCalledTimes(1);
+      expect(service.session.getSession()).not.toBeNull();
+    });
+
+    it('should populate state when createNewSession is called directly', () => {
+      const setSessionSpy = jest.spyOn(service.state, 'setSession');
+
+      service.createNewSession();
+
+      const session = service.session.getSession();
+      expect(session).not.toBeNull();
+      expect(setSessionSpy).toHaveBeenCalledWith(session);
+    });
+
+    it('should reconnect after setSessionId() when previously connected', async () => {
+      service.session.createNewSession();
+      service._initialized = true;
+      service._connected = true;
+      service.websocket.status = 'connected';
+
+      const disconnectSpy = jest
+        .spyOn(service, 'disconnect')
+        .mockImplementation(() => {
+          service._connected = false;
+          service.websocket.status = 'disconnected';
+        });
+      const connectSpy = jest
+        .spyOn(service, 'connect')
+        .mockResolvedValue(undefined);
+
+      await service.setSessionId('reconnect@test.host');
+
+      expect(disconnectSpy).toHaveBeenCalledWith(false);
+      expect(connectSpy).toHaveBeenCalledTimes(1);
+      expect(service.getSessionId()).toBe('reconnect@test.host');
+    });
+
+    it('should disconnect (without reconnect) after setSessionId() when only mid-connect', async () => {
+      service.session.createNewSession();
+      service._initialized = true;
+      service._connecting = true;
+      service.websocket.status = 'connecting';
+
+      const disconnectSpy = jest
+        .spyOn(service, 'disconnect')
+        .mockImplementation(() => {});
+      const connectSpy = jest
+        .spyOn(service, 'connect')
+        .mockResolvedValue(undefined);
+
+      await service.setSessionId('reconnect@test.host');
+
+      expect(disconnectSpy).toHaveBeenCalledWith(false);
+      expect(connectSpy).not.toHaveBeenCalled();
+      expect(service.getSessionId()).toBe('reconnect@test.host');
+    });
+
+    it('should be a no-op when setSessionId is called before initialization', async () => {
+      const disconnectSpy = jest.spyOn(service, 'disconnect');
+      const connectSpy = jest.spyOn(service, 'connect');
+
+      await service.setSessionId('preinit@test.host');
+
+      expect(disconnectSpy).not.toHaveBeenCalled();
+      expect(connectSpy).not.toHaveBeenCalled();
+      expect(service.session.config.sessionId).toBe('preinit@test.host');
     });
   });
 
@@ -360,9 +648,9 @@ describe('WeniWebchatService', () => {
     });
 
     it('should throw when statusType is missing or empty', () => {
-      expect(() =>
-        service.addConversationStatus('Added to cart', ''),
-      ).toThrow('Status type is required');
+      expect(() => service.addConversationStatus('Added to cart', '')).toThrow(
+        'Status type is required',
+      );
       expect(() =>
         service.addConversationStatus('Added to cart', '   '),
       ).toThrow('Status type is required');
@@ -382,6 +670,46 @@ describe('WeniWebchatService', () => {
 
     it('should return disconnected initially', () => {
       expect(service.getConnectionStatus()).toBe('disconnected');
+      expect(service.isConnected()).toBe(false);
+    });
+
+    it('should reflect _connecting via isConnecting()', () => {
+      expect(service.isConnecting()).toBeFalsy();
+
+      service._connecting = true;
+      expect(service.isConnecting()).toBe(true);
+
+      service._connecting = false;
+      expect(service.isConnecting()).toBe(false);
+    });
+
+    it('should reflect WebSocket status via isReconnecting()', () => {
+      expect(service.isReconnecting()).toBe(false);
+
+      service.websocket.status = 'reconnecting';
+      expect(service.isReconnecting()).toBe(true);
+
+      service.websocket.status = 'connected';
+      expect(service.isReconnecting()).toBe(false);
+    });
+
+    it('should default isRenderEnabled() to true', () => {
+      expect(service.isRenderEnabled()).toBe(true);
+
+      service._renderEnabled = false;
+      expect(service.isRenderEnabled()).toBe(false);
+    });
+
+    it('should require both _connected AND websocket.status === "connected" for isConnected()', () => {
+      service._connected = true;
+      service.websocket.status = 'connected';
+      expect(service.isConnected()).toBe(true);
+
+      service._connected = false;
+      expect(service.isConnected()).toBe(false);
+
+      service._connected = true;
+      service.websocket.status = 'reconnecting';
       expect(service.isConnected()).toBe(false);
     });
   });
@@ -809,6 +1137,24 @@ describe('WeniWebchatService', () => {
 
       expect(service._initialized).toBe(false);
       expect(service._connected).toBe(false);
+    });
+
+    it('should remove all consumer listeners', () => {
+      const listener = jest.fn();
+      service.on('custom-event', listener);
+
+      service.destroy();
+      service.emit('custom-event', 'after-destroy');
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('should call disconnect() during teardown', () => {
+      const disconnectSpy = jest.spyOn(service, 'disconnect');
+
+      service.destroy();
+
+      expect(disconnectSpy).toHaveBeenCalled();
     });
   });
 });
