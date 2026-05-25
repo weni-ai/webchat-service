@@ -51,6 +51,14 @@ describe('MessageProcessor', () => {
       expect(customProcessor.config.typingTimeout).toBe(10000);
     });
 
+    it('should preserve explicit enableTypingIndicator: false', () => {
+      const disabledProcessor = new MessageProcessor({
+        enableTypingIndicator: false,
+      });
+
+      expect(disabledProcessor.config.enableTypingIndicator).toBe(false);
+    });
+
     it('should initialize streaming state', () => {
       expect(processor.activeStreamId).toBeNull();
       expect(processor.pendingDeltas).toBeInstanceOf(Map);
@@ -205,6 +213,29 @@ describe('MessageProcessor', () => {
         expect.any(Error),
       );
     });
+
+    it.each([
+      [
+        'stream_start',
+        '_processStreamStart',
+        { type: 'stream_start', id: 'x' },
+      ],
+      ['delta', '_processDelta', { v: 'hi', seq: 1 }],
+      ['stream_end', '_processStreamEnd', { type: 'stream_end', id: 'x' }],
+      ['typing_start', '_handleTypingIndicator', { type: 'typing_start' }],
+    ])(
+      'should catch exceptions from %s handler and emit ERROR',
+      (_label, methodName, raw) => {
+        const thrown = new Error(`${methodName} failed`);
+        processor[methodName] = jest.fn(() => {
+          throw thrown;
+        });
+
+        processor.process(raw);
+
+        expect(mockEmit).toHaveBeenCalledWith(SERVICE_EVENTS.ERROR, thrown);
+      },
+    );
   });
 
   describe('_processStreamStart', () => {
@@ -370,6 +401,44 @@ describe('MessageProcessor', () => {
         }),
       );
     });
+
+    it('should fall back to Date.now() for deferred message when stream data is missing', () => {
+      // Simulate stream record being evicted between stream_start and first delta
+      processor.streams.delete(MESSAGE_ID_PREFIX + 'stream-123');
+      const before = Date.now();
+
+      processor._processDelta({ v: 'Hello', seq: 1 });
+
+      const deferred = mockEmit.mock.calls.find(
+        ([eventName, payload]) =>
+          eventName === SERVICE_EVENTS.MESSAGE_PROCESSED &&
+          payload?.status === 'streaming',
+      );
+      expect(deferred).toBeDefined();
+      expect(deferred[1].timestamp).toBeGreaterThanOrEqual(before);
+    });
+
+    it.each([
+      ['undefined', { seq: 1 }],
+      ['null', { v: null, seq: 1 }],
+      ['empty string', { v: '', seq: 1 }],
+    ])(
+      'should treat falsy v as empty content (%s) and still advance sequence',
+      (_label, delta) => {
+        processor._processDelta(delta);
+
+        const streamData = processor.streams.get(
+          MESSAGE_ID_PREFIX + 'stream-123',
+        );
+        expect(streamData.text).toBe('');
+        expect(processor.nextExpectedSeq).toBe(2);
+        expect(mockEmit).toHaveBeenCalledWith(
+          SERVICE_EVENTS.MESSAGE_UPDATED,
+          MESSAGE_ID_PREFIX + 'stream-123',
+          expect.objectContaining({ text: '', status: 'streaming' }),
+        );
+      },
+    );
   });
 
   describe('delta without stream_start (orphan deltas)', () => {
@@ -507,6 +576,39 @@ describe('MessageProcessor', () => {
         }),
       );
     });
+
+    it('should treat empty-string content as authoritative final text', () => {
+      processor._processStreamEnd({
+        type: 'stream_end',
+        id: 'stream-123',
+        content: '',
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'stream-123',
+        expect.objectContaining({ text: '', status: 'delivered' }),
+      );
+      // Empty final text should NOT be remembered for duplicate detection
+      expect(processor.recentIncomingTexts).not.toContain('');
+    });
+
+    it('should fall back to accumulated text when content is null', () => {
+      processor._processStreamEnd({
+        type: 'stream_end',
+        id: 'stream-123',
+        content: null,
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'stream-123',
+        expect.objectContaining({
+          text: 'Hello World',
+          status: 'delivered',
+        }),
+      );
+    });
   });
 
   describe('_isValidSequenceNumber', () => {
@@ -562,6 +664,124 @@ describe('MessageProcessor', () => {
     });
   });
 
+  describe('_appendStreamContent', () => {
+    it('should return silently when streamId is not in streams map', () => {
+      processor._appendStreamContent('missing-stream-id', 'content');
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe('_cleanupStream', () => {
+    it('should remove stream from map but preserve stream state when not active', () => {
+      processor._processStreamStart({
+        type: 'stream_start',
+        id: 'active-stream',
+      });
+      processor._processDelta({ v: 'partial', seq: 1 });
+
+      const activeId = MESSAGE_ID_PREFIX + 'active-stream';
+      const orphanId = MESSAGE_ID_PREFIX + 'orphan-stream';
+
+      processor.streams.set(orphanId, { text: 'orphan text', timestamp: 0 });
+
+      processor._cleanupStream(orphanId);
+
+      expect(processor.streams.has(orphanId)).toBe(false);
+      expect(processor.streams.has(activeId)).toBe(true);
+      expect(processor.activeStreamId).toBe(activeId);
+      expect(processor.nextExpectedSeq).toBe(2);
+      expect(processor.streamMessageEmitted).toBe(true);
+    });
+
+    it('should reset stream state when cleaning up the active stream', () => {
+      processor._processStreamStart({
+        type: 'stream_start',
+        id: 'active-stream',
+      });
+      processor._processDelta({ v: 'partial', seq: 1 });
+
+      const activeId = MESSAGE_ID_PREFIX + 'active-stream';
+
+      processor._cleanupStream(activeId);
+
+      expect(processor.streams.has(activeId)).toBe(false);
+      expect(processor.activeStreamId).toBeNull();
+      expect(processor.nextExpectedSeq).toBe(STREAM_INITIAL_SEQUENCE);
+      expect(processor.streamMessageEmitted).toBe(false);
+    });
+  });
+
+  describe('_getMessageType', () => {
+    it('should return inner type when push envelope wraps content', () => {
+      const raw = { type: 'message', message: { type: 'file' } };
+
+      expect(processor._getMessageType(raw)).toBe('file');
+    });
+
+    it('should return raw.type when no inner type wrapping', () => {
+      expect(processor._getMessageType({ type: 'stream_end' })).toBe(
+        'stream_end',
+      );
+    });
+
+    it('should return message.type when no top-level type', () => {
+      expect(processor._getMessageType({ message: { type: 'text' } })).toBe(
+        'text',
+      );
+    });
+
+    it('should infer "text" from message.text when no explicit type', () => {
+      expect(processor._getMessageType({ message: { text: 'Hello' } })).toBe(
+        'text',
+      );
+    });
+
+    it('should infer "media" from message.media when no type or text', () => {
+      expect(
+        processor._getMessageType({
+          message: { media: { url: 'http://example.com' } },
+        }),
+      ).toBe('media');
+    });
+
+    it('should default to "text" when no signals available', () => {
+      expect(processor._getMessageType({})).toBe('text');
+      expect(processor._getMessageType({ message: {} })).toBe('text');
+    });
+  });
+
+  describe('_validateMessage', () => {
+    it('should return false for null and undefined', () => {
+      expect(processor._validateMessage(null)).toBe(false);
+      expect(processor._validateMessage(undefined)).toBe(false);
+    });
+
+    it('should return false for non-object input', () => {
+      expect(processor._validateMessage('string')).toBe(false);
+      expect(processor._validateMessage(123)).toBe(false);
+      expect(processor._validateMessage(true)).toBe(false);
+    });
+
+    it('should return false when type is missing or falsy', () => {
+      expect(processor._validateMessage({})).toBe(false);
+      expect(processor._validateMessage({ type: undefined })).toBe(false);
+      expect(processor._validateMessage({ type: '' })).toBe(false);
+      expect(processor._validateMessage({ type: null })).toBe(false);
+    });
+
+    it('should return true for a minimally valid message', () => {
+      expect(processor._validateMessage({ type: 'text' })).toBe(true);
+      expect(processor._validateMessage({ type: 'message', text: 'Hi' })).toBe(
+        true,
+      );
+    });
+  });
+
   describe('_getMessageIdFromRaw', () => {
     it('should extract id from raw.id with prefix', () => {
       expect(processor._getMessageIdFromRaw({ id: '123' })).toBe(
@@ -590,6 +810,69 @@ describe('MessageProcessor', () => {
       expect(processor._getMessageIdFromRaw({})).toBeNull();
       expect(processor._getMessageIdFromRaw({ message: {} })).toBeNull();
       expect(processor._getMessageIdFromRaw(null)).toBeNull();
+    });
+  });
+
+  describe('_processQueue', () => {
+    it('should be a no-op when already processing', () => {
+      processor.isProcessing = true;
+      processor.queue.push({ id: '1', type: 'text', text: 'pending' });
+
+      processor._processQueue();
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.anything(),
+      );
+      expect(processor.queue).toHaveLength(1);
+    });
+
+    it('should be a no-op when queue is empty', () => {
+      processor._processQueue();
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.anything(),
+      );
+      expect(processor.isProcessing).toBe(false);
+    });
+
+    it('should apply messageDelay between queued messages', async () => {
+      processor.config.messageDelay = 100;
+      processor.queue.push({ id: '1', type: 'text', text: 'first' });
+      processor.queue.push({ id: '2', type: 'text', text: 'second' });
+      processor.queue.push({ id: '3', type: 'text', text: 'third' });
+
+      processor._processQueue();
+
+      // First emit is synchronous before the first await
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({ id: '1' }),
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({ id: '2' }),
+      );
+
+      await jest.advanceTimersByTimeAsync(100);
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({ id: '2' }),
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({ id: '3' }),
+      );
+
+      await jest.advanceTimersByTimeAsync(100);
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({ id: '3' }),
+      );
+
+      expect(processor.isProcessing).toBe(false);
+      expect(processor.queue).toHaveLength(0);
     });
   });
 
@@ -649,6 +932,20 @@ describe('MessageProcessor', () => {
       expect(processor.isTypingActive).toBe(false);
       expect(mockEmit).toHaveBeenCalledWith(SERVICE_EVENTS.TYPING_STOP);
     });
+
+    it('should clear the prior auto-stop timer on a subsequent call', () => {
+      const clearSpy = jest.spyOn(global, 'clearTimeout');
+
+      processor._handleTypingIndicator({ type: 'typing_start' });
+      const firstTimer = processor.typingTimer;
+      expect(firstTimer).not.toBeNull();
+
+      processor._handleTypingIndicator({ type: 'typing_start' });
+
+      expect(clearSpy).toHaveBeenCalledWith(firstTimer);
+      expect(processor.typingTimer).not.toBeNull();
+      expect(processor.typingTimer).not.toBe(firstTimer);
+    });
   });
 
   describe('startTypingOnMessageSent', () => {
@@ -681,6 +978,38 @@ describe('MessageProcessor', () => {
 
       expect(processor.isTypingActive).toBe(false);
     });
+
+    it('should not emit TYPING_START when thinking is already active', () => {
+      processor.isThinkingActive = true;
+
+      processor.startTypingOnMessageSent();
+      jest.advanceTimersByTime(processor.config.typingDelay);
+
+      expect(mockEmit).not.toHaveBeenCalledWith(SERVICE_EVENTS.TYPING_START);
+      expect(processor.isTypingActive).toBe(false);
+      expect(processor.isThinkingActive).toBe(true);
+    });
+
+    it('should reset the timer when called twice in quick succession', () => {
+      const clearSpy = jest.spyOn(global, 'clearTimeout');
+
+      processor.startTypingOnMessageSent();
+      const firstTimer = processor.typingTimer;
+      expect(firstTimer).not.toBeNull();
+
+      processor.startTypingOnMessageSent();
+
+      expect(clearSpy).toHaveBeenCalledWith(firstTimer);
+      expect(processor.typingTimer).not.toBe(firstTimer);
+
+      // Only one TYPING_START fires after the (second) delay
+      jest.advanceTimersByTime(processor.config.typingDelay);
+
+      const typingStartCalls = mockEmit.mock.calls.filter(
+        ([eventName]) => eventName === SERVICE_EVENTS.TYPING_START,
+      );
+      expect(typingStartCalls).toHaveLength(1);
+    });
   });
 
   describe('_stopTyping', () => {
@@ -708,6 +1037,18 @@ describe('MessageProcessor', () => {
 
       processor._stopTyping();
 
+      expect(processor.typingTimer).toBeNull();
+    });
+
+    it('should be a no-op when neither typing nor thinking is active', () => {
+      expect(processor.isTypingActive).toBe(false);
+      expect(processor.isThinkingActive).toBe(false);
+      expect(processor.typingTimer).toBeNull();
+
+      processor._stopTyping();
+
+      expect(mockEmit).not.toHaveBeenCalledWith(SERVICE_EVENTS.TYPING_STOP);
+      expect(mockEmit).not.toHaveBeenCalledWith(SERVICE_EVENTS.THINKING_STOP);
       expect(processor.typingTimer).toBeNull();
     });
   });
@@ -770,6 +1111,21 @@ describe('MessageProcessor', () => {
         SERVICE_EVENTS.MESSAGE_PROCESSED,
         expect.anything(),
       );
+    });
+
+    it('should emit ERROR via inner catch when _normalizeMessage throws', () => {
+      const thrown = new Error('normalize boom');
+      jest.spyOn(processor, '_normalizeMessage').mockImplementation(() => {
+        throw thrown;
+      });
+
+      processor._processUserMessage({
+        type: 'message',
+        message: { text: 'Hello' },
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(SERVICE_EVENTS.ERROR, thrown);
+      expect(processor.queue).toHaveLength(0);
     });
   });
 
@@ -1022,6 +1378,111 @@ describe('MessageProcessor', () => {
       expect(normalized.header).toBeUndefined();
       expect(normalized.footer).toBeUndefined();
     });
+
+    it('should fall back to generateMessageId when no id is provided', () => {
+      const raw = { type: 'message', message: { text: 'Hello' } };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      // generateMessageId returns `msg_<timestamp>_<random>`
+      expect(normalized.id).toMatch(/^msg_\d+_[a-z0-9]+$/);
+    });
+
+    it('should preserve raw.id when message.messageId is absent', () => {
+      const raw = { id: 'raw-id-only', type: 'message', message: {} };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.id).toBe('raw-id-only');
+    });
+
+    it('should preserve explicit raw.timestamp', () => {
+      const fixedTimestamp = 1700000000000;
+      const raw = {
+        type: 'message',
+        message: { text: 'Hello' },
+        timestamp: fixedTimestamp,
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.timestamp).toBe(fixedTimestamp);
+    });
+
+    it('should preserve truthy raw.persisted', () => {
+      const raw = {
+        type: 'message',
+        message: { text: 'Hello' },
+        persisted: true,
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.persisted).toBe(true);
+    });
+
+    it('should leave persisted undefined when falsy', () => {
+      const raw = {
+        type: 'message',
+        message: { text: 'Hello' },
+        persisted: false,
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.persisted).toBeUndefined();
+    });
+
+    it('should not set list_message when list_items is empty', () => {
+      const raw = {
+        message: {
+          text: 'Choose',
+          list_message: { list_items: [] },
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.list_message).toBeUndefined();
+    });
+
+    it('should not set cta_message when only url is provided', () => {
+      const raw = {
+        message: {
+          cta_message: { url: 'http://example.com' },
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.cta_message).toBeUndefined();
+    });
+
+    it('should not set cta_message when only display_text is provided', () => {
+      const raw = {
+        message: {
+          cta_message: { display_text: 'Click here' },
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.cta_message).toBeUndefined();
+    });
+
+    it('should not set caption when caption is not a string', () => {
+      const raw = {
+        message: {
+          type: 'file',
+          media_url: 'http://example.com/file.pdf',
+          caption: 42,
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.caption).toBeUndefined();
+    });
   });
 
   describe('processBatch', () => {
@@ -1043,6 +1504,28 @@ describe('MessageProcessor', () => {
       processor.processBatch([]);
 
       expect(processSpy).not.toHaveBeenCalled();
+    });
+
+    it('should default to empty array when called with no argument', () => {
+      const processSpy = jest.spyOn(processor, 'process');
+
+      expect(() => processor.processBatch()).not.toThrow();
+      expect(processSpy).not.toHaveBeenCalled();
+    });
+
+    it('should preserve input order when processing', () => {
+      const processed = [];
+      processor.on(SERVICE_EVENTS.MESSAGE_PROCESSED, (msg) => {
+        if (typeof msg.text === 'string') processed.push(msg.text);
+      });
+
+      processor.processBatch([
+        { type: 'message', message: { text: 'first', messageId: '1' } },
+        { type: 'message', message: { text: 'second', messageId: '2' } },
+        { type: 'message', message: { text: 'third', messageId: '3' } },
+      ]);
+
+      expect(processed).toEqual(['first', 'second', 'third']);
     });
   });
 
