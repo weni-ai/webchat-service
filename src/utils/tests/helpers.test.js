@@ -107,6 +107,19 @@ describe('Helpers', () => {
 
       expect(formattedTimestamp).toBe('Oct 17, 2025, 10:30 AM');
     });
+
+    it('should fall back to the en-US locale default when locale is omitted', () => {
+      // No locale arg -> default `'en-US'` branch fires. We pin UTC so the
+      // assertion is independent of the host machine timezone.
+      const timestamp = 1760697000000;
+      const formattedTimestamp = helpers.formatTimestamp(
+        timestamp,
+        undefined,
+        'UTC',
+      );
+
+      expect(formattedTimestamp).toBe('Oct 17, 2025, 10:30 AM');
+    });
   });
 
   describe('formatFileSize', () => {
