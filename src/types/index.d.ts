@@ -82,6 +82,17 @@ export interface Message {
   
   // Interactive elements
   quick_replies?: QuickReply[]
+  header?: string
+  footer?: string
+  product_list?: {
+    text?: string
+    buttonText?: string
+    sections?: unknown[]
+  }
+  product_carousel?: {
+    text?: string
+    product_items?: unknown[]
+  }
 
   
   // Additional data
