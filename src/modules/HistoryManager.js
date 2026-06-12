@@ -164,6 +164,13 @@ export default class HistoryManager extends EventEmitter {
             sections: interactive.action?.sections,
           };
         }
+
+        if (interactive?.type === 'product_carousel') {
+          message.product_carousel = {
+            text: message.text,
+            product_items: interactive.action?.product_items,
+          };
+        }
       }
 
       if (item.message?.type === 'order') {

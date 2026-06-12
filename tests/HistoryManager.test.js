@@ -693,6 +693,49 @@ describe('HistoryManager', () => {
         });
       });
 
+      it('should normalize interactive message with product_carousel type', () => {
+        const productItems = [
+          {
+            product_retailer_id: '5371#1',
+            name: 'Blusa 2',
+            price: '10.00',
+            image: 'https://imgur.com/DjO2QIa.jpg',
+          },
+        ];
+
+        const rawHistory = [
+          {
+            ID: 'msg-interactive-carousel',
+            timestamp: 1700000000,
+            direction: 'in',
+            message: {
+              type: 'interactive',
+              text: 'Oie',
+              interactive: {
+                type: 'product_carousel',
+                header: { type: 'text', text: 'Coleção Workshirt' },
+                footer: { text: 'Footer copy' },
+                action: { product_items: productItems },
+              },
+            },
+          },
+        ];
+
+        const result = historyManager.processHistory(rawHistory);
+
+        expect(result[0]).toMatchObject({
+          type: 'interactive',
+          text: 'Oie',
+          header: 'Coleção Workshirt',
+          footer: 'Footer copy',
+        });
+        expect(result[0].product_carousel).toEqual({
+          text: 'Oie',
+          product_items: productItems,
+        });
+        expect(result[0].product_list).toBeUndefined();
+      });
+
       it('should normalize interactive message with header, footer and product_list', () => {
         const rawHistory = [
           {
@@ -759,6 +802,7 @@ describe('HistoryManager', () => {
         const result = historyManager.processHistory(rawHistory);
 
         expect(result[0].product_list).toBeUndefined();
+        expect(result[0].product_carousel).toBeUndefined();
       });
 
       it('should not set header/footer when not present in interactive', () => {

@@ -1425,6 +1425,61 @@ describe('MessageProcessor', () => {
       });
     });
 
+    it('should normalize push envelope interactive product_carousel', () => {
+      const productItems = [
+        {
+          product_retailer_id: '5371#1',
+          name: 'Blusa 2',
+          price: '10.00',
+          currency: '',
+          image: 'https://imgur.com/DjO2QIa.jpg',
+          description: 'aaaa',
+          seller_id: '1',
+          product_url: 'https://weni.ai',
+        },
+        {
+          product_retailer_id: '10#bravtexgrocerystore02',
+          name: 'Blusa 1',
+          price: '10.90',
+          currency: '',
+          image: 'https://imgur.com/DjO2QIa.jpg',
+          description: 'bbbbb',
+          seller_id: '1',
+          product_url: 'https://weni.ai',
+        },
+      ];
+
+      const raw = {
+        type: 'message',
+        message: {
+          type: 'interactive',
+          text: 'Oie',
+          interactive: {
+            type: 'product_carousel',
+            header: { type: 'text', text: 'Coleção Workshirt' },
+            footer: {
+              text: 'Todas com proteção UV e detalhes exclusivos',
+            },
+            action: { product_items: productItems },
+          },
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.type).toBe('interactive');
+      expect(normalized.text).toBe('Oie');
+      expect(normalized.header).toBe('Coleção Workshirt');
+      expect(normalized.footer).toBe(
+        'Todas com proteção UV e detalhes exclusivos',
+      );
+      expect(normalized.product_carousel).toEqual({
+        text: 'Oie',
+        product_items: productItems,
+      });
+      expect(normalized.product_list).toBeUndefined();
+    });
+
     it('should normalize message with interactive header', () => {
       const raw = {
         message: {
@@ -1506,6 +1561,7 @@ describe('MessageProcessor', () => {
       const normalized = processor._normalizeMessage(raw);
 
       expect(normalized.product_list).toBeUndefined();
+      expect(normalized.product_carousel).toBeUndefined();
     });
 
     it('should not set header/footer when interactive has no header/footer', () => {

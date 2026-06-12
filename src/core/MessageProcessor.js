@@ -233,6 +233,13 @@ export default class MessageProcessor extends EventEmitter {
       };
     }
 
+    if (interactive?.type === 'product_carousel') {
+      message.product_carousel = {
+        text: raw.message.text,
+        product_items: interactive.action?.product_items,
+      };
+    }
+
     if (interactive?.header) {
       message.header = interactive.header.text;
     }
