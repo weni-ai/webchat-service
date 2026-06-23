@@ -160,6 +160,7 @@ export interface WebSocketMessage {
 export interface StartersData {
   account: string
   linkText: string
+  productPath?: string
   productName?: string
   description?: string
   brand?: string

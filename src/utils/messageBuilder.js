@@ -256,6 +256,7 @@ export function buildStartersRequest(sessionId, productData) {
     linkText: productData.linkText,
   };
 
+  if (productData.productPath) data.productPath = productData.productPath;
   if (productData.productName) data.productName = productData.productName;
   if (productData.description) data.description = productData.description;
   if (productData.brand) data.brand = productData.brand;
