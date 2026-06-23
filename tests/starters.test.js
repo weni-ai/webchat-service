@@ -107,10 +107,20 @@ describe('buildStartersRequest', () => {
   it('should omit optional fields when not provided', () => {
     const payload = buildStartersRequest('session-123', VALID_PRODUCT_DATA);
 
+    expect(payload.data).not.toHaveProperty('productPath');
     expect(payload.data).not.toHaveProperty('productName');
     expect(payload.data).not.toHaveProperty('description');
     expect(payload.data).not.toHaveProperty('brand');
     expect(payload.data).not.toHaveProperty('attributes');
+  });
+
+  it('should include productPath when provided', () => {
+    const payload = buildStartersRequest('session-123', {
+      ...VALID_PRODUCT_DATA,
+      productPath: '/en/ipad-10th-gen/p',
+    });
+
+    expect(payload.data.productPath).toBe('/en/ipad-10th-gen/p');
   });
 });
 
@@ -277,6 +287,24 @@ describe('WeniWebchatService - getStarters', () => {
 
       service.getStarters({ account: 'b', linkText: 'product-b' });
       expect(service._latestStartersFingerprint).toBe('b:product-b');
+    });
+
+    it('should use productPath in fingerprint when provided', () => {
+      makeConnected(service);
+
+      service.getStarters({
+        account: 'store',
+        linkText: 'ipad',
+        productPath: '/en/ipad/p',
+      });
+      expect(service._latestStartersFingerprint).toBe('store:/en/ipad/p');
+    });
+
+    it('should fall back to linkText in fingerprint when productPath is absent', () => {
+      makeConnected(service);
+
+      service.getStarters({ account: 'store', linkText: 'ipad' });
+      expect(service._latestStartersFingerprint).toBe('store:ipad');
     });
 
     it('should clear fingerprint after emitting starters:received', () => {

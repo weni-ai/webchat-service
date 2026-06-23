@@ -553,8 +553,8 @@ export default class WeniWebchatService extends EventEmitter {
       throw new Error('WebSocket not connected');
     }
 
-    this._latestStartersFingerprint =
-      productData.account + ':' + productData.linkText;
+    const pathKey = productData.productPath || productData.linkText;
+    this._latestStartersFingerprint = `${productData.account}:${pathKey}`;
 
     const payload = buildStartersRequest(
       this.session.getSessionId(),
