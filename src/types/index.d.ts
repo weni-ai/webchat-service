@@ -346,6 +346,17 @@ export interface AddProductToCartProps {
   id: string
 }
 
+export type UtmSource =
+  | 'cx_shopping_assistant_conv_starter'
+  | 'cx_shopping_assistant'
+  | 'cx_shopping_assistant_cart'
+
+export interface SendUtmData {
+  vtex_account: string
+  order_form_id: string
+  utm_source: UtmSource
+}
+
 /**
  * Main service class
  */
@@ -369,6 +380,7 @@ export default class WeniWebchatService {
     props: AddProductToCartProps,
     timeoutMs?: number
   ): Promise<{ id: string }>
+  sendUtm(data: SendUtmData): Promise<void>
   sendAttachment(file: File): Promise<void>
   sendAudio(audioData: any): Promise<void>
 

@@ -1124,6 +1124,79 @@ describe('WeniWebchatService', () => {
     });
   });
 
+  describe('sendUtm', () => {
+    let mockSocket;
+    const validData = {
+      vtex_account: 'account-name',
+      order_form_id: 'abc123def456abc123def456abc123de',
+      utm_source: 'cx_shopping_assistant',
+    };
+
+    beforeEach(() => {
+      mockSocket = {
+        send: jest.fn(),
+        close: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        readyState: WebSocket.OPEN,
+      };
+
+      global.WebSocket = jest.fn().mockImplementation(() => mockSocket);
+
+      service = new WeniWebchatService({
+        socketUrl: 'wss://test.example.com',
+        channelUuid: '12345',
+      });
+
+      service.websocket.socket = mockSocket;
+      service.websocket.status = 'connected';
+    });
+
+    it('should send send_utm payload through WebSocket', async () => {
+      await service.sendUtm(validData);
+
+      expect(mockSocket.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'send_utm',
+          data: validData,
+        }),
+      );
+    });
+
+    it.each([
+      'cx_shopping_assistant',
+      'cx_shopping_assistant_conv_starter',
+      'cx_shopping_assistant_cart',
+    ])('should accept allowed utm_source %p', async (utm_source) => {
+      await service.sendUtm({
+        ...validData,
+        utm_source,
+      });
+
+      expect(mockSocket.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'send_utm',
+          data: {
+            ...validData,
+            utm_source,
+          },
+        }),
+      );
+    });
+
+    it('should reject when input is invalid', async () => {
+      await expect(service.sendUtm(null)).rejects.toThrow(
+        'UTM data is required',
+      );
+      await expect(
+        service.sendUtm({
+          ...validData,
+          utm_source: 'invalid_source',
+        }),
+      ).rejects.toThrow('utm_source must be one of:');
+    });
+  });
+
   describe('Destroy', () => {
     beforeEach(() => {
       service = new WeniWebchatService({

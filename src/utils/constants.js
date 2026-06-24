@@ -45,6 +45,7 @@ export const WS_MESSAGE_TYPES = {
   HISTORY: 'get_history',
   GET_PDP_STARTERS: 'get_pdp_starters',
   STARTERS: 'starters',
+  SEND_UTM: 'send_utm',
   ACK: 'ack',
   ERROR: 'error',
   WARNING: 'warning',
@@ -52,6 +53,14 @@ export const WS_MESSAGE_TYPES = {
   REQUEST_VOICE_TOKENS: 'request_voice_tokens',
   VOICE_TOKENS: 'voice_tokens',
 };
+
+export const UTM_SOURCES = {
+  CONV_STARTER: 'cx_shopping_assistant_conv_starter',
+  ASSISTANT: 'cx_shopping_assistant',
+  CART: 'cx_shopping_assistant_cart',
+};
+
+export const ALLOWED_UTM_SOURCES = Object.values(UTM_SOURCES);
 
 export const STORAGE_KEYS = {
   SESSION: 'weni:webchat:session',

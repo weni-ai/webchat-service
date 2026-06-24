@@ -1,7 +1,8 @@
 import EventEmitter from 'eventemitter3';
 
-import { DEFAULTS, SERVICE_EVENTS } from '../utils/constants';
+import { DEFAULTS, SERVICE_EVENTS, WS_MESSAGE_TYPES } from '../utils/constants';
 import { buildRegistrationMessage } from '../utils/messageBuilder';
+import { normalizeSendUtmData } from '../utils/validators';
 
 /**
  * WebSocketManager
@@ -304,6 +305,28 @@ export default class WebSocketManager extends EventEmitter {
         reject(err);
       });
     });
+  }
+
+  /**
+   * Sends UTM attribution data to the backend for VTEX orderForm registration.
+   *
+   * @param {Object} data
+   * @param {string} data.vtex_account
+   * @param {string} data.order_form_id
+   * @param {string} data.utm_source
+   * @returns {Promise<void>}
+   */
+  sendUtm(data) {
+    try {
+      const payload = normalizeSendUtmData(data);
+
+      return this.send({
+        type: WS_MESSAGE_TYPES.SEND_UTM,
+        data: payload,
+      });
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   async _handleReadyForMessage(data = {}) {

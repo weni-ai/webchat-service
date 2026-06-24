@@ -29,6 +29,8 @@ import {
   STORAGE_TYPES,
   ERROR_TYPES,
   QUICK_REPLY_TYPES,
+  UTM_SOURCES,
+  ALLOWED_UTM_SOURCES,
 } from './utils/constants';
 import {
   buildTextMessage,
@@ -960,6 +962,16 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
+   * Sends UTM attribution data to the backend for VTEX orderForm registration.
+   *
+   * @param {Object} data
+   * @returns {Promise<void>}
+   */
+  sendUtm(data) {
+    return this.websocket.sendUtm(data);
+  }
+
+  /**
    * Destroys service instance
    */
   destroy() {
@@ -1249,6 +1261,8 @@ WeniWebchatService.ERROR_TYPES = ERROR_TYPES;
 WeniWebchatService.QUICK_REPLY_TYPES = QUICK_REPLY_TYPES;
 WeniWebchatService.SERVICE_EVENTS = SERVICE_EVENTS;
 WeniWebchatService.DEFAULTS = DEFAULTS;
+WeniWebchatService.UTM_SOURCES = UTM_SOURCES;
+WeniWebchatService.ALLOWED_UTM_SOURCES = ALLOWED_UTM_SOURCES;
 
 export {
   ALLOWED_FILE_TYPES,
@@ -1265,4 +1279,6 @@ export {
   QUICK_REPLY_TYPES,
   SERVICE_EVENTS,
   DEFAULTS,
+  UTM_SOURCES,
+  ALLOWED_UTM_SOURCES,
 };

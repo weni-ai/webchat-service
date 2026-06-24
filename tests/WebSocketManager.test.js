@@ -1169,6 +1169,54 @@ describe('WebSocketManager', () => {
     });
   });
 
+  describe('sendUtm()', () => {
+    const validData = {
+      vtex_account: 'account',
+      order_form_id: 'abc123def456abc123def456abc123de',
+      utm_source: 'cx_shopping_assistant_conv_starter',
+    };
+
+    it('sends send_utm payload through WebSocket', async () => {
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+
+      await manager.sendUtm(validData);
+
+      expect(manager.socket.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'send_utm',
+          data: validData,
+        }),
+      );
+    });
+
+    it('rejects when validation fails before send', async () => {
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+      const sendSpy = jest.spyOn(manager, 'send');
+
+      await expect(
+        manager.sendUtm({
+          ...validData,
+          utm_source: 'invalid',
+        }),
+      ).rejects.toThrow('utm_source must be one of:');
+
+      expect(sendSpy).not.toHaveBeenCalled();
+    });
+
+    it('rejects when send fails', async () => {
+      const manager = createManager();
+      const sendError = new Error('socket gone');
+      manager.socket = makeOpenSocketMock();
+      manager.socket.send = jest.fn(() => {
+        throw sendError;
+      });
+
+      await expect(manager.sendUtm(validData)).rejects.toBe(sendError);
+    });
+  });
+
   // ---------------------------------------------------------------------------
   // I. _handleReadyForMessage()
   // ---------------------------------------------------------------------------
