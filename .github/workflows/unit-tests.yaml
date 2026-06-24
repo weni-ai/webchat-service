@@ -1,12 +1,15 @@
 name: Run tests and upload coverage
 
 on:
-  push
+  push:
+  pull_request:
 
 jobs:
   unit-tests:
     name: Run tests and collect coverage
     runs-on: ubuntu-latest
+    env:
+      COVERAGE_THRESHOLD: ${{ vars.COVERAGE_THRESHOLD || '80' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,10 +25,41 @@ jobs:
         run: npm ci
 
       - name: Run unit tests with coverage
-        run: npm run test --coverage
+        run: npm run test -- --coverage --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text
+
+      - name: Verify coverage threshold
+        run: |
+          THRESHOLD="${COVERAGE_THRESHOLD}"
+          SUMMARY="coverage/coverage-summary.json"
+
+          if [ ! -f "$SUMMARY" ]; then
+            echo "Coverage summary not found at $SUMMARY"
+            exit 1
+          fi
+
+          echo "Minimum coverage required: ${THRESHOLD}% (statements, branches, functions, lines)"
+
+          FAILED=0
+          for metric in statements branches functions lines; do
+            VALUE=$(node -e "const s=require('./${SUMMARY}'); console.log(s.total['${metric}'].pct)")
+            echo "${metric}: ${VALUE}%"
+            if node -e "process.exit(Number('${VALUE}') < Number('${THRESHOLD}') ? 1 : 0)"; then
+              :
+            else
+              echo "FAIL: ${metric} (${VALUE}%) is below ${THRESHOLD}%"
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            exit 1
+          fi
+
+          echo "All coverage metrics meet the ${THRESHOLD}% threshold"
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: weni-ai/webchat-service
+          fail_ci_if_error: true
