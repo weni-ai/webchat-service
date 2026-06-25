@@ -380,7 +380,10 @@ export default class WeniWebchatService {
     props: AddProductToCartProps,
     timeoutMs?: number
   ): Promise<{ id: string }>
-  sendUtm(data: SendUtmData): Promise<void>
+  sendUtm(
+    data: SendUtmData,
+    timeoutMs?: number
+  ): Promise<{ utm_source: UtmSource }>
   sendAttachment(file: File): Promise<void>
   sendAudio(audioData: any): Promise<void>
 

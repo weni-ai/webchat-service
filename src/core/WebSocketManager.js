@@ -309,24 +309,64 @@ export default class WebSocketManager extends EventEmitter {
 
   /**
    * Sends UTM attribution data to the backend for VTEX orderForm registration.
+   * Resolves with { utm_source } or rejects on error/timeout.
    *
    * @param {Object} data
    * @param {string} data.vtex_account
    * @param {string} data.order_form_id
    * @param {string} data.utm_source
-   * @returns {Promise<void>}
+   * @param {number} [timeoutMs=10000]
+   * @returns {Promise<{ utm_source: string }>}
    */
-  sendUtm(data) {
-    try {
-      const payload = normalizeSendUtmData(data);
+  sendUtm(data, timeoutMs = 10000) {
+    let payload;
 
-      return this.send({
-        type: WS_MESSAGE_TYPES.SEND_UTM,
-        data: payload,
-      });
+    try {
+      payload = normalizeSendUtmData(data);
     } catch (error) {
       return Promise.reject(error);
     }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+
+      const timer = setTimeout(() => {
+        settled = true;
+        cleanup();
+        reject(new Error('UTM request timed out'));
+      }, timeoutMs);
+
+      const onSent = (response) => {
+        settled = true;
+        cleanup();
+        resolve(response.data || {});
+      };
+
+      const onError = (response) => {
+        settled = true;
+        cleanup();
+        reject(new Error(response.error || 'Failed to send UTM'));
+      };
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.off(SERVICE_EVENTS.UTM_SENT, onSent);
+        this.off(SERVICE_EVENTS.UTM_ERROR, onError);
+      };
+
+      this.once(SERVICE_EVENTS.UTM_SENT, onSent);
+      this.once(SERVICE_EVENTS.UTM_ERROR, onError);
+
+      this.send({
+        type: WS_MESSAGE_TYPES.SEND_UTM,
+        data: payload,
+      }).catch((err) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(err);
+      });
+    });
   }
 
   async _handleReadyForMessage(data = {}) {
@@ -516,6 +556,16 @@ export default class WebSocketManager extends EventEmitter {
 
       if (data.type === 'voice_tokens_error') {
         this.emit(SERVICE_EVENTS.VOICE_TOKENS_ERROR, data);
+        return;
+      }
+
+      if (data.type === 'utm_sent') {
+        this.emit(SERVICE_EVENTS.UTM_SENT, data);
+        return;
+      }
+
+      if (data.type === 'utm_error') {
+        this.emit(SERVICE_EVENTS.UTM_ERROR, data);
         return;
       }
 

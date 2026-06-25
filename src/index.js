@@ -965,10 +965,11 @@ export default class WeniWebchatService extends EventEmitter {
    * Sends UTM attribution data to the backend for VTEX orderForm registration.
    *
    * @param {Object} data
-   * @returns {Promise<void>}
+   * @param {number} [timeoutMs=10000] Maximum wait time in milliseconds
+   * @returns {Promise<{ utm_source: string }>}
    */
-  sendUtm(data) {
-    return this.websocket.sendUtm(data);
+  sendUtm(data, timeoutMs = 10000) {
+    return this.websocket.sendUtm(data, timeoutMs);
   }
 
   /**
@@ -1085,6 +1086,14 @@ export default class WeniWebchatService extends EventEmitter {
 
     this.websocket.on(SERVICE_EVENTS.VOICE_TOKENS_ERROR, (data) => {
       this.emit(SERVICE_EVENTS.VOICE_TOKENS_ERROR, data);
+    });
+
+    this.websocket.on(SERVICE_EVENTS.UTM_SENT, (data) => {
+      this.emit(SERVICE_EVENTS.UTM_SENT, data);
+    });
+
+    this.websocket.on(SERVICE_EVENTS.UTM_ERROR, (data) => {
+      this.emit(SERVICE_EVENTS.UTM_ERROR, data);
     });
 
     this.websocket.on(SERVICE_EVENTS.CART_UPDATED, (data) => {

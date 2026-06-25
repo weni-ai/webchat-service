@@ -51,6 +51,8 @@ export const WS_MESSAGE_TYPES = {
   WARNING: 'warning',
   FORBIDDEN: 'forbidden',
   REQUEST_VOICE_TOKENS: 'request_voice_tokens',
+  UTM_ERROR: 'utm_error',
+  UTM_SENT: 'utm_sent',
   VOICE_TOKENS: 'voice_tokens',
 };
 
@@ -265,6 +267,10 @@ export const SERVICE_EVENTS = {
 
   // Cart
   CART_UPDATED: 'cart:updated',
+
+  // UTM
+  UTM_ERROR: 'utm:error',
+  UTM_SENT: 'utm:sent',
 
   // WebSocket
   WS_REGISTERED: 'registered',

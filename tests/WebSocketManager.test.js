@@ -1176,11 +1176,38 @@ describe('WebSocketManager', () => {
       utm_source: 'cx_shopping_assistant_conv_starter',
     };
 
+    const utmSentPayload = {
+      type: 'utm_sent',
+      to: '',
+      from: '',
+      message: {
+        type: '',
+        timestamp: '',
+        list_message: { button_text: '', list_items: null },
+      },
+      data: { utm_source: 'cx_shopping_assistant_conv_starter' },
+    };
+
+    const utmErrorPayload = {
+      type: 'utm_error',
+      to: '',
+      from: '',
+      error: 'failed to send UTM',
+      message: {
+        type: '',
+        timestamp: '',
+        list_message: { button_text: '', list_items: null },
+      },
+    };
+
     it('sends send_utm payload through WebSocket', async () => {
       const manager = createManager();
       manager.socket = makeOpenSocketMock();
 
-      await manager.sendUtm(validData);
+      const promise = manager.sendUtm(validData);
+      manager.emit(SERVICE_EVENTS.UTM_SENT, utmSentPayload);
+
+      await promise;
 
       expect(manager.socket.send).toHaveBeenCalledWith(
         JSON.stringify({
@@ -1188,6 +1215,69 @@ describe('WebSocketManager', () => {
           data: validData,
         }),
       );
+    });
+
+    it('resolves with utm_source when server responds with utm_sent', async () => {
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+
+      const promise = manager.sendUtm(validData);
+      manager.emit(SERVICE_EVENTS.UTM_SENT, utmSentPayload);
+
+      await expect(promise).resolves.toEqual({
+        utm_source: 'cx_shopping_assistant_conv_starter',
+      });
+    });
+
+    it('rejects when server responds with utm_error', async () => {
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+
+      const promise = manager.sendUtm(validData);
+      manager.emit(SERVICE_EVENTS.UTM_ERROR, utmErrorPayload);
+
+      await expect(promise).rejects.toThrow('failed to send UTM');
+    });
+
+    it("rejects with 'Failed to send UTM' when error payload has no error field", async () => {
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+
+      const promise = manager.sendUtm(validData);
+      manager.emit(SERVICE_EVENTS.UTM_ERROR, {});
+
+      await expect(promise).rejects.toThrow('Failed to send UTM');
+    });
+
+    it('rejects after timeout if no response is received', async () => {
+      jest.useFakeTimers();
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+
+      const promise = manager.sendUtm(validData, 5000);
+      jest.advanceTimersByTime(5001);
+
+      await expect(promise).rejects.toThrow('UTM request timed out');
+
+      jest.useRealTimers();
+    });
+
+    it('ignores late UTM_SENT events after the promise has settled', async () => {
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+
+      const promise = manager.sendUtm(validData);
+      manager.emit(SERVICE_EVENTS.UTM_SENT, utmSentPayload);
+      await expect(promise).resolves.toEqual({
+        utm_source: 'cx_shopping_assistant_conv_starter',
+      });
+
+      expect(() =>
+        manager.emit(SERVICE_EVENTS.UTM_SENT, {
+          ...utmSentPayload,
+          data: { utm_source: 'late' },
+        }),
+      ).not.toThrow();
     });
 
     it('rejects when validation fails before send', async () => {
@@ -1372,6 +1462,48 @@ describe('WebSocketManager', () => {
       manager.on(SERVICE_EVENTS.VOICE_TOKENS_ERROR, handler);
 
       const payload = { type: 'voice_tokens_error', error: 'boom' };
+      sendMessage(manager, payload);
+
+      expect(handler).toHaveBeenCalledWith(payload);
+    });
+
+    it('emits UTM_SENT with full payload on { type: "utm_sent" }', () => {
+      const manager = createManager();
+      const handler = jest.fn();
+      manager.on(SERVICE_EVENTS.UTM_SENT, handler);
+
+      const payload = {
+        type: 'utm_sent',
+        to: '',
+        from: '',
+        message: {
+          type: '',
+          timestamp: '',
+          list_message: { button_text: '', list_items: null },
+        },
+        data: { utm_source: 'cx_shopping_assistant' },
+      };
+      sendMessage(manager, payload);
+
+      expect(handler).toHaveBeenCalledWith(payload);
+    });
+
+    it('emits UTM_ERROR with full payload on { type: "utm_error" }', () => {
+      const manager = createManager();
+      const handler = jest.fn();
+      manager.on(SERVICE_EVENTS.UTM_ERROR, handler);
+
+      const payload = {
+        type: 'utm_error',
+        to: '',
+        from: '',
+        error: 'failed to send UTM',
+        message: {
+          type: '',
+          timestamp: '',
+          list_message: { button_text: '', list_items: null },
+        },
+      };
       sendMessage(manager, payload);
 
       expect(handler).toHaveBeenCalledWith(payload);

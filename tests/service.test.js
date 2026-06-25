@@ -1132,6 +1132,30 @@ describe('WeniWebchatService', () => {
       utm_source: 'cx_shopping_assistant',
     };
 
+    const utmSentPayload = {
+      type: 'utm_sent',
+      to: '',
+      from: '',
+      message: {
+        type: '',
+        timestamp: '',
+        list_message: { button_text: '', list_items: null },
+      },
+      data: { utm_source: 'cx_shopping_assistant' },
+    };
+
+    const utmErrorPayload = {
+      type: 'utm_error',
+      to: '',
+      from: '',
+      error: 'failed to send UTM',
+      message: {
+        type: '',
+        timestamp: '',
+        list_message: { button_text: '', list_items: null },
+      },
+    };
+
     beforeEach(() => {
       mockSocket = {
         send: jest.fn(),
@@ -1153,7 +1177,10 @@ describe('WeniWebchatService', () => {
     });
 
     it('should send send_utm payload through WebSocket', async () => {
-      await service.sendUtm(validData);
+      const promise = service.sendUtm(validData);
+      service.websocket.emit(SERVICE_EVENTS.UTM_SENT, utmSentPayload);
+
+      await promise;
 
       expect(mockSocket.send).toHaveBeenCalledWith(
         JSON.stringify({
@@ -1168,10 +1195,16 @@ describe('WeniWebchatService', () => {
       'cx_shopping_assistant_conv_starter',
       'cx_shopping_assistant_cart',
     ])('should accept allowed utm_source %p', async (utm_source) => {
-      await service.sendUtm({
+      const promise = service.sendUtm({
         ...validData,
         utm_source,
       });
+      service.websocket.emit(SERVICE_EVENTS.UTM_SENT, {
+        ...utmSentPayload,
+        data: { utm_source },
+      });
+
+      await promise;
 
       expect(mockSocket.send).toHaveBeenCalledWith(
         JSON.stringify({
@@ -1182,6 +1215,45 @@ describe('WeniWebchatService', () => {
           },
         }),
       );
+    });
+
+    it('should resolve with utm_source when server responds with utm_sent', async () => {
+      const promise = service.sendUtm(validData);
+
+      service.websocket.emit(SERVICE_EVENTS.UTM_SENT, utmSentPayload);
+
+      await expect(promise).resolves.toEqual({
+        utm_source: 'cx_shopping_assistant',
+      });
+    });
+
+    it('should reject when server responds with utm_error', async () => {
+      const promise = service.sendUtm(validData);
+
+      service.websocket.emit(SERVICE_EVENTS.UTM_ERROR, utmErrorPayload);
+
+      await expect(promise).rejects.toThrow('failed to send UTM');
+    });
+
+    it('should reject after timeout if no response is received', async () => {
+      jest.useFakeTimers();
+
+      const promise = service.sendUtm(validData, 5000);
+
+      jest.advanceTimersByTime(5001);
+
+      await expect(promise).rejects.toThrow('UTM request timed out');
+
+      jest.useRealTimers();
+    });
+
+    it('should emit utm:sent event on service when received', async () => {
+      const listener = jest.fn();
+      service.on(SERVICE_EVENTS.UTM_SENT, listener);
+
+      service.websocket.emit(SERVICE_EVENTS.UTM_SENT, utmSentPayload);
+
+      expect(listener).toHaveBeenCalledWith(utmSentPayload);
     });
 
     it('should reject when input is invalid', async () => {
