@@ -13,6 +13,8 @@ import WeniWebchatService, {
   QUICK_REPLY_TYPES,
   SERVICE_EVENTS,
   DEFAULTS,
+  UTM_SOURCES,
+  ALLOWED_UTM_SOURCES,
 } from '../src/index';
 
 import * as Constants from '../src/utils/constants';
@@ -35,6 +37,8 @@ describe('WeniWebchatService — public surface', () => {
       ['QUICK_REPLY_TYPES', 'QUICK_REPLY_TYPES'],
       ['SERVICE_EVENTS', 'SERVICE_EVENTS'],
       ['DEFAULTS', 'DEFAULTS'],
+      ['UTM_SOURCES', 'UTM_SOURCES'],
+      ['ALLOWED_UTM_SOURCES', 'ALLOWED_UTM_SOURCES'],
     ])('exposes %s as a static property identical to constants.%s', (key) => {
       expect(WeniWebchatService[key]).toBe(Constants[key]);
     });
@@ -102,6 +106,14 @@ describe('WeniWebchatService — public surface', () => {
     it('re-exports DEFAULTS identical to constants', () => {
       expect(DEFAULTS).toBe(Constants.DEFAULTS);
     });
+
+    it('re-exports UTM_SOURCES identical to constants', () => {
+      expect(UTM_SOURCES).toBe(Constants.UTM_SOURCES);
+    });
+
+    it('re-exports ALLOWED_UTM_SOURCES identical to constants', () => {
+      expect(ALLOWED_UTM_SOURCES).toBe(Constants.ALLOWED_UTM_SOURCES);
+    });
   });
 
   describe('default export shape', () => {
@@ -157,6 +169,7 @@ describe('WeniWebchatService — public surface', () => {
         'resetRetryStrategy',
         'requestVoiceTokens',
         'addProductToCart',
+        'sendUtm',
         'destroy',
         'simulateMessageReceived',
         'simulateMessageSent',

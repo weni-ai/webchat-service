@@ -2,6 +2,8 @@
  * Validation utility functions
  */
 
+import { ALLOWED_UTM_SOURCES } from './constants.js';
+
 /**
  * Validates service configuration
  * @param {Object} config
@@ -165,6 +167,41 @@ export function validateStartersData(productData) {
   if (!productData.linkText || typeof productData.linkText !== 'string') {
     throw new Error('linkText is required and must be a non-empty string');
   }
+}
+
+/**
+ * Validates UTM payload before sending send_utm through WebSocket.
+ *
+ * @param {Object} data
+ * @returns {{ vtex_account: string, order_form_id: string, utm_source: string }}
+ * @throws {Error}
+ */
+export function normalizeSendUtmData(data) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('UTM data is required');
+  }
+
+  const { vtex_account, order_form_id, utm_source } = data;
+
+  if (!vtex_account || typeof vtex_account !== 'string') {
+    throw new Error('vtex_account is required');
+  }
+
+  if (!order_form_id || typeof order_form_id !== 'string') {
+    throw new Error('order_form_id is required');
+  }
+
+  if (!utm_source || typeof utm_source !== 'string') {
+    throw new Error('utm_source is required');
+  }
+
+  if (!ALLOWED_UTM_SOURCES.includes(utm_source)) {
+    throw new Error(
+      `utm_source must be one of: ${ALLOWED_UTM_SOURCES.join(', ')}`,
+    );
+  }
+
+  return { vtex_account, order_form_id, utm_source };
 }
 
 /**

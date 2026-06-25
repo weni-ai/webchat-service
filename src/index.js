@@ -29,6 +29,8 @@ import {
   STORAGE_TYPES,
   ERROR_TYPES,
   QUICK_REPLY_TYPES,
+  UTM_SOURCES,
+  ALLOWED_UTM_SOURCES,
 } from './utils/constants';
 import {
   buildTextMessage,
@@ -960,6 +962,17 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
+   * Sends UTM attribution data to the backend for VTEX orderForm registration.
+   *
+   * @param {Object} data
+   * @param {number} [timeoutMs=10000] Maximum wait time in milliseconds
+   * @returns {Promise<{ utm_source: string }>}
+   */
+  sendUtm(data, timeoutMs = 10000) {
+    return this.websocket.sendUtm(data, timeoutMs);
+  }
+
+  /**
    * Destroys service instance
    */
   destroy() {
@@ -1073,6 +1086,14 @@ export default class WeniWebchatService extends EventEmitter {
 
     this.websocket.on(SERVICE_EVENTS.VOICE_TOKENS_ERROR, (data) => {
       this.emit(SERVICE_EVENTS.VOICE_TOKENS_ERROR, data);
+    });
+
+    this.websocket.on(SERVICE_EVENTS.UTM_SENT, (data) => {
+      this.emit(SERVICE_EVENTS.UTM_SENT, data);
+    });
+
+    this.websocket.on(SERVICE_EVENTS.UTM_ERROR, (data) => {
+      this.emit(SERVICE_EVENTS.UTM_ERROR, data);
     });
 
     this.websocket.on(SERVICE_EVENTS.CART_UPDATED, (data) => {
@@ -1249,6 +1270,8 @@ WeniWebchatService.ERROR_TYPES = ERROR_TYPES;
 WeniWebchatService.QUICK_REPLY_TYPES = QUICK_REPLY_TYPES;
 WeniWebchatService.SERVICE_EVENTS = SERVICE_EVENTS;
 WeniWebchatService.DEFAULTS = DEFAULTS;
+WeniWebchatService.UTM_SOURCES = UTM_SOURCES;
+WeniWebchatService.ALLOWED_UTM_SOURCES = ALLOWED_UTM_SOURCES;
 
 export {
   ALLOWED_FILE_TYPES,
@@ -1265,4 +1288,6 @@ export {
   QUICK_REPLY_TYPES,
   SERVICE_EVENTS,
   DEFAULTS,
+  UTM_SOURCES,
+  ALLOWED_UTM_SOURCES,
 };
