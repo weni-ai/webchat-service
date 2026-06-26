@@ -9,7 +9,9 @@ import {
   sanitizeText,
   validateFileType,
   validateFileSize,
+  normalizeSendUtmData,
 } from '../src/utils/validators';
+import { ALLOWED_UTM_SOURCES } from '../src/utils/constants';
 
 describe('validators', () => {
   // -------------------------------------------------------------------------
@@ -444,6 +446,75 @@ describe('validators', () => {
       ['maxSize as undefined', 100, undefined],
     ])('returns false when %s', (_label, size, max) => {
       expect(validateFileSize(size, max)).toBe(false);
+    });
+  });
+
+  describe('normalizeSendUtmData', () => {
+    const validData = {
+      vtex_account: 'mystore',
+      order_form_id: 'abc123def456abc123def456abc123de',
+      utm_source: 'cx_shopping_assistant',
+    };
+
+    it('returns normalized snake_case payload for valid input', () => {
+      expect(normalizeSendUtmData(validData)).toEqual(validData);
+    });
+
+    it.each(ALLOWED_UTM_SOURCES)('accepts allowed utm_source %p', (utm_source) => {
+      expect(
+        normalizeSendUtmData({
+          ...validData,
+          utm_source,
+        }),
+      ).toEqual({
+        ...validData,
+        utm_source,
+      });
+    });
+
+    it('throws when data is missing', () => {
+      expect(() => normalizeSendUtmData(null)).toThrow('UTM data is required');
+      expect(() => normalizeSendUtmData(undefined)).toThrow(
+        'UTM data is required',
+      );
+    });
+
+    it('throws when vtex_account is missing', () => {
+      expect(() =>
+        normalizeSendUtmData({
+          order_form_id: validData.order_form_id,
+          utm_source: validData.utm_source,
+        }),
+      ).toThrow('vtex_account is required');
+    });
+
+    it('throws when order_form_id is missing', () => {
+      expect(() =>
+        normalizeSendUtmData({
+          vtex_account: validData.vtex_account,
+          utm_source: validData.utm_source,
+        }),
+      ).toThrow('order_form_id is required');
+    });
+
+    it('throws when utm_source is missing', () => {
+      expect(() =>
+        normalizeSendUtmData({
+          vtex_account: validData.vtex_account,
+          order_form_id: validData.order_form_id,
+        }),
+      ).toThrow('utm_source is required');
+    });
+
+    it('throws when utm_source is not allowed', () => {
+      expect(() =>
+        normalizeSendUtmData({
+          ...validData,
+          utm_source: 'invalid_source',
+        }),
+      ).toThrow(
+        `utm_source must be one of: ${ALLOWED_UTM_SOURCES.join(', ')}`,
+      );
     });
   });
 });
