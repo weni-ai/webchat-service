@@ -1,6 +1,9 @@
 import EventEmitter from 'eventemitter3';
 
-import { generateMessageId, shouldIgnoreJsonObjectPayload } from '../utils/helpers';
+import {
+  generateMessageId,
+  shouldIgnoreJsonObjectPayload,
+} from '../utils/helpers';
 import {
   DEFAULTS,
   SERVICE_EVENTS,
