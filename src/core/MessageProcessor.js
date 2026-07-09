@@ -1,6 +1,6 @@
 import EventEmitter from 'eventemitter3';
 
-import { generateMessageId } from '../utils/helpers';
+import { generateMessageId, shouldIgnoreJsonObjectPayload } from '../utils/helpers';
 import {
   DEFAULTS,
   SERVICE_EVENTS,
@@ -64,6 +64,10 @@ export default class MessageProcessor extends EventEmitter {
    */
   process(rawMessage) {
     try {
+      if (shouldIgnoreJsonObjectPayload(rawMessage)) {
+        return;
+      }
+
       const messageType = this._extractMessageType(rawMessage);
 
       switch (messageType) {

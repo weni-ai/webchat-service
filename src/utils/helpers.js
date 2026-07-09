@@ -201,6 +201,59 @@ export async function retry(fn, retries = 3, delay = 1000) {
 }
 
 /**
+ * Returns true when a value is a JSON object (parsed from string or already an object).
+ * Arrays and primitives are not treated as JSON objects.
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+export function isJsonObject(value) {
+  if (value == null) {
+    return false;
+  }
+
+  let parsed = value;
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('{')) {
+      return false;
+    }
+
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return false;
+    }
+  }
+
+  return (
+    parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+  );
+}
+
+/**
+ * Returns true when a socket payload should be ignored because it is a JSON object
+ * @param {unknown} raw
+ * @returns {boolean}
+ */
+export function shouldIgnoreJsonObjectPayload(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return false;
+  }
+
+  const text = raw.message?.text ?? raw.text;
+  if (typeof text === 'string' && isJsonObject(text)) {
+    return true;
+  }
+
+  if (isJsonObject(raw) && !('type' in raw) && !('v' in raw && 'seq' in raw)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Creates a promise that times out
  * @param {Promise} promise
  * @param {number} ms

@@ -154,6 +154,42 @@ describe('MessageProcessor', () => {
       expect(spy).toHaveBeenCalledWith(raw);
     });
 
+    it('should ignore JSON object payloads in message text', () => {
+      const spy = jest.spyOn(processor, '_processUserMessage');
+      const leakedJson = JSON.stringify({
+        is_final_output: true,
+        messages_sent: [
+          {
+            text: 'Message',
+            catalog_message: { send_catalog: false },
+          },
+        ],
+      });
+
+      processor.process({
+        type: 'message',
+        message: { text: leakedJson },
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('should ignore top-level JSON object payloads without message envelope', () => {
+      const spy = jest.spyOn(processor, '_processUserMessage');
+
+      processor.process({
+        is_final_output: true,
+        messages_sent: [{ text: 'Message' }],
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UNKNOWN,
+        expect.anything(),
+      );
+    });
+
     it('should route stream_start to _processStreamStart', () => {
       const spy = jest.spyOn(processor, '_processStreamStart');
       const raw = { type: 'stream_start', id: 'stream-123' };
@@ -191,7 +227,7 @@ describe('MessageProcessor', () => {
     });
 
     it('should emit MESSAGE_UNKNOWN for unknown message types', () => {
-      const raw = { unknownField: 'value' };
+      const raw = { type: 'some_unknown_type' };
 
       processor.process(raw);
 
@@ -199,6 +235,14 @@ describe('MessageProcessor', () => {
         SERVICE_EVENTS.MESSAGE_UNKNOWN,
         raw,
       );
+    });
+
+    it('should silently ignore bare JSON object payloads', () => {
+      const raw = { unknownField: 'value' };
+
+      processor.process(raw);
+
+      expect(mockEmit).not.toHaveBeenCalled();
     });
 
     it('should emit ERROR on exception', () => {

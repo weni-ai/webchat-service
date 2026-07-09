@@ -404,4 +404,65 @@ describe('Helpers', () => {
       });
     });
   });
+
+  describe('isJsonObject', () => {
+    it('should detect a JSON object', () => {
+      expect(helpers.isJsonObject({ foo: 'bar' })).toBe(true);
+    });
+
+    it('should detect a JSON object string', () => {
+      expect(helpers.isJsonObject('{"foo":"bar"}')).toBe(true);
+    });
+
+    it('should ignore regular chat text', () => {
+      expect(helpers.isJsonObject('Hello')).toBe(false);
+    });
+
+    it('should ignore JSON arrays', () => {
+      expect(helpers.isJsonObject('[1, 2, 3]')).toBe(false);
+      expect(helpers.isJsonObject([1, 2, 3])).toBe(false);
+    });
+
+    it('should ignore invalid JSON strings', () => {
+      expect(helpers.isJsonObject('{not-json')).toBe(false);
+    });
+  });
+
+  describe('shouldIgnoreJsonObjectPayload', () => {
+    it('should ignore a top-level JSON object without message envelope', () => {
+      expect(
+        helpers.shouldIgnoreJsonObjectPayload({
+          is_final_output: true,
+          messages_sent: [{ text: 'Message' }],
+        }),
+      ).toBe(true);
+    });
+
+    it('should ignore a message whose text is a JSON object string', () => {
+      expect(
+        helpers.shouldIgnoreJsonObjectPayload({
+          type: 'message',
+          message: { text: '{"foo":"bar"}' },
+        }),
+      ).toBe(true);
+    });
+
+    it('should not ignore regular socket messages', () => {
+      expect(
+        helpers.shouldIgnoreJsonObjectPayload({
+          type: 'message',
+          message: { text: 'Hello' },
+        }),
+      ).toBe(false);
+    });
+
+    it('should not ignore typed socket payloads', () => {
+      expect(
+        helpers.shouldIgnoreJsonObjectPayload({
+          type: 'stream_start',
+          id: 'stream-123',
+        }),
+      ).toBe(false);
+    });
+  });
 });
