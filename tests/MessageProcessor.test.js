@@ -3,7 +3,6 @@ import {
   SERVICE_EVENTS,
   MESSAGE_ID_PREFIX,
   STREAM_INITIAL_SEQUENCE,
-  STREAM_START_TIMEOUT_MS,
   DEFAULTS,
 } from '../src/utils/constants';
 
@@ -155,6 +154,42 @@ describe('MessageProcessor', () => {
       expect(spy).toHaveBeenCalledWith(raw);
     });
 
+    it('should ignore JSON object payloads in message text', () => {
+      const spy = jest.spyOn(processor, '_processUserMessage');
+      const leakedJson = JSON.stringify({
+        is_final_output: true,
+        messages_sent: [
+          {
+            text: 'Message',
+            catalog_message: { send_catalog: false },
+          },
+        ],
+      });
+
+      processor.process({
+        type: 'message',
+        message: { text: leakedJson },
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('should ignore top-level JSON object payloads without message envelope', () => {
+      const spy = jest.spyOn(processor, '_processUserMessage');
+
+      processor.process({
+        is_final_output: true,
+        messages_sent: [{ text: 'Message' }],
+      });
+
+      expect(spy).not.toHaveBeenCalled();
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UNKNOWN,
+        expect.anything(),
+      );
+    });
+
     it('should route stream_start to _processStreamStart', () => {
       const spy = jest.spyOn(processor, '_processStreamStart');
       const raw = { type: 'stream_start', id: 'stream-123' };
@@ -192,7 +227,7 @@ describe('MessageProcessor', () => {
     });
 
     it('should emit MESSAGE_UNKNOWN for unknown message types', () => {
-      const raw = { unknownField: 'value' };
+      const raw = { type: 'some_unknown_type' };
 
       processor.process(raw);
 
@@ -200,6 +235,14 @@ describe('MessageProcessor', () => {
         SERVICE_EVENTS.MESSAGE_UNKNOWN,
         raw,
       );
+    });
+
+    it('should silently ignore bare JSON object payloads', () => {
+      const raw = { unknownField: 'value' };
+
+      processor.process(raw);
+
+      expect(mockEmit).not.toHaveBeenCalled();
     });
 
     it('should emit ERROR on exception', () => {
@@ -481,18 +524,17 @@ describe('MessageProcessor', () => {
     });
   });
 
-  describe('stream inactivity timeout', () => {
-    const streamId = 'timeout-test';
+  describe('stream waits for stream_end', () => {
+    const streamId = 'stream-wait-test';
     const prefixedId = MESSAGE_ID_PREFIX + streamId;
 
-    it('should not timeout while waiting for the first delta after stream_start', () => {
+    it('should not finalize while waiting for the first delta after stream_start', () => {
       processor._processStreamStart({ type: 'stream_start', id: streamId });
 
       jest.advanceTimersByTime(10000);
 
       expect(processor.activeStreamId).toBe(prefixedId);
       expect(processor.streams.has(prefixedId)).toBe(true);
-      expect(processor.timedOutStreamIds.has(prefixedId)).toBe(false);
       expect(mockEmit).not.toHaveBeenCalledWith(
         SERVICE_EVENTS.MESSAGE_UPDATED,
         prefixedId,
@@ -500,129 +542,75 @@ describe('MessageProcessor', () => {
       );
     });
 
-    it('should finalize when idle for 2s after the first delta', () => {
+    it('should not auto-finalize after a long idle gap between deltas', () => {
       processor._processStreamStart({ type: 'stream_start', id: streamId });
       processor._processDelta({ v: 'Hi', seq: 1 });
 
-      jest.advanceTimersByTime(STREAM_START_TIMEOUT_MS + 1);
+      jest.advanceTimersByTime(5000);
+
+      expect(processor.activeStreamId).toBe(prefixedId);
+      expect(processor.streams.get(prefixedId).text).toBe('Hi');
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        prefixedId,
+        expect.objectContaining({ status: 'delivered' }),
+      );
+    });
+
+    it('should keep streaming through long gaps and replace with stream_end content', () => {
+      const interimText =
+        'Olá! :slightly_smiling_face: Vou buscar as regras certinhas pra te explicar de forma bem clara. :slightly_smiling_face:';
+      const finalText =
+        ' Olá! :slightly_smiling_face: As regras ainda não estão cadastradas aqui no meu sistema, então não consigo te passar os detalhes certinhos agora. :slightly_smiling_face: Me conta melhor de quais regras você quer saber: uso do serviço, atendimento, privacidade ou outra coisa específica. :slightly_smiling_face:';
+
+      processor._processStreamStart({ type: 'stream_start', id: streamId });
+      processor._processDelta({ v: interimText, seq: 1 });
+
+      jest.advanceTimersByTime(5000);
+
+      processor._processDelta({ v: finalText, seq: 2 });
+
+      expect(processor.streams.get(prefixedId).text).toBe(
+        interimText + finalText,
+      );
+
+      processor._processStreamEnd({
+        type: 'stream_end',
+        id: streamId,
+        content: finalText,
+      });
 
       expect(mockEmit).toHaveBeenCalledWith(
         SERVICE_EVENTS.MESSAGE_UPDATED,
         prefixedId,
-        expect.objectContaining({
-          text: 'Hi',
-          status: 'delivered',
-        }),
+        expect.objectContaining({ text: finalText, status: 'delivered' }),
       );
       expect(processor.activeStreamId).toBeNull();
-      expect(processor.timedOutStreamIds.has(prefixedId)).toBe(true);
     });
 
-    it('should ignore deltas after inactivity timeout', () => {
+    it('should accept stream_end after a long idle gap', () => {
       processor._processStreamStart({ type: 'stream_start', id: streamId });
       processor._processDelta({ v: 'Hi', seq: 1 });
-      jest.advanceTimersByTime(STREAM_START_TIMEOUT_MS + 1);
 
-      mockEmit.mockClear();
-
-      processor._processDelta({ v: 'late', seq: 2 });
-
-      expect(mockEmit).not.toHaveBeenCalledWith(
-        SERVICE_EVENTS.MESSAGE_UPDATED,
-        prefixedId,
-        expect.anything(),
-      );
-      expect(mockEmit).not.toHaveBeenCalledWith(
-        SERVICE_EVENTS.MESSAGE_PROCESSED,
-        expect.anything(),
-      );
-    });
-
-    it('should ignore stream_end after inactivity timeout', () => {
-      processor._processStreamStart({ type: 'stream_start', id: streamId });
-      processor._processDelta({ v: 'Hi', seq: 1 });
-      jest.advanceTimersByTime(STREAM_START_TIMEOUT_MS + 1);
+      jest.advanceTimersByTime(5000);
 
       mockEmit.mockClear();
 
       processor._processStreamEnd({
         type: 'stream_end',
         id: streamId,
-        content: 'late content',
+        content: 'Authoritative final text',
       });
-
-      expect(mockEmit).not.toHaveBeenCalledWith(
-        SERVICE_EVENTS.MESSAGE_PROCESSED,
-        expect.anything(),
-      );
-      expect(mockEmit).not.toHaveBeenCalledWith(
-        SERVICE_EVENTS.MESSAGE_UPDATED,
-        prefixedId,
-        expect.objectContaining({ text: 'late content' }),
-      );
-    });
-
-    it('should restart idle window on each delta', () => {
-      processor._processStreamStart({ type: 'stream_start', id: streamId });
-
-      jest.advanceTimersByTime(5000);
-      processor._processDelta({ v: 'Hi', seq: 1 });
-
-      jest.advanceTimersByTime(1500);
-      expect(processor.activeStreamId).toBe(prefixedId);
-
-      jest.advanceTimersByTime(STREAM_START_TIMEOUT_MS + 1);
 
       expect(mockEmit).toHaveBeenCalledWith(
         SERVICE_EVENTS.MESSAGE_UPDATED,
         prefixedId,
         expect.objectContaining({
-          text: 'Hi',
+          text: 'Authoritative final text',
           status: 'delivered',
         }),
       );
       expect(processor.activeStreamId).toBeNull();
-    });
-
-    it('should keep stream alive when deltas arrive within 2s gaps', () => {
-      processor._processStreamStart({ type: 'stream_start', id: streamId });
-
-      jest.advanceTimersByTime(1000);
-      processor._processDelta({ v: 'A', seq: 1 });
-
-      jest.advanceTimersByTime(1500);
-      processor._processDelta({ v: 'B', seq: 2 });
-
-      jest.advanceTimersByTime(STREAM_START_TIMEOUT_MS - 1);
-      expect(processor.activeStreamId).toBe(prefixedId);
-
-      jest.advanceTimersByTime(2);
-      expect(processor.activeStreamId).toBeNull();
-    });
-
-    it('should clear inactivity timer on stream_end without timeout finalize', () => {
-      processor._processStreamStart({ type: 'stream_start', id: streamId });
-
-      jest.advanceTimersByTime(500);
-      processor._processStreamEnd({ type: 'stream_end', id: streamId });
-
-      const deliveredCalls = mockEmit.mock.calls.filter(
-        ([event, id, payload]) =>
-          event === SERVICE_EVENTS.MESSAGE_UPDATED &&
-          id === prefixedId &&
-          payload?.status === 'delivered',
-      );
-      expect(deliveredCalls).toHaveLength(1);
-
-      mockEmit.mockClear();
-      jest.advanceTimersByTime(3000);
-
-      expect(mockEmit).not.toHaveBeenCalledWith(
-        SERVICE_EVENTS.MESSAGE_UPDATED,
-        prefixedId,
-        expect.anything(),
-      );
-      expect(processor.timedOutStreamIds.has(prefixedId)).toBe(false);
     });
   });
 
