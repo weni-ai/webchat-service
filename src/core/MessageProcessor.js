@@ -2,6 +2,7 @@ import EventEmitter from 'eventemitter3';
 
 import {
   generateMessageId,
+  isJsonObject,
   shouldIgnoreJsonObjectPayload,
 } from '../utils/helpers';
 import {
@@ -455,6 +456,7 @@ export default class MessageProcessor extends EventEmitter {
    * Processes a stream_end message
    * Finalizes the stream and cleans up state
    * When raw.content is a string, it is the authoritative final text (e.g. after missed stream_start)
+   * JSON object strings in content are ignored (backend leak); fall back to accumulated stream text
    * @private
    * @param {Object} raw - { type: 'stream_end', id: string, content?: string }
    */
@@ -473,8 +475,13 @@ export default class MessageProcessor extends EventEmitter {
     }
 
     const streamData = this.streams.get(messageId);
-    const finalText =
-      typeof raw.content === 'string' ? raw.content : streamData?.text || '';
+    const contentIsLeakedJson =
+      typeof raw.content === 'string' && isJsonObject(raw.content);
+    const finalText = contentIsLeakedJson
+      ? streamData?.text || ''
+      : typeof raw.content === 'string'
+        ? raw.content
+        : streamData?.text || '';
 
     const now = Date.now();
 
@@ -484,6 +491,9 @@ export default class MessageProcessor extends EventEmitter {
         status: 'delivered',
         timestamp: now,
       });
+    } else if (contentIsLeakedJson) {
+      // No local stream and content is leaked JSON — do not create a message
+      return;
     } else {
       const message = this._createDeliveredTextMessage(
         messageId,
