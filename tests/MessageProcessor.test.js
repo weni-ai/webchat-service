@@ -743,6 +743,68 @@ describe('MessageProcessor', () => {
         }),
       );
     });
+
+    it('should ignore leaked JSON content and finalize with accumulated stream text', () => {
+      const leakedJson = JSON.stringify({
+        is_final_output: true,
+        messages_sent: [
+          {
+            text: 'Encontrei opções de colchões',
+            catalog_message: { carousel: true, products: [] },
+          },
+        ],
+      });
+
+      processor._processStreamEnd({
+        type: 'stream_end',
+        id: 'stream-123',
+        content: leakedJson,
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'stream-123',
+        expect.objectContaining({
+          text: 'Hello World',
+          status: 'delivered',
+        }),
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'stream-123',
+        expect.objectContaining({ text: leakedJson }),
+      );
+      expect(processor.streams.has(MESSAGE_ID_PREFIX + 'stream-123')).toBe(
+        false,
+      );
+    });
+
+    it('should not create a message when stream_end has leaked JSON and no local stream', () => {
+      processor._resetStreamState();
+      processor.streams.clear();
+      mockEmit.mockClear();
+
+      const leakedJson = JSON.stringify({
+        is_final_output: true,
+        messages_sent: [{ text: 'Leaked message' }],
+      });
+
+      processor._processStreamEnd({
+        type: 'stream_end',
+        id: 'orphan-json',
+        content: leakedJson,
+      });
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.anything(),
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        expect.anything(),
+        expect.anything(),
+      );
+    });
   });
 
   describe('_isValidSequenceNumber', () => {

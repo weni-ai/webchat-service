@@ -464,5 +464,18 @@ describe('Helpers', () => {
         }),
       ).toBe(false);
     });
+
+    it('should not ignore stream_end with JSON content (must still finalize stream)', () => {
+      expect(
+        helpers.shouldIgnoreJsonObjectPayload({
+          type: 'stream_end',
+          id: 'stream-123',
+          content: JSON.stringify({
+            is_final_output: true,
+            messages_sent: [{ text: 'Message' }],
+          }),
+        }),
+      ).toBe(false);
+    });
   });
 });
