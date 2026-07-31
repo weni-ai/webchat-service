@@ -205,6 +205,82 @@ export function normalizeSendUtmData(data) {
 }
 
 /**
+ * Normalizes add-to-cart items from the batch `items` shape or the legacy
+ * single-item `{ id, seller, quantity? }` shape.
+ *
+ * @param {Object} props
+ * @returns {Array<{ id: string, seller: string, quantity?: number }>}
+ * @throws {Error}
+ */
+export function normalizeAddToCartItems(props) {
+  if (!props || typeof props !== 'object') {
+    throw new Error('Add to cart data is required');
+  }
+
+  const { items, seller, id, quantity } = props;
+
+  if (Array.isArray(items)) {
+    if (!items.length) {
+      throw new Error('items must not be empty');
+    }
+
+    return items.map((item, index) => {
+      if (!item || typeof item !== 'object') {
+        throw new Error(`items[${index}] is invalid`);
+      }
+
+      if (!item.id || typeof item.id !== 'string') {
+        throw new Error(`items[${index}].id is required`);
+      }
+
+      if (!item.seller || typeof item.seller !== 'string') {
+        throw new Error(`items[${index}].seller is required`);
+      }
+
+      const normalized = { id: item.id, seller: item.seller };
+
+      if (item.quantity !== undefined) {
+        if (
+          typeof item.quantity !== 'number' ||
+          !Number.isFinite(item.quantity) ||
+          item.quantity < 1
+        ) {
+          throw new Error(
+            `items[${index}].quantity must be a positive number`,
+          );
+        }
+        normalized.quantity = item.quantity;
+      }
+
+      return normalized;
+    });
+  }
+
+  if (!seller || typeof seller !== 'string') {
+    throw new Error('seller is required');
+  }
+
+  if (!id || typeof id !== 'string') {
+    throw new Error('id is required');
+  }
+
+  const item = { id, seller };
+
+  if (quantity !== undefined) {
+    if (
+      typeof quantity !== 'number' ||
+      !Number.isFinite(quantity) ||
+      quantity < 1
+    ) {
+      throw new Error('quantity must be a positive number');
+    }
+    item.quantity = quantity;
+  }
+
+  return [item];
+}
+
+/**
  * Validates file size
  * @param {number} size
  * @param {number} maxSize

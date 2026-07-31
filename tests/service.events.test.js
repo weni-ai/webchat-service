@@ -193,7 +193,10 @@ describe('WeniWebchatService — _setupEventListeners wiring', () => {
       const listener = jest.fn();
       service.on(SERVICE_EVENTS.CART_UPDATED, listener);
 
-      const payload = { type: 'cart_updated', data: { item_id: 'x' } };
+      const payload = {
+        type: 'cart_updated',
+        data: { items: [{ id: 'x', quantity: 1 }] },
+      };
       service.websocket.emit(SERVICE_EVENTS.CART_UPDATED, payload);
 
       expect(listener).toHaveBeenCalledWith(payload);

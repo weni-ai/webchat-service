@@ -925,8 +925,13 @@ describe('WeniWebchatService', () => {
     const validProps = {
       VTEXAccountName: 'account-name',
       orderFormId: '1234567890',
-      seller: 'seller_123',
-      id: 'product_456',
+      items: [
+        {
+          seller: 'seller_123',
+          id: 'product_456',
+          quantity: 2,
+        },
+      ],
     };
 
     beforeEach(() => {
@@ -958,36 +963,127 @@ describe('WeniWebchatService', () => {
           data: {
             vtex_account: 'account-name',
             order_form_id: '1234567890',
-            item: {
-              seller: 'seller_123',
-              id: 'product_456',
-            },
+            items: [
+              {
+                id: 'product_456',
+                seller: 'seller_123',
+                quantity: 2,
+              },
+            ],
           },
         }),
       );
     });
 
-    it('should resolve when cart_updated arrives with matching item_id', async () => {
+    it('should wrap legacy single-item props into items', () => {
+      service.addProductToCart({
+        VTEXAccountName: 'account-name',
+        orderFormId: '1234567890',
+        seller: 'seller_123',
+        id: 'product_456',
+        quantity: 3,
+      });
+
+      expect(mockSocket.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'add_to_cart',
+          data: {
+            vtex_account: 'account-name',
+            order_form_id: '1234567890',
+            items: [
+              {
+                id: 'product_456',
+                seller: 'seller_123',
+                quantity: 3,
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('should send multiple items in one add_to_cart payload', () => {
+      service.addProductToCart({
+        VTEXAccountName: 'account-name',
+        orderFormId: '1234567890',
+        items: [
+          { id: 'banana_sku', seller: 'seller_a', quantity: 2 },
+          { id: 'apple_sku', seller: 'seller_a' },
+        ],
+      });
+
+      expect(mockSocket.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'add_to_cart',
+          data: {
+            vtex_account: 'account-name',
+            order_form_id: '1234567890',
+            items: [
+              { id: 'banana_sku', seller: 'seller_a', quantity: 2 },
+              { id: 'apple_sku', seller: 'seller_a' },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('should resolve when cart_updated arrives with matching items', async () => {
       const promise = service.addProductToCart(validProps);
 
       service.websocket._handleMessage({
         data: JSON.stringify({
           type: 'cart_updated',
-          data: { item_id: 'product_456' },
+          data: {
+            items: [{ id: 'product_456', quantity: 2 }],
+          },
         }),
       });
 
-      await expect(promise).resolves.toEqual({ id: 'product_456' });
+      await expect(promise).resolves.toEqual({
+        items: [{ id: 'product_456', quantity: 2 }],
+      });
     });
 
-    it('should reject when cart_error arrives with matching item_id', async () => {
+    it('should resolve a multi-item request when cart_updated returns all items', async () => {
+      const promise = service.addProductToCart({
+        VTEXAccountName: 'account-name',
+        orderFormId: '1234567890',
+        items: [
+          { id: 'banana_sku', seller: 'seller_a', quantity: 2 },
+          { id: 'apple_sku', seller: 'seller_a' },
+        ],
+      });
+
+      service.websocket._handleMessage({
+        data: JSON.stringify({
+          type: 'cart_updated',
+          data: {
+            items: [
+              { id: 'banana_sku', quantity: 2 },
+              { id: 'apple_sku', quantity: 1 },
+            ],
+          },
+        }),
+      });
+
+      await expect(promise).resolves.toEqual({
+        items: [
+          { id: 'banana_sku', quantity: 2 },
+          { id: 'apple_sku', quantity: 1 },
+        ],
+      });
+    });
+
+    it('should reject when cart_error arrives with matching items', async () => {
       const promise = service.addProductToCart(validProps);
 
       service.websocket._handleMessage({
         data: JSON.stringify({
           type: 'cart_error',
           error: 'failed to update cart',
-          data: { item_id: 'product_456' },
+          data: {
+            items: [{ id: 'product_456' }],
+          },
         }),
       });
 
@@ -1000,21 +1096,25 @@ describe('WeniWebchatService', () => {
       service.websocket._handleMessage({
         data: JSON.stringify({
           type: 'cart_error',
-          data: { item_id: 'product_456' },
+          data: {
+            items: [{ id: 'product_456' }],
+          },
         }),
       });
 
       await expect(promise).rejects.toThrow('Failed to update cart');
     });
 
-    it('should ignore duplicate cart_error for same item_id', async () => {
+    it('should ignore duplicate cart_error for same item id', async () => {
       const promise = service.addProductToCart(validProps);
 
       service.websocket._handleMessage({
         data: JSON.stringify({
           type: 'cart_error',
           error: 'failed to update cart',
-          data: { item_id: 'product_456' },
+          data: {
+            items: [{ id: 'product_456' }],
+          },
         }),
       });
 
@@ -1025,13 +1125,15 @@ describe('WeniWebchatService', () => {
           data: JSON.stringify({
             type: 'cart_error',
             error: 'failed again',
-            data: { item_id: 'product_456' },
+            data: {
+              items: [{ id: 'product_456' }],
+            },
           }),
         });
       }).not.toThrow();
     });
 
-    it('should not resolve for a different item_id', async () => {
+    it('should not resolve for a different item id', async () => {
       jest.useFakeTimers();
 
       const promise = service.addProductToCart(validProps, 50);
@@ -1039,7 +1141,9 @@ describe('WeniWebchatService', () => {
       service.websocket._handleMessage({
         data: JSON.stringify({
           type: 'cart_updated',
-          data: { item_id: 'another-item' },
+          data: {
+            items: [{ id: 'another-item', quantity: 1 }],
+          },
         }),
       });
 
@@ -1052,31 +1156,41 @@ describe('WeniWebchatService', () => {
       jest.useRealTimers();
     });
 
-    it('should resolve concurrent requests by matching each item_id', async () => {
+    it('should resolve concurrent requests by matching each item id', async () => {
       const p1 = service.addProductToCart({
-        ...validProps,
-        id: 'product_1',
+        VTEXAccountName: 'account-name',
+        orderFormId: '1234567890',
+        items: [{ id: 'product_1', seller: 'seller_123' }],
       });
       const p2 = service.addProductToCart({
-        ...validProps,
-        id: 'product_2',
+        VTEXAccountName: 'account-name',
+        orderFormId: '1234567890',
+        items: [{ id: 'product_2', seller: 'seller_123' }],
       });
 
       service.websocket._handleMessage({
         data: JSON.stringify({
           type: 'cart_updated',
-          data: { item_id: 'product_2' },
+          data: {
+            items: [{ id: 'product_2', quantity: 1 }],
+          },
         }),
       });
       service.websocket._handleMessage({
         data: JSON.stringify({
           type: 'cart_updated',
-          data: { item_id: 'product_1' },
+          data: {
+            items: [{ id: 'product_1', quantity: 1 }],
+          },
         }),
       });
 
-      await expect(p2).resolves.toEqual({ id: 'product_2' });
-      await expect(p1).resolves.toEqual({ id: 'product_1' });
+      await expect(p2).resolves.toEqual({
+        items: [{ id: 'product_2', quantity: 1 }],
+      });
+      await expect(p1).resolves.toEqual({
+        items: [{ id: 'product_1', quantity: 1 }],
+      });
     });
 
     it('should reject after 30 seconds when no response is received', async () => {
@@ -1111,16 +1225,27 @@ describe('WeniWebchatService', () => {
       ).rejects.toThrow('orderFormId is required');
       await expect(
         service.addProductToCart({
-          ...validProps,
+          VTEXAccountName: 'account-name',
+          orderFormId: '1234567890',
           seller: '',
+          id: 'product_456',
         }),
       ).rejects.toThrow('seller is required');
       await expect(
         service.addProductToCart({
-          ...validProps,
+          VTEXAccountName: 'account-name',
+          orderFormId: '1234567890',
+          seller: 'seller_123',
           id: '',
         }),
       ).rejects.toThrow('id is required');
+      await expect(
+        service.addProductToCart({
+          VTEXAccountName: 'account-name',
+          orderFormId: '1234567890',
+          items: [],
+        }),
+      ).rejects.toThrow('items must not be empty');
     });
   });
 

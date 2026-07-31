@@ -10,6 +10,7 @@ import {
   validateFileType,
   validateFileSize,
   normalizeSendUtmData,
+  normalizeAddToCartItems,
 } from '../src/utils/validators';
 import { ALLOWED_UTM_SOURCES } from '../src/utils/constants';
 
@@ -515,6 +516,77 @@ describe('validators', () => {
       ).toThrow(
         `utm_source must be one of: ${ALLOWED_UTM_SOURCES.join(', ')}`,
       );
+    });
+  });
+
+  describe('normalizeAddToCartItems', () => {
+    it('normalizes a batch items array', () => {
+      expect(
+        normalizeAddToCartItems({
+          items: [
+            { id: 'banana_sku', seller: 'seller_a', quantity: 2 },
+            { id: 'apple_sku', seller: 'seller_a' },
+          ],
+        }),
+      ).toEqual([
+        { id: 'banana_sku', seller: 'seller_a', quantity: 2 },
+        { id: 'apple_sku', seller: 'seller_a' },
+      ]);
+    });
+
+    it('wraps the legacy single-item shape', () => {
+      expect(
+        normalizeAddToCartItems({
+          id: 'sku-1',
+          seller: 'seller-1',
+          quantity: 3,
+        }),
+      ).toEqual([{ id: 'sku-1', seller: 'seller-1', quantity: 3 }]);
+    });
+
+    it('throws when items is empty', () => {
+      expect(() => normalizeAddToCartItems({ items: [] })).toThrow(
+        'items must not be empty',
+      );
+    });
+
+    it('throws when a batch item is missing id or seller', () => {
+      expect(() =>
+        normalizeAddToCartItems({
+          items: [{ seller: 'seller_a' }],
+        }),
+      ).toThrow('items[0].id is required');
+
+      expect(() =>
+        normalizeAddToCartItems({
+          items: [{ id: 'sku-1' }],
+        }),
+      ).toThrow('items[0].seller is required');
+    });
+
+    it('throws when legacy seller or id is missing', () => {
+      expect(() =>
+        normalizeAddToCartItems({ id: 'sku-1' }),
+      ).toThrow('seller is required');
+      expect(() =>
+        normalizeAddToCartItems({ seller: 'seller-1' }),
+      ).toThrow('id is required');
+    });
+
+    it('throws when quantity is invalid', () => {
+      expect(() =>
+        normalizeAddToCartItems({
+          id: 'sku-1',
+          seller: 'seller-1',
+          quantity: 0,
+        }),
+      ).toThrow('quantity must be a positive number');
+
+      expect(() =>
+        normalizeAddToCartItems({
+          items: [{ id: 'sku-1', seller: 'seller-1', quantity: -1 }],
+        }),
+      ).toThrow('items[0].quantity must be a positive number');
     });
   });
 });

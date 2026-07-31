@@ -2,7 +2,10 @@ import EventEmitter from 'eventemitter3';
 
 import { DEFAULTS, SERVICE_EVENTS, WS_MESSAGE_TYPES } from '../utils/constants';
 import { buildRegistrationMessage } from '../utils/messageBuilder';
-import { normalizeSendUtmData } from '../utils/validators';
+import {
+  normalizeAddToCartItems,
+  normalizeSendUtmData,
+} from '../utils/validators';
 
 /**
  * WebSocketManager
@@ -230,20 +233,25 @@ export default class WebSocketManager extends EventEmitter {
   }
 
   /**
-   * Requests the backend to add an item to the VTEX cart.
-   * Supports concurrent requests by correlating responses using item id.
+   * Requests the backend to add one or more items to the VTEX cart.
+   * Supports concurrent requests by correlating responses using item ids.
+   *
+   * Prefer `props.items`. The legacy single-item shape
+   * `{ id, seller, quantity? }` is still accepted and wrapped into `items`.
    *
    * @param {Object} props
    * @param {string} props.VTEXAccountName
    * @param {string} props.orderFormId
-   * @param {string} props.seller
-   * @param {string} props.id
+   * @param {Array<{ id: string, seller: string, quantity?: number }>} [props.items]
+   * @param {string} [props.seller]
+   * @param {string} [props.id]
+   * @param {number} [props.quantity]
    * @param {number} [timeoutMs=30000]
-   * @returns {Promise<{ id: string }>}
+   * @returns {Promise<{ items: Array<{ id: string, quantity?: number }> }>}
    */
   addProductToCart(props, timeoutMs = 30000) {
     return new Promise((resolve, reject) => {
-      const { VTEXAccountName, orderFormId, seller, id: itemId } = props || {};
+      const { VTEXAccountName, orderFormId } = props || {};
 
       if (!VTEXAccountName || typeof VTEXAccountName !== 'string') {
         reject(new Error('VTEXAccountName is required'));
@@ -255,36 +263,46 @@ export default class WebSocketManager extends EventEmitter {
         return;
       }
 
-      if (!seller || typeof seller !== 'string') {
-        reject(new Error('seller is required'));
+      let items;
+      try {
+        items = normalizeAddToCartItems(props);
+      } catch (error) {
+        reject(error);
         return;
       }
 
-      if (!itemId || typeof itemId !== 'string') {
-        reject(new Error('id is required'));
-        return;
+      const itemIds = items.map((item) => item.id);
+
+      for (const pending of this.pendingAddToCartRequests.values()) {
+        for (const itemId of itemIds) {
+          if (pending.itemIds.has(itemId)) {
+            reject(
+              new Error(
+                `An add-to-cart request is already pending for item id "${itemId}"`,
+              ),
+            );
+            return;
+          }
+        }
       }
 
-      if (this.pendingAddToCartRequests.has(itemId)) {
-        reject(
-          new Error(
-            `An add-to-cart request is already pending for item id "${itemId}"`,
-          ),
-        );
-        return;
-      }
+      const requestKey = itemIds.slice().sort().join('\0');
 
       const timer = setTimeout(() => {
-        this.pendingAddToCartRequests.delete(itemId);
+        this.pendingAddToCartRequests.delete(requestKey);
+        const label = itemIds.length === 1 ? 'id' : 'ids';
         reject(
-          new Error(`Add to cart request timed out for item id "${itemId}"`),
+          new Error(
+            `Add to cart request timed out for item ${label} "${itemIds.join(', ')}"`,
+          ),
         );
       }, timeoutMs);
 
-      this.pendingAddToCartRequests.set(itemId, {
+      this.pendingAddToCartRequests.set(requestKey, {
         resolve,
         reject,
         timer,
+        itemIds: new Set(itemIds),
       });
 
       this.send({
@@ -292,19 +310,80 @@ export default class WebSocketManager extends EventEmitter {
         data: {
           vtex_account: VTEXAccountName,
           order_form_id: orderFormId,
-          item: {
-            seller,
-            id: itemId,
-          },
+          items,
         },
       }).catch((err) => {
-        const pending = this.pendingAddToCartRequests.get(itemId);
+        const pending = this.pendingAddToCartRequests.get(requestKey);
         if (!pending) return;
         clearTimeout(pending.timer);
-        this.pendingAddToCartRequests.delete(itemId);
+        this.pendingAddToCartRequests.delete(requestKey);
         reject(err);
       });
     });
+  }
+
+  /**
+   * Collects item ids from cart_updated / cart_error payloads.
+   * Supports the batch `items` shape and the legacy `item_id` field.
+   *
+   * @param {Object} data
+   * @returns {string[]}
+   */
+  _getCartResponseItemIds(data) {
+    const responseItems = Array.isArray(data?.items) ? data.items : null;
+    if (responseItems) {
+      return responseItems
+        .map((item) => item?.id)
+        .filter((id) => typeof id === 'string' && id);
+    }
+
+    if (typeof data?.item_id === 'string' && data.item_id) {
+      return [data.item_id];
+    }
+
+    return [];
+  }
+
+  /**
+   * Resolves or rejects pending add-to-cart requests that match response ids.
+   *
+   * @param {string[]} responseIds
+   * @param {'resolve'|'reject'} outcome
+   * @param {*} value
+   * @param {boolean} [requireAll=true] When true, every pending id must appear
+   *   in the response. When false, any overlap is enough (used for errors).
+   */
+  _settlePendingAddToCart(
+    responseIds,
+    outcome,
+    value,
+    requireAll = true,
+  ) {
+    if (!responseIds.length) return;
+
+    const responseIdSet = new Set(responseIds);
+
+    for (const [key, pending] of [
+      ...this.pendingAddToCartRequests.entries(),
+    ]) {
+      const ids = [...pending.itemIds];
+      const matches = requireAll
+        ? ids.every((id) => responseIdSet.has(id))
+        : ids.some((id) => responseIdSet.has(id));
+
+      if (!matches) continue;
+
+      clearTimeout(pending.timer);
+      this.pendingAddToCartRequests.delete(key);
+
+      if (outcome === 'resolve') {
+        const result =
+          typeof value === 'function' ? value(pending.itemIds) : value;
+        pending.resolve(result);
+      } else {
+        pending.reject(value);
+      }
+    }
   }
 
   /**
@@ -570,32 +649,40 @@ export default class WebSocketManager extends EventEmitter {
       }
 
       if (data.type === 'cart_updated') {
-        const itemId = data?.data?.item_id;
+        const responseIds = this._getCartResponseItemIds(data?.data);
+        const responseItems = Array.isArray(data?.data?.items)
+          ? data.data.items
+          : null;
 
-        if (itemId && this.pendingAddToCartRequests.has(itemId)) {
-          const pending = this.pendingAddToCartRequests.get(itemId);
-          clearTimeout(pending.timer);
-          this.pendingAddToCartRequests.delete(itemId);
-          pending.resolve({ id: itemId });
-        }
+        this._settlePendingAddToCart(
+          responseIds,
+          'resolve',
+          (pendingIds) => ({
+            items: responseItems
+              ? responseItems.filter((item) => pendingIds.has(item?.id))
+              : responseIds
+                  .filter((id) => pendingIds.has(id))
+                  .map((id) => ({ id })),
+          }),
+        );
 
         this.emit(SERVICE_EVENTS.CART_UPDATED, data);
         return;
       }
 
       if (data.type === 'cart_error') {
-        const itemId = data?.data?.item_id;
+        const responseIds = this._getCartResponseItemIds(data?.data);
+        const errMsg =
+          typeof data.error === 'string' && data.error.trim()
+            ? data.error.trim()
+            : 'Failed to update cart';
 
-        if (itemId && this.pendingAddToCartRequests.has(itemId)) {
-          const pending = this.pendingAddToCartRequests.get(itemId);
-          clearTimeout(pending.timer);
-          this.pendingAddToCartRequests.delete(itemId);
-          const errMsg =
-            typeof data.error === 'string' && data.error.trim()
-              ? data.error.trim()
-              : 'Failed to update cart';
-          pending.reject(new Error(errMsg));
-        }
+        this._settlePendingAddToCart(
+          responseIds,
+          'reject',
+          new Error(errMsg),
+          false,
+        );
 
         return;
       }

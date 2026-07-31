@@ -1514,7 +1514,10 @@ describe('WebSocketManager', () => {
       const cartHandler = jest.fn();
       manager.on(SERVICE_EVENTS.CART_UPDATED, cartHandler);
 
-      const payload = { type: 'cart_updated', data: { item_id: 'item-x' } };
+      const payload = {
+        type: 'cart_updated',
+        data: { items: [{ id: 'item-x', quantity: 1 }] },
+      };
       sendMessage(manager, payload);
 
       expect(cartHandler).toHaveBeenCalledWith(payload);
@@ -1530,7 +1533,7 @@ describe('WebSocketManager', () => {
         sendMessage(manager, {
           type: 'cart_error',
           error: 'boom',
-          data: { item_id: 'unknown' },
+          data: { items: [{ id: 'unknown' }] },
         }),
       ).not.toThrow();
       expect(errorHandler).not.toHaveBeenCalled();
