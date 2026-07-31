@@ -353,19 +353,12 @@ export default class WebSocketManager extends EventEmitter {
    * @param {boolean} [requireAll=true] When true, every pending id must appear
    *   in the response. When false, any overlap is enough (used for errors).
    */
-  _settlePendingAddToCart(
-    responseIds,
-    outcome,
-    value,
-    requireAll = true,
-  ) {
+  _settlePendingAddToCart(responseIds, outcome, value, requireAll = true) {
     if (!responseIds.length) return;
 
     const responseIdSet = new Set(responseIds);
 
-    for (const [key, pending] of [
-      ...this.pendingAddToCartRequests.entries(),
-    ]) {
+    for (const [key, pending] of [...this.pendingAddToCartRequests.entries()]) {
       const ids = [...pending.itemIds];
       const matches = requireAll
         ? ids.every((id) => responseIdSet.has(id))
@@ -654,17 +647,13 @@ export default class WebSocketManager extends EventEmitter {
           ? data.data.items
           : null;
 
-        this._settlePendingAddToCart(
-          responseIds,
-          'resolve',
-          (pendingIds) => ({
-            items: responseItems
-              ? responseItems.filter((item) => pendingIds.has(item?.id))
-              : responseIds
-                  .filter((id) => pendingIds.has(id))
-                  .map((id) => ({ id })),
-          }),
-        );
+        this._settlePendingAddToCart(responseIds, 'resolve', (pendingIds) => ({
+          items: responseItems
+            ? responseItems.filter((item) => pendingIds.has(item?.id))
+            : responseIds
+                .filter((id) => pendingIds.has(id))
+                .map((id) => ({ id })),
+        }));
 
         this.emit(SERVICE_EVENTS.CART_UPDATED, data);
         return;

@@ -245,9 +245,7 @@ export function normalizeAddToCartItems(props) {
           !Number.isFinite(item.quantity) ||
           item.quantity < 1
         ) {
-          throw new Error(
-            `items[${index}].quantity must be a positive number`,
-          );
+          throw new Error(`items[${index}].quantity must be a positive number`);
         }
         normalized.quantity = item.quantity;
       }
