@@ -339,11 +339,28 @@ export interface FileConfig {
   acceptAttribute: string
 }
 
+export interface AddToCartItem {
+  id: string
+  seller: string
+  quantity?: number
+}
+
 export interface AddProductToCartProps {
   VTEXAccountName: string
   orderFormId: string
-  seller: string
+  /** Preferred batch shape */
+  items?: AddToCartItem[]
+  /** @deprecated Prefer `items`. Legacy single-item API. */
+  seller?: string
+  /** @deprecated Prefer `items`. Legacy single-item API. */
+  id?: string
+  /** @deprecated Prefer `items`. Legacy single-item API. */
+  quantity?: number
+}
+
+export interface CartUpdatedItem {
   id: string
+  quantity?: number
 }
 
 export type UtmSource =
@@ -379,7 +396,7 @@ export default class WeniWebchatService {
   addProductToCart(
     props: AddProductToCartProps,
     timeoutMs?: number
-  ): Promise<{ id: string }>
+  ): Promise<{ items: CartUpdatedItem[] }>
   sendUtm(
     data: SendUtmData,
     timeoutMs?: number

@@ -947,15 +947,20 @@ export default class WeniWebchatService extends EventEmitter {
   }
 
   /**
-   * Adds a product to cart through WebSocket and waits for confirmation.
+   * Adds one or more products to cart through WebSocket and waits for confirmation.
+   *
+   * Prefer `props.items`. The legacy single-item shape
+   * `{ id, seller, quantity? }` is still accepted and wrapped into `items`.
    *
    * @param {Object} props
    * @param {string} props.VTEXAccountName
    * @param {string} props.orderFormId
-   * @param {string} props.seller
-   * @param {string} props.id
+   * @param {Array<{ id: string, seller: string, quantity?: number }>} [props.items]
+   * @param {string} [props.seller]
+   * @param {string} [props.id]
+   * @param {number} [props.quantity]
    * @param {number} [timeoutMs=30000] Maximum wait time in milliseconds
-   * @returns {Promise<{ id: string }>}
+   * @returns {Promise<{ items: Array<{ id: string, quantity?: number }> }>}
    */
   addProductToCart(props, timeoutMs = 30000) {
     return this.websocket.addProductToCart(props, timeoutMs);
