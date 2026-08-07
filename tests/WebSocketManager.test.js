@@ -225,6 +225,53 @@ describe('WebSocketManager', () => {
       expect(manager.isRegistered).toBe(false);
     });
 
+    it('includes token from registrationData when present', async () => {
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+      manager.setRegistrationData({
+        from: 'session-id',
+        callback: 'https://example.com/cb',
+        session_type: 'local',
+        token: 'reg-token',
+      });
+
+      await manager._closeOthersConnections();
+
+      expect(manager.socket.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'close_session',
+          from: 'session-id',
+          token: 'reg-token',
+        }),
+      );
+    });
+
+    it('falls back to config.sessionToken when registration token is missing', async () => {
+      const manager = createManager({ sessionToken: 'config-token' });
+      manager.socket = makeOpenSocketMock();
+
+      await manager._closeOthersConnections();
+
+      expect(manager.socket.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          type: 'close_session',
+          from: 'session-id',
+          token: 'config-token',
+        }),
+      );
+    });
+
+    it('omits token when neither registration nor config has one', async () => {
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+
+      await manager._closeOthersConnections();
+
+      expect(manager.socket.send).toHaveBeenCalledWith(
+        JSON.stringify({ type: 'close_session', from: 'session-id' }),
+      );
+    });
+
     it('emits ERROR with prefix and rethrows when send rejects', async () => {
       const manager = createManager();
       manager.socket = makeOpenSocketMock();
