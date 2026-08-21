@@ -137,6 +137,8 @@ export interface SessionData {
 export interface ConnectionState {
   status: 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting'
   reconnectAttempts?: number
+  reconnectDelayMs?: number
+  nextAttemptAt?: number
   lastError?: string
 }
 
@@ -434,6 +436,7 @@ export default class WeniWebchatService {
   // Retry strategy
   getRetryInfo(): RetryInfo
   resetRetryStrategy(): void
+  reconnectNow(): Promise<void>
 
   // File configuration
   getAllowedFileTypes(): string[]

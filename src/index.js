@@ -842,6 +842,10 @@ export default class WeniWebchatService extends EventEmitter {
     return this.websocket.getStatus() === 'reconnecting';
   }
 
+  reconnectNow() {
+    return this.websocket.reconnectNow();
+  }
+
   isRenderEnabled() {
     return Boolean(this._renderEnabled);
   }
@@ -1031,6 +1035,15 @@ export default class WeniWebchatService extends EventEmitter {
         reconnectAttempts: attempts,
       });
       this.emit(SERVICE_EVENTS.RECONNECTING, attempts);
+    });
+
+    this.websocket.on(SERVICE_EVENTS.RECONNECT_SCHEDULED, (info) => {
+      this.state.setConnectionStatus('reconnecting', {
+        reconnectAttempts: info.attempt,
+        reconnectDelayMs: info.delayMs,
+        nextAttemptAt: info.nextAttemptAt,
+      });
+      this.emit(SERVICE_EVENTS.RECONNECT_SCHEDULED, info);
     });
 
     this.websocket.on(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, (status) => {

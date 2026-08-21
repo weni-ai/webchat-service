@@ -1791,6 +1791,48 @@ describe('WebSocketManager', () => {
 
       jest.useRealTimers();
     });
+
+    it('emits RECONNECT_SCHEDULED with delay timing before the timer fires', () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(1_000_000);
+      const manager = createManager({
+        maxReconnectAttempts: 5,
+        reconnectInterval: 250,
+      });
+      const scheduledHandler = jest.fn();
+      manager.on(SERVICE_EVENTS.RECONNECT_SCHEDULED, scheduledHandler);
+
+      manager._scheduleReconnect();
+
+      expect(scheduledHandler).toHaveBeenCalledWith({
+        attempt: 1,
+        delayMs: 250,
+        nextAttemptAt: 1_000_250,
+      });
+
+      jest.useRealTimers();
+    });
+
+    it('reconnectNow() stops the timer and calls connect()', () => {
+      jest.useFakeTimers();
+      const manager = createManager({
+        maxReconnectAttempts: 5,
+        reconnectInterval: 5000,
+      });
+      const connectSpy = jest
+        .spyOn(manager, 'connect')
+        .mockResolvedValue(undefined);
+
+      manager._scheduleReconnect();
+      manager.reconnectNow();
+
+      expect(manager.reconnectTimer).toBeNull();
+      expect(connectSpy).toHaveBeenCalledTimes(1);
+      jest.advanceTimersByTime(5000);
+      expect(connectSpy).toHaveBeenCalledTimes(1);
+
+      jest.useRealTimers();
+    });
   });
 
   // ---------------------------------------------------------------------------

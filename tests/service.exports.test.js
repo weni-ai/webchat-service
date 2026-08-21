@@ -162,6 +162,7 @@ describe('WeniWebchatService — public surface', () => {
         'isConnected',
         'isConnecting',
         'isReconnecting',
+        'reconnectNow',
         'isRenderEnabled',
         'getRetryInfo',
         'getAllowedFileTypes',
