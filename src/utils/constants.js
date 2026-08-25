@@ -163,6 +163,16 @@ export const ALLOWED_DOCUMENT_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
   'application/vnd.ms-excel', // .xls
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel.sheet.macroEnabled.12', // .xlsm
+  'application/vnd.ms-excel.sheet.binary.macroEnabled.12', // .xlsb
+  'application/vnd.oasis.opendocument.spreadsheet', // .ods
+  'application/vnd.apple.numbers', // .numbers
+  'text/csv', // .csv
+  'application/csv',
+  'text/comma-separated-values',
+  'text/tab-separated-values', // .tsv
+  'text/html', // .html, .htm
+  'application/xhtml+xml', // .xhtml
 ];
 
 export const ALLOWED_FILE_TYPES = [
