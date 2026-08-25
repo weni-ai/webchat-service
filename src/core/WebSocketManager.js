@@ -807,6 +807,12 @@ export default class WebSocketManager extends EventEmitter {
       ? this.retryStrategy.next()
       : this.config.reconnectInterval;
 
+    this.emit(SERVICE_EVENTS.RECONNECT_SCHEDULED, {
+      attempt: this.reconnectAttempts + 1,
+      delayMs: delay,
+      nextAttemptAt: Date.now() + delay,
+    });
+
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectAttempts++;
       this.emit(SERVICE_EVENTS.RECONNECTING, this.reconnectAttempts);
@@ -853,5 +859,14 @@ export default class WebSocketManager extends EventEmitter {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+  }
+
+  /**
+   * Cancels a pending reconnect timer and connects immediately.
+   * @returns {Promise<void>}
+   */
+  reconnectNow() {
+    this._stopReconnectTimer();
+    return this.connect(this.registrationData);
   }
 }

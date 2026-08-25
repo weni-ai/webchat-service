@@ -47,6 +47,22 @@ describe('WeniWebchatService — _setupEventListeners wiring', () => {
       expect(listener).toHaveBeenCalledWith(5);
     });
 
+    it('forwards RECONNECT_SCHEDULED and stores delay timing on connection state', () => {
+      const setStatusSpy = jest.spyOn(service.state, 'setConnectionStatus');
+      const listener = jest.fn();
+      service.on(SERVICE_EVENTS.RECONNECT_SCHEDULED, listener);
+
+      const info = { attempt: 2, delayMs: 3000, nextAttemptAt: 123456 };
+      service.websocket.emit(SERVICE_EVENTS.RECONNECT_SCHEDULED, info);
+
+      expect(setStatusSpy).toHaveBeenCalledWith('reconnecting', {
+        reconnectAttempts: 2,
+        reconnectDelayMs: 3000,
+        nextAttemptAt: 123456,
+      });
+      expect(listener).toHaveBeenCalledWith(info);
+    });
+
     it('handles CONNECTION_STATUS_CHANGED "connected": flips _connected, emits CONNECTED, calls _handleWebSocketConnected', () => {
       const handleSpy = jest
         .spyOn(service, '_handleWebSocketConnected')

@@ -196,6 +196,7 @@ export const SERVICE_EVENTS = {
   CONNECTED: 'connected',
   DISCONNECTED: 'disconnected',
   RECONNECTING: 'reconnecting',
+  RECONNECT_SCHEDULED: 'reconnecting:scheduled',
   CLOSED: 'closed',
   CONNECTION_STATUS_CHANGED: 'connection:status:changed',
 
