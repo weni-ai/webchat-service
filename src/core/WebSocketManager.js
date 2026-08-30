@@ -473,6 +473,8 @@ export default class WebSocketManager extends EventEmitter {
     const message = {
       type: 'close_session',
       from: this.registrationData.from,
+      token:
+        this.registrationData.token || this.config.sessionToken || undefined,
     };
 
     try {
