@@ -351,7 +351,7 @@ const config = service.getFileConfig()
 - **Images**: JPEG, PNG, SVG
 - **Videos**: MP4, QuickTime (.mov)
 - **Audio**: MP3, WAV
-- **Documents**: PDF, Word (.docx), Excel (.xls, .xlsx, .xlsm, .xlsb), ODS, Numbers, CSV, TSV, HTML (.html, .htm, .xhtml)
+- **Documents**: PDF, Word (.doc, .docx), Excel (.xls, .xlsx, .xlsm, .xlsb), ODS, Numbers, plain text (.txt), CSV, TSV, HTML (.html, .htm, .xhtml)
 
 ---
 
