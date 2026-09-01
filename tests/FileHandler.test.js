@@ -1,5 +1,6 @@
 import FileHandler from '../src/modules/FileHandler';
 import {
+  ALLOWED_DOCUMENT_TYPES,
   ALLOWED_FILE_TYPES,
   DEFAULTS,
   SERVICE_EVENTS,
@@ -604,14 +605,22 @@ describe('FileHandler', () => {
     });
 
     it('falls through to the catch-all "file" branch for any other allowed type', async () => {
-      const handler = createHandler({ allowedTypes: ['text/plain'] });
-      const file = makeFile({
-        type: 'text/plain',
-        name: 'note.txt',
-        content: ['hi'],
-      });
-      const result = await handler.process(file);
-      expect(result.type).toBe('file');
+      const handler = createHandler();
+
+      for (const { type, name } of [
+        { type: 'text/plain', name: 'note.txt' },
+        { type: 'application/msword', name: 'letter.doc' },
+      ]) {
+        const result = await handler.process(
+          makeFile({ type, name, content: ['hi'] }),
+        );
+        expect(result.type).toBe('file');
+      }
+    });
+
+    it('includes text/plain and application/msword in ALLOWED_DOCUMENT_TYPES', () => {
+      expect(ALLOWED_DOCUMENT_TYPES).toContain('text/plain');
+      expect(ALLOWED_DOCUMENT_TYPES).toContain('application/msword');
     });
   });
 
