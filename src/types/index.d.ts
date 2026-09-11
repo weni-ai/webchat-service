@@ -98,6 +98,8 @@ export interface Message {
   // Additional data
   metadata?: Record<string, any>
   persisted?: boolean
+  /** True when the outgoing text came from a conversation-starter click */
+  from_conversation_starter?: boolean
 }
 
 /**

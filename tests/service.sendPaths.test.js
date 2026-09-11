@@ -79,6 +79,23 @@ describe('WeniWebchatService — outgoing send paths', () => {
       expect(service.messagesQueue).toEqual([]);
     });
 
+    it('serializes from_conversation_starter when fromConversationStarter is true', async () => {
+      ({ service, socket } = createConnectedService());
+      service.session.createNewSession();
+
+      await service.sendMessage('Q?', { fromConversationStarter: true });
+      await flushMicrotasks();
+
+      expect(socket.send).toHaveBeenCalledTimes(1);
+      const payload = JSON.parse(socket.send.mock.calls[0][0]);
+      expect(payload.type).toBe('message');
+      expect(payload.message).toEqual({
+        type: 'text',
+        text: 'Q?',
+        from_conversation_starter: true,
+      });
+    });
+
     it('skips state.addMessage and session.appendToConversation when options.hidden=true', async () => {
       ({ service, socket } = createConnectedService());
       service.session.createNewSession();

@@ -163,6 +163,35 @@ describe('messageBuilder', () => {
           message: { type: 'text', text: 'Hello' },
           from: sessionId,
         });
+        expect(payload.message.from_conversation_starter).toBeUndefined();
+      });
+
+      it('includes from_conversation_starter when fromConversationStarter is true', () => {
+        const textMessage = {
+          type: 'text',
+          text: 'Hello',
+          fromConversationStarter: true,
+        };
+
+        const payload = buildMessagePayload(sessionId, textMessage);
+
+        expect(payload.message).toEqual({
+          type: 'text',
+          text: 'Hello',
+          from_conversation_starter: true,
+        });
+      });
+
+      it('does not include from_conversation_starter when fromConversationStarter is false', () => {
+        const textMessage = {
+          type: 'text',
+          text: 'Hello',
+          fromConversationStarter: false,
+        };
+
+        const payload = buildMessagePayload(sessionId, textMessage);
+
+        expect(payload.message).toEqual({ type: 'text', text: 'Hello' });
       });
 
       it('switches to message_with_fields and forwards data when text has __customFields', () => {
@@ -177,6 +206,25 @@ describe('messageBuilder', () => {
         expect(payload.type).toBe('message_with_fields');
         expect(payload.data).toEqual({ utm: 'source-x' });
         expect(payload.message).toEqual({ type: 'text', text: 'Hi' });
+      });
+
+      it('keeps from_conversation_starter on message when __customFields are also present', () => {
+        const textMessage = {
+          type: 'text',
+          text: 'Hi',
+          fromConversationStarter: true,
+          __customFields: { utm: 'source-x' },
+        };
+
+        const payload = buildMessagePayload(sessionId, textMessage);
+
+        expect(payload.type).toBe('message_with_fields');
+        expect(payload.data).toEqual({ utm: 'source-x' });
+        expect(payload.message).toEqual({
+          type: 'text',
+          text: 'Hi',
+          from_conversation_starter: true,
+        });
       });
 
       it('keeps the message type when __customFields is an empty object', () => {
@@ -305,6 +353,7 @@ describe('messageBuilder', () => {
         status: 'pending',
         metadata: {},
         hidden: false,
+        fromConversationStarter: false,
       });
       expect(message.id).toBeDefined();
       expect(message.timestamp).toBeDefined();
@@ -329,7 +378,16 @@ describe('messageBuilder', () => {
         status: 'delivered',
         metadata: { source: 'history' },
         hidden: true,
+        fromConversationStarter: false,
       });
+    });
+
+    it('sets fromConversationStarter when the option is true', () => {
+      const message = buildTextMessage('Hello', {
+        fromConversationStarter: true,
+      });
+
+      expect(message.fromConversationStarter).toBe(true);
     });
 
     it('generates a unique id per call when not provided', () => {

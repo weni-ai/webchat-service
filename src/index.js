@@ -245,6 +245,10 @@ export default class WeniWebchatService extends EventEmitter {
    *
    * @param {string} text Message text
    * @param {Object} options Additional options
+   * @param {boolean} [options.fromConversationStarter] Whether the text
+   *   came from a conversation-starter click
+   * @param {boolean} [options.hidden] If true, skip adding the message
+   *   to UI state and session history
    * @returns {Promise<void>}
    */
   async sendMessage(text, options = {}) {

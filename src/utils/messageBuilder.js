@@ -18,15 +18,16 @@ export function buildMessagePayload(sessionId, message, options = {}) {
   const messageData = hasCustomFields ? message.__customFields : undefined;
 
   if (message.type === 'text') {
-    return buildWebSocketMessage(
-      messageType,
-      { type: 'text', text: message.text },
-      {
-        context,
-        from,
-        data: messageData,
-      },
-    );
+    const textPayload = { type: 'text', text: message.text };
+    if (message.fromConversationStarter) {
+      textPayload.from_conversation_starter = true;
+    }
+
+    return buildWebSocketMessage(messageType, textPayload, {
+      context,
+      from,
+      data: messageData,
+    });
   } else if (['image', 'video', 'audio', 'file'].includes(message.type)) {
     return buildWebSocketMessage(
       messageType,
@@ -73,6 +74,7 @@ export function buildTextMessage(text, options = {}) {
     status: options.status || 'pending',
     metadata: options.metadata || {},
     hidden: options.hidden || false,
+    fromConversationStarter: Boolean(options.fromConversationStarter),
   };
 }
 
