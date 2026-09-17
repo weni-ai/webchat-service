@@ -378,6 +378,230 @@ export interface SendUtmData {
   utm_source: UtmSource
 }
 
+export const VoiceSessionState: {
+  IDLE: 'idle'
+  INITIALIZING: 'initializing'
+  LISTENING: 'listening'
+  PROCESSING: 'processing'
+  SPEAKING: 'speaking'
+  ERROR: 'error'
+}
+
+export type VoiceSessionStateValue =
+  (typeof VoiceSessionState)[keyof typeof VoiceSessionState]
+
+export const VoiceErrorCode: {
+  MICROPHONE_PERMISSION_DENIED: 'MICROPHONE_PERMISSION_DENIED'
+  MICROPHONE_NOT_FOUND: 'MICROPHONE_NOT_FOUND'
+  BROWSER_NOT_SUPPORTED: 'BROWSER_NOT_SUPPORTED'
+  STT_CONNECTION_FAILED: 'STT_CONNECTION_FAILED'
+  STT_AUTH_FAILED: 'STT_AUTH_FAILED'
+  STT_TRANSCRIPTION_FAILED: 'STT_TRANSCRIPTION_FAILED'
+  TTS_CONNECTION_FAILED: 'TTS_CONNECTION_FAILED'
+  TTS_AUTH_FAILED: 'TTS_AUTH_FAILED'
+  TTS_GENERATION_FAILED: 'TTS_GENERATION_FAILED'
+  NETWORK_ERROR: 'NETWORK_ERROR'
+  TOKEN_EXPIRED: 'TOKEN_EXPIRED'
+  RATE_LIMITED: 'RATE_LIMITED'
+  SESSION_TIMEOUT: 'SESSION_TIMEOUT'
+  SESSION_IDLE_TIMEOUT: 'SESSION_IDLE_TIMEOUT'
+  UNKNOWN_ERROR: 'UNKNOWN_ERROR'
+}
+
+export type VoiceErrorCodeValue =
+  (typeof VoiceErrorCode)[keyof typeof VoiceErrorCode]
+
+export class VoiceError extends Error {
+  name: 'VoiceError'
+  code: VoiceErrorCodeValue | string
+  suggestion: string
+  recoverable: boolean
+  originalError: Error | null
+  constructor(
+    code: VoiceErrorCodeValue | string,
+    customMessage?: string,
+    originalError?: Error
+  )
+  toJSON(): {
+    code: string
+    message: string
+    suggestion: string
+    recoverable: boolean
+  }
+}
+
+export function createVoiceError(
+  code: VoiceErrorCodeValue | string,
+  errorOrMessage?: Error | string
+): VoiceError
+
+export interface VoiceTokens {
+  sttToken: string
+  ttsToken: string
+}
+
+export interface VoiceSessionInfo {
+  id: string
+  state: VoiceSessionStateValue
+  startedAt: number
+  config: VoiceConfig
+  partialTranscript: string
+  isPlaying: boolean
+  error: VoiceError | null
+}
+
+export interface VoiceConfig {
+  elevenLabs?: { voiceId?: string }
+  languageCode?: string
+  ttsModel?: string
+  sttModel?: string
+  audioFormat?: string
+  sampleRate?: number
+  silenceThreshold?: number
+  vadThreshold?: number
+  bargeInVadThreshold?: number
+  sttVadThreshold?: number
+  minSpeechDuration?: number
+  minSilenceDuration?: number
+  latencyOptimization?: number
+  enableBargeIn?: boolean
+  autoListen?: boolean
+  maxSessionDurationMs?: number
+  idleTimeoutMs?: number
+  hiddenGracePeriodMs?: number
+  sttLeadInFrames?: number
+  sttTrailFrames?: number
+  getTokens?: () => Promise<VoiceTokens>
+  texts?: Record<string, string>
+}
+
+export const DEFAULT_VOICE_CONFIG: VoiceConfig
+
+export function validateVoiceConfig(config: VoiceConfig): {
+  valid: boolean
+  errors: string[]
+}
+export function mergeVoiceConfig(userConfig?: VoiceConfig): VoiceConfig
+export function buildSTTWebSocketURL(config: VoiceConfig, token: string): string
+export function buildTTSWebSocketURL(
+  voiceId: string,
+  config: VoiceConfig,
+  token: string
+): string
+
+export class VoiceService {
+  static NON_SPEAKABLE: RegExp
+  static isSupported(): boolean
+  constructor()
+  init(config?: VoiceConfig): Promise<void>
+  startSession(): Promise<{ id: string; startedAt: number }>
+  endSession(reason?: string): void
+  processTextChunk(textChunk: string, isComplete?: boolean): void
+  stopSpeaking(immediate?: boolean): void
+  setMessageCallback(callback: ((text: string) => void) | null): void
+  setLanguage(languageCode: string): void
+  getSession(): VoiceSessionInfo | null
+  on(event: string, callback: (...args: any[]) => void): this
+  once(event: string, callback: (...args: any[]) => void): this
+  off(event: string, callback: (...args: any[]) => void): this
+  emit(event: string, data?: any): void
+  removeAllListeners(): void
+  destroy(): void
+}
+
+export class AudioCapture {
+  static isSupported(): boolean
+  static requestPermission(): Promise<boolean>
+  static checkPermission(): Promise<PermissionState | 'prompt'>
+  constructor()
+  start(options?: { vadThreshold?: number }): Promise<void>
+  stop(): void
+  pause(): void
+  resume(): void
+  resetSpeakingState(): void
+  destroy(): void
+  on(event: string, callback: (...args: any[]) => void): void
+  off(event: string, callback: (...args: any[]) => void): void
+  emit(event: string, data?: any): void
+  removeAllListeners(): void
+}
+
+export class STTConnection {
+  constructor(config: VoiceConfig, token: string)
+  connect(): Promise<void>
+  sendAudio(audioBase64: string, sampleRate: number, commit?: boolean): void
+  commit(): void
+  isConnected(): boolean
+  disconnect(): void
+  destroy(): void
+  on(event: string, listener: (...args: any[]) => void): this
+  off(event: string, listener: (...args: any[]) => void): this
+  emit(event: string, ...args: any[]): void
+  removeAllListeners(event?: string): void
+}
+
+export class TTSPlayer {
+  isPlaying: boolean
+  isStopped: boolean
+  constructor(options?: { getConnectionUrl?: () => Promise<string> })
+  connect(url: string): Promise<void>
+  isConnected(): boolean
+  speak(text: string): Promise<void>
+  stop(immediate?: boolean, bargeIn?: boolean): void
+  disconnect(): void
+  destroy(): void
+  on(event: string, listener: (...args: any[]) => void): this
+  once(event: string, listener: (...args: any[]) => void): this
+  off(event: string, listener: (...args: any[]) => void): this
+  emit(event: string, ...args: any[]): void
+  removeAllListeners(event?: string): void
+}
+
+export class TextChunker {
+  constructor(options?: { minChunkSize?: number; maxChunkSize?: number })
+  addText(text: string): string | null
+  flush(): string | null
+  clear(): void
+  getBufferLength(): number
+}
+
+export class EchoGuard {
+  readonly isGated: boolean
+  readonly isTTSPlaying: boolean
+  readonly bargeInThreshold: number
+  constructor(options?: {
+    cooldownMs?: number
+    consecutiveFramesRequired?: number
+    normalThreshold?: number
+    elevatedThreshold?: number
+  })
+  onTTSStarted(): void
+  onTTSStopped(): void
+  onBargeInDetected(): void
+  shouldForwardAudio(): boolean
+  shouldTriggerBargeIn(hasVoice: boolean): boolean
+  reset(): void
+  destroy(): void
+}
+
+export class SessionGuard {
+  constructor(options?: {
+    maxSessionDurationMs?: number
+    idleTimeoutMs?: number
+    hiddenGracePeriodMs?: number
+  })
+  start(callbacks: {
+    onTimeout?: () => void
+    onIdle?: () => void
+    onHidden?: () => void
+    onVisible?: () => void
+    onHiddenExpired?: () => void
+  }): void
+  recordActivity(): void
+  stop(): void
+  destroy(): void
+}
+
 /**
  * Main service class
  */
@@ -451,6 +675,7 @@ export default class WeniWebchatService {
 
   // Static methods
   static isAudioRecordingSupported(): boolean
+  static isVoiceSupported(): boolean
   
   // Static constants
   static ALLOWED_FILE_TYPES: string[]

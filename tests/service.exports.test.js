@@ -15,10 +15,15 @@ import WeniWebchatService, {
   DEFAULTS,
   UTM_SOURCES,
   ALLOWED_UTM_SOURCES,
+  VoiceService,
+  VoiceSessionState,
+  VoiceError,
+  VoiceErrorCode,
 } from '../src/index';
 
 import * as Constants from '../src/utils/constants';
 import AudioRecorder from '../src/modules/AudioRecorder';
+import { VoiceService as VoiceServiceModule } from '../src/modules/voice';
 
 describe('WeniWebchatService — public surface', () => {
   describe('static class properties', () => {
@@ -48,9 +53,30 @@ describe('WeniWebchatService — public surface', () => {
         AudioRecorder.isSupported,
       );
     });
+
+    it('exposes VoiceService.isSupported as a static method', () => {
+      expect(WeniWebchatService.isVoiceSupported).toBe(
+        VoiceServiceModule.isSupported,
+      );
+    });
   });
 
   describe('named re-exports from src/index', () => {
+    it('re-exports VoiceService, VoiceSessionState, VoiceError, and VoiceErrorCode', () => {
+      expect(VoiceService).toBe(VoiceServiceModule);
+      expect(typeof VoiceService.isSupported).toBe('function');
+      expect(VoiceSessionState).toEqual({
+        IDLE: 'idle',
+        INITIALIZING: 'initializing',
+        LISTENING: 'listening',
+        PROCESSING: 'processing',
+        SPEAKING: 'speaking',
+        ERROR: 'error',
+      });
+      expect(typeof VoiceError).toBe('function');
+      expect(VoiceErrorCode.UNKNOWN_ERROR).toBe('UNKNOWN_ERROR');
+    });
+
     it('re-exports ALLOWED_FILE_TYPES identical to constants', () => {
       expect(ALLOWED_FILE_TYPES).toBe(Constants.ALLOWED_FILE_TYPES);
     });
