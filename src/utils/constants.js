@@ -306,6 +306,7 @@ export const SERVICE_EVENTS = {
   // Starters
   STARTERS_RECEIVED: 'starters:received',
   STARTERS_ERROR: 'starters:error',
+  STARTERS_DISCARDED: 'starters:discarded',
 };
 
 export const LOG_LEVELS = {

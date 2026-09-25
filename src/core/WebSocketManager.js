@@ -731,7 +731,11 @@ export default class WebSocketManager extends EventEmitter {
         const errorMsg = data.error || 'Unknown server error';
 
         if (errorMsg.includes('starters')) {
-          this.emit(SERVICE_EVENTS.STARTERS_ERROR, { error: errorMsg });
+          const payload = { error: errorMsg };
+          if (data.data && typeof data.data === 'object') {
+            payload.data = data.data;
+          }
+          this.emit(SERVICE_EVENTS.STARTERS_ERROR, payload);
         }
 
         this.emit(SERVICE_EVENTS.ERROR, new Error(errorMsg));

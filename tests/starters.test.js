@@ -279,6 +279,24 @@ describe('WeniWebchatService - getStarters', () => {
       expect(handler).not.toHaveBeenCalled();
     });
 
+    it('should emit starters:discarded when fingerprint is already cleared', () => {
+      makeConnected(service);
+      const discarded = jest.fn();
+      service.on(SERVICE_EVENTS.STARTERS_DISCARDED, discarded);
+
+      service.getStarters(VALID_PRODUCT_DATA);
+      service.clearStarters();
+
+      service.websocket.emit(SERVICE_EVENTS.STARTERS_RECEIVED, {
+        questions: ['Q1?'],
+      });
+
+      expect(discarded).toHaveBeenCalledWith({
+        reason: 'stale_fingerprint',
+        data: { questions: ['Q1?'] },
+      });
+    });
+
     it('should update fingerprint on successive getStarters calls', () => {
       makeConnected(service);
 
@@ -413,6 +431,32 @@ describe('WebSocketManager - starters message handling', () => {
 
     expect(handler).toHaveBeenCalledWith({
       error: 'failed to generate conversation starters: Lambda timeout',
+    });
+  });
+
+  it('should emit STARTERS_ERROR with data.code when present', () => {
+    const handler = jest.fn();
+    service.websocket.on(SERVICE_EVENTS.STARTERS_ERROR, handler);
+
+    service.websocket._handleMessage({
+      data: JSON.stringify({
+        type: 'error',
+        error: 'failed to generate conversation starters: Lambda timeout',
+        data: {
+          code: 'STARTERS_LAMBDA',
+          account: 'store',
+          duration_ms: 1200,
+        },
+      }),
+    });
+
+    expect(handler).toHaveBeenCalledWith({
+      error: 'failed to generate conversation starters: Lambda timeout',
+      data: {
+        code: 'STARTERS_LAMBDA',
+        account: 'store',
+        duration_ms: 1200,
+      },
     });
   });
 
