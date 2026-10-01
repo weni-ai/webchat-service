@@ -398,6 +398,7 @@ service.on('typing:start', () => {})          // Human agent typing
 service.on('typing:stop', () => {})           // Human agent stopped typing
 service.on('thinking:start', () => {})        // AI assistant processing
 service.on('thinking:stop', () => {})         // AI assistant finished
+service.on('thinking:text:changed', (text) => {}) // Rationale text while thinking
 
 // Session events
 service.on('session:restored', (session) => {})
@@ -426,10 +427,14 @@ service.on('error', (error) => {})
 
 The service distinguishes between two types of indicators:
 
-#### 🤖 **Thinking Indicator** (`thinking:start` / `thinking:stop`)
+#### 🤖 **Thinking Indicator** (`thinking:start` / `thinking:stop` / `thinking:text:changed`)
 - Triggered when an **AI assistant** is processing a response
 - Activated when `typing_start` message has `from: 'ai-assistant'`
-- Auto-stops after `typingTimeout` (50s default) or when message is received
+- Also activated by an incoming message with `message_kind: "rationale"`. A rationale is not a chat message: it is not queued, added to state messages, or appended to the session conversation. It turns thinking on (or keeps it on) and sets `state.thinkingText` to the trimmed text.
+- `thinkingText` is cleared whenever thinking stops: on the first stream delta, on `stream_end`, on an incoming chat message, or when `typingTimeout` elapses.
+- A rationale is ignored when the typing indicator is disabled (`enableTypingIndicator: false`), its text is empty, the answer is already streaming, or it arrives after the reply is no longer pending and thinking is off.
+- Host code can set the same text with `service.setThinkingText(text)`. The call throws when `text` is not a non-empty string, then starts thinking and emits `thinking:text:changed`.
+- Auto-stops after `typingTimeout` (50s default) or when the answer is received
 - Template can choose to ignore these events if not needed
 
 #### ✍️ **Typing Indicator** (`typing:start` / `typing:stop`)

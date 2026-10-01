@@ -23,6 +23,7 @@ import {
   ALLOWED_AUDIO_TYPES,
   ALLOWED_DOCUMENT_TYPES,
   MESSAGE_TYPES,
+  MESSAGE_KINDS,
   MESSAGE_STATUS,
   MESSAGE_DIRECTIONS,
   CONNECTION_STATUS,
@@ -377,6 +378,20 @@ export default class WeniWebchatService extends EventEmitter {
     this.state.addMessage(message);
     this.session.appendToConversation(message);
     this.session.setLastMessageSentAt(Date.now());
+  }
+
+  /**
+   * Shows rationale text on the thinking indicator.
+   * Starts thinking (or keeps it on) and resets the typing timeout.
+   *
+   * @param {string} text Non-empty thinking text
+   */
+  setThinkingText(text) {
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      throw new Error('Thinking text is required');
+    }
+
+    this.messageProcessor.showThinkingText(text.trim());
   }
 
   /**
@@ -1158,6 +1173,11 @@ export default class WeniWebchatService extends EventEmitter {
       this.emit(SERVICE_EVENTS.THINKING_STOP);
     });
 
+    this.messageProcessor.on(SERVICE_EVENTS.THINKING_TEXT_CHANGED, (text) => {
+      this.state.setThinkingText(text);
+      this.emit(SERVICE_EVENTS.THINKING_TEXT_CHANGED, text);
+    });
+
     this.messageProcessor.on(SERVICE_EVENTS.ERROR, (error) => {
       this.emit(SERVICE_EVENTS.ERROR, error);
     });
@@ -1284,6 +1304,7 @@ WeniWebchatService.ALLOWED_VIDEO_TYPES = ALLOWED_VIDEO_TYPES;
 WeniWebchatService.ALLOWED_AUDIO_TYPES = ALLOWED_AUDIO_TYPES;
 WeniWebchatService.ALLOWED_DOCUMENT_TYPES = ALLOWED_DOCUMENT_TYPES;
 WeniWebchatService.MESSAGE_TYPES = MESSAGE_TYPES;
+WeniWebchatService.MESSAGE_KINDS = MESSAGE_KINDS;
 WeniWebchatService.MESSAGE_STATUS = MESSAGE_STATUS;
 WeniWebchatService.MESSAGE_DIRECTIONS = MESSAGE_DIRECTIONS;
 WeniWebchatService.CONNECTION_STATUS = CONNECTION_STATUS;
@@ -1302,6 +1323,7 @@ export {
   ALLOWED_AUDIO_TYPES,
   ALLOWED_DOCUMENT_TYPES,
   MESSAGE_TYPES,
+  MESSAGE_KINDS,
   MESSAGE_STATUS,
   MESSAGE_DIRECTIONS,
   CONNECTION_STATUS,

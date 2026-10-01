@@ -279,6 +279,20 @@ describe('WeniWebchatService — _setupEventListeners wiring', () => {
       expect(stopListener).toHaveBeenCalledTimes(1);
     });
 
+    it('on THINKING_TEXT_CHANGED: sets state.thinkingText and re-emits', () => {
+      const setThinkingTextSpy = jest.spyOn(service.state, 'setThinkingText');
+      const listener = jest.fn();
+      service.on(SERVICE_EVENTS.THINKING_TEXT_CHANGED, listener);
+
+      service.messageProcessor.emit(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        'Checking your order...',
+      );
+
+      expect(setThinkingTextSpy).toHaveBeenCalledWith('Checking your order...');
+      expect(listener).toHaveBeenCalledWith('Checking your order...');
+    });
+
     it('on THINKING_START / THINKING_STOP: toggles state.isThinking and re-emits', () => {
       const setThinkingSpy = jest.spyOn(service.state, 'setThinking');
       const startListener = jest.fn();
