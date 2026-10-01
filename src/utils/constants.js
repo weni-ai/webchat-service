@@ -27,6 +27,11 @@ export const MESSAGE_DIRECTIONS = {
   OUTGOING: 'outgoing',
 };
 
+export const MESSAGE_KINDS = {
+  RATIONALE: 'rationale',
+  FINAL_RESPONSE: 'final_response',
+};
+
 export const MESSAGE_STATUS = {
   PENDING: 'pending',
   SENT: 'sent',
@@ -236,6 +241,7 @@ export const SERVICE_EVENTS = {
   TYPING_STOP: 'typing:stop',
   THINKING_START: 'thinking:start',
   THINKING_STOP: 'thinking:stop',
+  THINKING_TEXT_CHANGED: 'thinking:text:changed',
 
   // Session
   SESSION_RESTORED: 'session:restored',

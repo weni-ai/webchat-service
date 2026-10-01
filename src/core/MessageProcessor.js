@@ -9,6 +9,7 @@ import {
   DEFAULTS,
   SERVICE_EVENTS,
   MESSAGE_ID_PREFIX,
+  MESSAGE_KINDS,
   STREAM_INITIAL_SEQUENCE,
 } from '../utils/constants';
 
@@ -41,6 +42,7 @@ export default class MessageProcessor extends EventEmitter {
     this.typingTimer = null;
     this.isTypingActive = false;
     this.isThinkingActive = false;
+    this.isAwaitingReply = false;
     this.streams = new Map();
     this.recentIncomingTexts = [];
 
@@ -59,6 +61,10 @@ export default class MessageProcessor extends EventEmitter {
     this.pendingDeltas = new Map();
     this.nextExpectedSeq = STREAM_INITIAL_SEQUENCE;
     this.streamMessageEmitted = false;
+
+    if (streamId === null) {
+      this.isAwaitingReply = false;
+    }
   }
 
   /**
@@ -76,7 +82,11 @@ export default class MessageProcessor extends EventEmitter {
 
       switch (messageType) {
         case 'message':
-          this._processUserMessage(rawMessage);
+          if (rawMessage.message_kind === MESSAGE_KINDS.RATIONALE) {
+            this._processRationale(rawMessage);
+          } else {
+            this._processUserMessage(rawMessage);
+          }
           break;
         case 'stream_start':
           this._processStreamStart(rawMessage);
@@ -111,6 +121,10 @@ export default class MessageProcessor extends EventEmitter {
       if (!this._validateMessage(message)) {
         this.emit(SERVICE_EVENTS.ERROR, new Error('Invalid message format'));
         return;
+      }
+
+      if (message.direction === 'incoming') {
+        this.isAwaitingReply = false;
       }
 
       if (
@@ -470,6 +484,8 @@ export default class MessageProcessor extends EventEmitter {
       return;
     }
 
+    this.isAwaitingReply = false;
+
     if (this.isTypingActive || this.isThinkingActive) {
       this._stopTyping();
     }
@@ -609,6 +625,47 @@ export default class MessageProcessor extends EventEmitter {
   }
 
   /**
+   * Shows rationale text on the thinking indicator.
+   * Starts thinking (or keeps it on) and resets the typing timeout.
+   * @param {string} text Trimmed rationale text
+   */
+  showThinkingText(text) {
+    this._handleTypingIndicator({ from: 'ai-assistant' });
+    this.emit(SERVICE_EVENTS.THINKING_TEXT_CHANGED, text);
+  }
+
+  /**
+   * Applies a rationale payload as thinking text.
+   * A rationale is never queued or emitted as a chat message.
+   * @private
+   * @param {Object} raw
+   */
+  _processRationale(raw) {
+    if (!this.config.enableTypingIndicator) {
+      return;
+    }
+
+    const rawText = raw?.message?.text;
+    const text = typeof rawText === 'string' ? rawText.trim() : '';
+    if (!text) {
+      return;
+    }
+
+    const answerAlreadyStreaming =
+      this.activeStreamId && this.nextExpectedSeq > STREAM_INITIAL_SEQUENCE;
+    if (answerAlreadyStreaming) {
+      return;
+    }
+
+    const arrivedAfterAnswer = !this.isAwaitingReply && !this.isThinkingActive;
+    if (arrivedAfterAnswer) {
+      return;
+    }
+
+    this.showThinkingText(text);
+  }
+
+  /**
    * Handles typing indicator from server
    * Distinguishes between AI thinking and human typing
    * Allows typing indicator if stream started but no deltas received yet
@@ -652,6 +709,8 @@ export default class MessageProcessor extends EventEmitter {
    * @public
    */
   startTypingOnMessageSent() {
+    this.isAwaitingReply = true;
+
     if (!this.config.enableTypingIndicator) {
       return;
     }

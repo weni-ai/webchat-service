@@ -51,6 +51,7 @@ describe('StateManager', () => {
         context: '',
         isTyping: false,
         isThinking: false,
+        thinkingText: null,
         error: null,
       });
     });
@@ -525,6 +526,27 @@ describe('StateManager', () => {
       expect(handler).toHaveBeenCalledWith(true, false);
     });
 
+    it('setThinking(false) clears thinkingText in the same update', () => {
+      manager.setThinking(true);
+      manager.setThinkingText('Checking your order...');
+
+      manager.setThinking(false);
+
+      expect(manager.getState()).toMatchObject({
+        isThinking: false,
+        thinkingText: null,
+      });
+    });
+
+    it('setThinking(true) leaves an existing thinkingText in place', () => {
+      manager.setThinkingText('Checking your order...');
+
+      manager.setThinking(true);
+
+      expect(manager.get('isThinking')).toBe(true);
+      expect(manager.get('thinkingText')).toBe('Checking your order...');
+    });
+
     it('setting the same typing value twice skips the second per-key event', () => {
       manager.setTyping(true);
       const handler = jest.fn();
@@ -620,6 +642,7 @@ describe('StateManager', () => {
       manager.setContext('about');
       manager.setTyping(true);
       manager.setThinking(true);
+      manager.setThinkingText('Checking your order...');
       manager.setError('boom');
       manager.setConnectionStatus('connected', { reconnectAttempts: 4 });
     });
@@ -638,6 +661,7 @@ describe('StateManager', () => {
         context: '',
         isTyping: false,
         isThinking: false,
+        thinkingText: null,
         error: null,
       });
     });

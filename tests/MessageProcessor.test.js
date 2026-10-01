@@ -2,6 +2,7 @@ import MessageProcessor from '../src/core/MessageProcessor';
 import {
   SERVICE_EVENTS,
   MESSAGE_ID_PREFIX,
+  MESSAGE_KINDS,
   STREAM_INITIAL_SEQUENCE,
   DEFAULTS,
 } from '../src/utils/constants';
@@ -65,6 +66,7 @@ describe('MessageProcessor', () => {
       expect(processor.pendingDeltas.size).toBe(0);
       expect(processor.nextExpectedSeq).toBe(STREAM_INITIAL_SEQUENCE);
       expect(processor.streamMessageEmitted).toBe(false);
+      expect(processor.isAwaitingReply).toBe(false);
     });
 
     it('should initialize empty queue and streams', () => {
@@ -81,6 +83,7 @@ describe('MessageProcessor', () => {
       processor.pendingDeltas.set(1, 'content');
       processor.nextExpectedSeq = 5;
       processor.streamMessageEmitted = true;
+      processor.isAwaitingReply = true;
 
       processor._resetStreamState();
 
@@ -88,15 +91,19 @@ describe('MessageProcessor', () => {
       expect(processor.pendingDeltas.size).toBe(0);
       expect(processor.nextExpectedSeq).toBe(STREAM_INITIAL_SEQUENCE);
       expect(processor.streamMessageEmitted).toBe(false);
+      expect(processor.isAwaitingReply).toBe(false);
     });
 
     it('should reset state with provided streamId', () => {
+      processor.isAwaitingReply = true;
+
       processor._resetStreamState('new-stream-id');
 
       expect(processor.activeStreamId).toBe('new-stream-id');
       expect(processor.pendingDeltas.size).toBe(0);
       expect(processor.nextExpectedSeq).toBe(STREAM_INITIAL_SEQUENCE);
       expect(processor.streamMessageEmitted).toBe(false);
+      expect(processor.isAwaitingReply).toBe(true);
     });
   });
 
@@ -1893,6 +1900,189 @@ describe('MessageProcessor', () => {
 
       const streamData = processor.streams.get(MESSAGE_ID_PREFIX + 'ooo-test');
       expect(streamData.text).toBe('Hi !');
+    });
+  });
+
+  describe('rationale messages', () => {
+    const rationale = (text) => ({
+      type: 'message',
+      message_kind: MESSAGE_KINDS.RATIONALE,
+      from: 'agent',
+      message: { type: 'text', text },
+    });
+
+    it('does not queue a rationale or emit MESSAGE_PROCESSED', () => {
+      processor.startTypingOnMessageSent();
+
+      processor.process(rationale('Checking your order...'));
+
+      expect(processor.queue).toEqual([]);
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.anything(),
+      );
+    });
+
+    it('starts thinking and emits THINKING_TEXT_CHANGED with trimmed text', () => {
+      processor.startTypingOnMessageSent();
+
+      processor.process(rationale('  Checking your order...  '));
+
+      expect(processor.isThinkingActive).toBe(true);
+      expect(mockEmit).toHaveBeenCalledWith(SERVICE_EVENTS.THINKING_START);
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        'Checking your order...',
+      );
+    });
+
+    it('replaces the text and resets the timeout on a second rationale', () => {
+      processor.startTypingOnMessageSent();
+      processor.process(rationale('First'));
+      const firstTimer = processor.typingTimer;
+      const clearSpy = jest.spyOn(global, 'clearTimeout');
+
+      processor.process(rationale('Second'));
+
+      expect(clearSpy).toHaveBeenCalledWith(firstTimer);
+      expect(processor.typingTimer).not.toBe(firstTimer);
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        'Second',
+      );
+    });
+
+    it('still applies a rationale after stream_start before any delta', () => {
+      processor.startTypingOnMessageSent();
+      processor.process({ type: 'stream_start', id: 'stream-1' });
+
+      processor.process(rationale('Checking'));
+
+      expect(processor.isAwaitingReply).toBe(true);
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        'Checking',
+      );
+    });
+
+    it('drops a rationale once deltas have been received', () => {
+      processor.startTypingOnMessageSent();
+      processor.process({ type: 'stream_start', id: 'stream-1' });
+      processor.process({ v: 'Hi', seq: 1 });
+      mockEmit.mockClear();
+
+      processor.process(rationale('too late'));
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        expect.anything(),
+      );
+      expect(processor.queue).toEqual([]);
+    });
+
+    it('drops a rationale with empty text', () => {
+      processor.startTypingOnMessageSent();
+
+      processor.process(rationale('   '));
+      processor.process({
+        type: 'message',
+        message_kind: MESSAGE_KINDS.RATIONALE,
+        message: { type: 'text' },
+      });
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        expect.anything(),
+      );
+    });
+
+    it('drops a rationale when no reply is pending and thinking is off', () => {
+      expect(processor.isAwaitingReply).toBe(false);
+      expect(processor.isThinkingActive).toBe(false);
+
+      processor.process(rationale('Checking your order...'));
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        expect.anything(),
+      );
+    });
+
+    it('drops a rationale when the typing indicator is disabled', () => {
+      processor.config.enableTypingIndicator = false;
+      processor.startTypingOnMessageSent();
+
+      processor.process(rationale('Checking your order...'));
+
+      expect(processor.isAwaitingReply).toBe(true);
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        expect.anything(),
+      );
+    });
+
+    it('routes final_response and messages without a kind to _processUserMessage', () => {
+      const spy = jest.spyOn(processor, '_processUserMessage');
+
+      processor.process({
+        type: 'message',
+        message_kind: MESSAGE_KINDS.FINAL_RESPONSE,
+        message: { text: 'Done' },
+      });
+      processor.process({
+        type: 'message',
+        message: { text: 'Hello' },
+      });
+
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
+
+    it('clears the pending reply when an incoming message arrives', () => {
+      processor.startTypingOnMessageSent();
+      expect(processor.isAwaitingReply).toBe(true);
+
+      processor.process({
+        type: 'message',
+        message: { text: 'Here is the answer' },
+      });
+
+      expect(processor.isAwaitingReply).toBe(false);
+      mockEmit.mockClear();
+      processor.process(rationale('too late'));
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        expect.anything(),
+      );
+    });
+
+    it('clears the pending reply on stream_end', () => {
+      processor.startTypingOnMessageSent();
+
+      processor.process({
+        type: 'stream_end',
+        id: 'stream-1',
+        content: 'Done',
+      });
+
+      expect(processor.isAwaitingReply).toBe(false);
+    });
+
+    it('accepts a later rationale after the thinking timeout while a reply is pending', () => {
+      processor.startTypingOnMessageSent();
+      processor.process(rationale('First'));
+
+      jest.advanceTimersByTime(processor.config.typingTimeout);
+
+      expect(processor.isThinkingActive).toBe(false);
+      expect(processor.isAwaitingReply).toBe(true);
+
+      processor.process(rationale('Still working'));
+
+      expect(processor.isThinkingActive).toBe(true);
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        'Still working',
+      );
     });
   });
 });
