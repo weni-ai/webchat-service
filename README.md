@@ -430,9 +430,10 @@ The service distinguishes between two types of indicators:
 #### 🤖 **Thinking Indicator** (`thinking:start` / `thinking:stop` / `thinking:text:changed`)
 - Triggered when an **AI assistant** is processing a response
 - Activated when `typing_start` message has `from: 'ai-assistant'`
-- Also activated by an incoming message with `message_kind: "rationale"`. A rationale is not a chat message: it is not queued, added to state messages, or appended to the session conversation. It turns thinking on (or keeps it on) and sets `state.thinkingText` to the trimmed text.
+- Also activated by an incoming message with `message_kind: "rationale"`, and by a socket event `{ type: "stream_rationale", id, content, index? }` tied to the active stream. A rationale is not a chat message: it is not queued, added to state messages, or appended to the session conversation. It turns thinking on (or keeps it on) and sets `state.thinkingText` to the trimmed text.
 - `thinkingText` is cleared whenever thinking stops: on the first stream delta, on `stream_end`, on an incoming chat message, or when `typingTimeout` elapses.
 - A rationale is ignored when the typing indicator is disabled (`enableTypingIndicator: false`), its text is empty, the answer is already streaming, or it arrives after the reply is no longer pending and thinking is off.
+- A `stream_rationale` is ignored when its `id` does not match the active stream, when it arrives after the first answer delta, when `content` is blank, or when the typing indicator is disabled. If `stream_start` was missed, the event adopts that stream so the deltas that follow are applied.
 - Host code can set the same text with `service.setThinkingText(text)`. The call throws when `text` is not a non-empty string, then starts thinking and emits `thinking:text:changed`.
 - Auto-stops after `typingTimeout` (50s default) or when the answer is received
 - Template can choose to ignore these events if not needed
