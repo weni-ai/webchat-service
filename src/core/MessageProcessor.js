@@ -91,6 +91,9 @@ export default class MessageProcessor extends EventEmitter {
         case 'stream_start':
           this._processStreamStart(rawMessage);
           break;
+        case 'stream_rationale':
+          this._processStreamRationale(rawMessage);
+          break;
         case 'delta':
           this._processDelta(rawMessage);
           break;
@@ -286,8 +289,55 @@ export default class MessageProcessor extends EventEmitter {
       return;
     }
 
-    this._resetStreamState(messageId);
-    this.streams.set(messageId, { text: '', timestamp: Date.now() });
+    this._beginStream(messageId);
+  }
+
+  /**
+   * Records a stream as active with an empty buffer.
+   * Does not emit a chat message; the first delta emits the streaming bubble.
+   * @private
+   * @param {string} streamId Prefixed message id
+   */
+  _beginStream(streamId) {
+    this._resetStreamState(streamId);
+    this.streams.set(streamId, { text: '', timestamp: Date.now() });
+  }
+
+  /**
+   * Applies a stream_rationale payload as thinking text for its stream.
+   * A rationale is never queued or emitted as a chat message.
+   * If stream_start was missed, adopts the stream so later deltas are applied.
+   * @private
+   * @param {Object} raw - { type: 'stream_rationale', id: string, content: string, index?: number }
+   */
+  _processStreamRationale(raw) {
+    if (!this.config.enableTypingIndicator) {
+      return;
+    }
+
+    const text = typeof raw?.content === 'string' ? raw.content.trim() : '';
+    if (!text) {
+      return;
+    }
+
+    const streamId = this._getMessageIdFromRaw(raw);
+    if (!streamId) {
+      return;
+    }
+
+    if (this.activeStreamId && this.activeStreamId !== streamId) {
+      return;
+    }
+
+    if (!this.activeStreamId) {
+      this._beginStream(streamId);
+    }
+
+    if (this.nextExpectedSeq > STREAM_INITIAL_SEQUENCE) {
+      return;
+    }
+
+    this.showThinkingText(text);
   }
 
   /**

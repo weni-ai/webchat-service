@@ -206,6 +206,19 @@ describe('MessageProcessor', () => {
       expect(spy).toHaveBeenCalledWith(raw);
     });
 
+    it('should route stream_rationale to _processStreamRationale', () => {
+      const spy = jest.spyOn(processor, '_processStreamRationale');
+      const raw = {
+        type: 'stream_rationale',
+        id: 'stream-123',
+        content: 'Checking',
+      };
+
+      processor.process(raw);
+
+      expect(spy).toHaveBeenCalledWith(raw);
+    });
+
     it('should route delta messages to _processDelta', () => {
       const spy = jest.spyOn(processor, '_processDelta');
       const raw = { v: 'content', seq: 1 };
@@ -270,6 +283,11 @@ describe('MessageProcessor', () => {
         'stream_start',
         '_processStreamStart',
         { type: 'stream_start', id: 'x' },
+      ],
+      [
+        'stream_rationale',
+        '_processStreamRationale',
+        { type: 'stream_rationale', id: 'x', content: 'Checking' },
       ],
       ['delta', '_processDelta', { v: 'hi', seq: 1 }],
       ['stream_end', '_processStreamEnd', { type: 'stream_end', id: 'x' }],
@@ -2083,6 +2101,199 @@ describe('MessageProcessor', () => {
         SERVICE_EVENTS.THINKING_TEXT_CHANGED,
         'Still working',
       );
+    });
+  });
+
+  describe('stream_rationale', () => {
+    const streamRationale = (id, content, index) => ({
+      type: 'stream_rationale',
+      id,
+      content,
+      ...(index === undefined ? {} : { index }),
+    });
+
+    it('shows each rationale as thinking text until the first delta', () => {
+      processor.startTypingOnMessageSent();
+      jest.advanceTimersByTime(processor.config.typingDelay);
+      expect(mockEmit).toHaveBeenCalledWith(SERVICE_EVENTS.TYPING_START);
+      mockEmit.mockClear();
+
+      processor.process({ type: 'stream_start', id: 'stream-1' });
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.anything(),
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(SERVICE_EVENTS.THINKING_STOP);
+      expect(mockEmit).not.toHaveBeenCalledWith(SERVICE_EVENTS.TYPING_STOP);
+
+      processor.process(
+        streamRationale('stream-1', '  Vou consultar o status.  ', 1),
+      );
+      processor.process(streamRationale('stream-1', 'Aguardando o pedido.', 2));
+
+      expect(mockEmit).toHaveBeenCalledWith(SERVICE_EVENTS.THINKING_START);
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        'Vou consultar o status.',
+      );
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        'Aguardando o pedido.',
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.anything(),
+      );
+
+      mockEmit.mockClear();
+      processor.process({ v: 'Olá', seq: 1 });
+
+      const stopIndex = mockEmit.mock.calls.findIndex(
+        (call) => call[0] === SERVICE_EVENTS.THINKING_STOP,
+      );
+      const processedIndex = mockEmit.mock.calls.findIndex(
+        (call) => call[0] === SERVICE_EVENTS.MESSAGE_PROCESSED,
+      );
+      expect(stopIndex).toBeGreaterThanOrEqual(0);
+      expect(processedIndex).toBeGreaterThan(stopIndex);
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({
+          id: MESSAGE_ID_PREFIX + 'stream-1',
+          status: 'streaming',
+          text: '',
+        }),
+      );
+      expect(processor.streams.get(MESSAGE_ID_PREFIX + 'stream-1').text).toBe(
+        'Olá',
+      );
+
+      processor.process({
+        type: 'stream_end',
+        id: 'stream-1',
+        content: 'Olá',
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'stream-1',
+        expect.objectContaining({
+          text: 'Olá',
+          status: 'delivered',
+        }),
+      );
+    });
+
+    it('ignores a rationale whose id does not match the active stream', () => {
+      processor.process({ type: 'stream_start', id: 'stream-1' });
+      mockEmit.mockClear();
+
+      processor.process(streamRationale('other-stream', 'stale'));
+
+      expect(processor.activeStreamId).toBe(MESSAGE_ID_PREFIX + 'stream-1');
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        expect.anything(),
+      );
+    });
+
+    it('ignores a rationale after the first delta', () => {
+      processor.process({ type: 'stream_start', id: 'stream-1' });
+      processor.process({ v: 'Hi', seq: 1 });
+      mockEmit.mockClear();
+
+      processor.process(streamRationale('stream-1', 'too late'));
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        expect.anything(),
+      );
+    });
+
+    it('adopts a stream when stream_start was missed', () => {
+      processor.process(streamRationale('adopted', 'Checking'));
+
+      expect(processor.activeStreamId).toBe(MESSAGE_ID_PREFIX + 'adopted');
+      expect(processor.nextExpectedSeq).toBe(STREAM_INITIAL_SEQUENCE);
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        'Checking',
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.anything(),
+      );
+
+      processor.process({ v: 'Hello', seq: 1 });
+      processor.process({ v: ' world', seq: 2 });
+
+      const processed = mockEmit.mock.calls.filter(
+        (call) => call[0] === SERVICE_EVENTS.MESSAGE_PROCESSED,
+      );
+      expect(processed).toHaveLength(1);
+      expect(processed[0][1]).toEqual(
+        expect.objectContaining({
+          id: MESSAGE_ID_PREFIX + 'adopted',
+          status: 'streaming',
+        }),
+      );
+      expect(processor.streams.get(MESSAGE_ID_PREFIX + 'adopted').text).toBe(
+        'Hello world',
+      );
+
+      processor.process({
+        type: 'stream_end',
+        id: 'adopted',
+        content: 'Hello world',
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'adopted',
+        expect.objectContaining({
+          text: 'Hello world',
+          status: 'delivered',
+        }),
+      );
+      expect(processor.activeStreamId).toBeNull();
+    });
+
+    it('ignores a rationale without an id', () => {
+      processor.process({ type: 'stream_rationale', content: 'Checking' });
+
+      expect(processor.activeStreamId).toBeNull();
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        expect.anything(),
+      );
+    });
+
+    it('ignores blank content', () => {
+      processor.process({ type: 'stream_start', id: 'stream-1' });
+      mockEmit.mockClear();
+
+      processor.process(streamRationale('stream-1', '   '));
+      processor.process(streamRationale('stream-1', ''));
+      processor.process({ type: 'stream_rationale', id: 'stream-1' });
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        expect.anything(),
+      );
+    });
+
+    it('ignores every rationale when the typing indicator is disabled', () => {
+      processor.config.enableTypingIndicator = false;
+
+      processor.process(streamRationale('stream-1', 'Checking'));
+
+      expect(processor.activeStreamId).toBeNull();
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.THINKING_TEXT_CHANGED,
+        expect.anything(),
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(SERVICE_EVENTS.THINKING_START);
     });
   });
 });

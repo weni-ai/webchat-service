@@ -160,6 +160,17 @@ export interface WebSocketMessage {
 }
 
 /**
+ * Socket event sent before the first answer delta of a stream.
+ * Shown as thinking text; not stored as a chat message.
+ */
+export interface StreamRationaleMessage {
+  type: 'stream_rationale'
+  id: string
+  content: string
+  index?: number
+}
+
+/**
  * Product data for PDP conversation starters request
  */
 export interface StartersData {
