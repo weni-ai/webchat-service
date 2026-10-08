@@ -359,6 +359,8 @@ export interface AddToCartItem {
   id: string
   seller: string
   quantity?: number
+  /** Product image URL copied onto the order message thumbnail */
+  image?: string
 }
 
 export interface AddProductToCartProps {
