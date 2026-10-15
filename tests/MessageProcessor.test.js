@@ -660,6 +660,24 @@ describe('MessageProcessor', () => {
       );
     });
 
+    it('should unescape JSON-escaped slashes in stream_end content URLs', () => {
+      processor._processStreamEnd({
+        type: 'stream_end',
+        id: 'stream-123',
+        content:
+          'https:\\/\\/shop.example.com\\/catalog\\/uniforms\\/14\\/boys\\/early-years\\/school?map=category,size,gender,grade,school',
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'stream-123',
+        expect.objectContaining({
+          text: 'https://shop.example.com/catalog/uniforms/14/boys/early-years/school?map=category,size,gender,grade,school',
+          status: 'delivered',
+        }),
+      );
+    });
+
     it('should use stream_end content over accumulated stream text when provided', () => {
       processor._processStreamEnd({
         type: 'stream_end',
@@ -1366,6 +1384,21 @@ describe('MessageProcessor', () => {
         direction: 'incoming',
         status: 'delivered',
       });
+    });
+
+    it('should unescape JSON-escaped slashes inside URLs in text', () => {
+      const raw = {
+        type: 'message',
+        message: {
+          text: 'https:\\/\\/shop.example.com\\/catalog\\/uniforms\\/14\\/boys\\/early-years\\/school?map=category,size,gender,grade,school',
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.text).toBe(
+        'https://shop.example.com/catalog/uniforms/14/boys/early-years/school?map=category,size,gender,grade,school',
+      );
     });
 
     it('should normalize message with media', () => {
