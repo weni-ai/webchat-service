@@ -402,6 +402,24 @@ describe('HistoryManager', () => {
       });
     });
 
+    it('should unescape JSON-escaped slashes inside URLs in history text', () => {
+      const result = historyManager.processHistory([
+        {
+          ID: 'msg-url',
+          timestamp: 1700000000,
+          direction: 'in',
+          message: {
+            type: 'text',
+            text: 'https:\\/\\/www.uniformeasy.com.br\\/colegio-franco\\/14\\/masculino\\/fundamental-anos-iniciais\\/franco?map=category-1,tamanho,genero,serie,colegio',
+          },
+        },
+      ]);
+
+      expect(result[0].text).toBe(
+        'https://www.uniformeasy.com.br/colegio-franco/14/masculino/fundamental-anos-iniciais/franco?map=category-1,tamanho,genero,serie,colegio',
+      );
+    });
+
     it('should normalize direction "out" to "outgoing"', () => {
       const rawHistory = [
         {

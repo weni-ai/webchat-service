@@ -4,6 +4,7 @@ import {
   generateMessageId,
   isJsonObject,
   shouldIgnoreJsonObjectPayload,
+  unescapeEscapedUrlSlashes,
 } from '../utils/helpers';
 import {
   DEFAULTS,
@@ -213,7 +214,7 @@ export default class MessageProcessor extends EventEmitter {
     };
 
     if (raw.message && raw.message.text) {
-      message.text = raw.message.text;
+      message.text = unescapeEscapedUrlSlashes(raw.message.text);
     }
 
     if (raw.message && raw.message.media) {
@@ -223,7 +224,7 @@ export default class MessageProcessor extends EventEmitter {
     }
 
     if (typeof raw.message?.caption === 'string') {
-      message.caption = raw.message.caption;
+      message.caption = unescapeEscapedUrlSlashes(raw.message.caption);
     }
 
     if (raw.message && raw.message.quick_replies) {
@@ -237,7 +238,10 @@ export default class MessageProcessor extends EventEmitter {
     const CTAMessage = raw.message?.cta_message;
 
     if (CTAMessage?.url && CTAMessage?.display_text) {
-      message.cta_message = CTAMessage;
+      message.cta_message = {
+        ...CTAMessage,
+        url: unescapeEscapedUrlSlashes(CTAMessage.url),
+      };
     }
 
     if (raw.metadata) {
@@ -248,7 +252,7 @@ export default class MessageProcessor extends EventEmitter {
 
     if (interactive?.type === 'product_list') {
       message.product_list = {
-        text: raw.message.text,
+        text: message.text,
         buttonText: interactive.action?.name,
         sections: interactive.action?.sections,
       };
@@ -256,17 +260,17 @@ export default class MessageProcessor extends EventEmitter {
 
     if (interactive?.type === 'product_carousel') {
       message.product_carousel = {
-        text: raw.message.text,
+        text: message.text,
         product_items: interactive.action?.product_items,
       };
     }
 
     if (interactive?.header) {
-      message.header = interactive.header.text;
+      message.header = unescapeEscapedUrlSlashes(interactive.header.text);
     }
 
     if (interactive?.footer) {
-      message.footer = interactive.footer.text;
+      message.footer = unescapeEscapedUrlSlashes(interactive.footer.text);
     }
 
     return message;
@@ -506,7 +510,7 @@ export default class MessageProcessor extends EventEmitter {
     if (!current) return;
 
     const timestamp = Date.now();
-    const mergedText = current.text + content;
+    const mergedText = unescapeEscapedUrlSlashes(current.text + content);
     this.streams.set(streamId, { text: mergedText, timestamp });
 
     this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
@@ -543,11 +547,13 @@ export default class MessageProcessor extends EventEmitter {
     const streamData = this.streams.get(messageId);
     const contentIsLeakedJson =
       typeof raw.content === 'string' && isJsonObject(raw.content);
-    const finalText = contentIsLeakedJson
-      ? streamData?.text || ''
-      : typeof raw.content === 'string'
-        ? raw.content
-        : streamData?.text || '';
+    const finalText = unescapeEscapedUrlSlashes(
+      contentIsLeakedJson
+        ? streamData?.text || ''
+        : typeof raw.content === 'string'
+          ? raw.content
+          : streamData?.text || '',
+    );
 
     const now = Date.now();
 

@@ -405,6 +405,44 @@ describe('Helpers', () => {
     });
   });
 
+  describe('unescapeEscapedUrlSlashes', () => {
+    const escapedUniformEasyUrl =
+      'https:\\/\\/www.uniformeasy.com.br\\/colegio-franco\\/14\\/masculino\\/fundamental-anos-iniciais\\/franco?map=category-1,tamanho,genero,serie,colegio';
+    const normalizedUniformEasyUrl =
+      'https://www.uniformeasy.com.br/colegio-franco/14/masculino/fundamental-anos-iniciais/franco?map=category-1,tamanho,genero,serie,colegio';
+
+    it('should unescape JSON-escaped slashes inside http(s) URLs', () => {
+      expect(helpers.unescapeEscapedUrlSlashes(escapedUniformEasyUrl)).toBe(
+        normalizedUniformEasyUrl,
+      );
+    });
+
+    it('should leave already-valid URLs unchanged', () => {
+      expect(helpers.unescapeEscapedUrlSlashes(normalizedUniformEasyUrl)).toBe(
+        normalizedUniformEasyUrl,
+      );
+    });
+
+    it('should unescape URLs inside surrounding text', () => {
+      expect(
+        helpers.unescapeEscapedUrlSlashes(
+          `Confira o uniforme em ${escapedUniformEasyUrl} agora`,
+        ),
+      ).toBe(`Confira o uniforme em ${normalizedUniformEasyUrl} agora`);
+    });
+
+    it('should leave escaped slashes that are not part of a URL', () => {
+      expect(helpers.unescapeEscapedUrlSlashes('path\\/to\\/file')).toBe(
+        'path\\/to\\/file',
+      );
+    });
+
+    it('should return non-string values unchanged', () => {
+      expect(helpers.unescapeEscapedUrlSlashes(undefined)).toBeUndefined();
+      expect(helpers.unescapeEscapedUrlSlashes(42)).toBe(42);
+    });
+  });
+
   describe('isJsonObject', () => {
     it('should detect a JSON object', () => {
       expect(helpers.isJsonObject({ foo: 'bar' })).toBe(true);

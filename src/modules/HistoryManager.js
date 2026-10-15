@@ -1,5 +1,6 @@
 import EventEmitter from 'eventemitter3';
 import { SERVICE_EVENTS } from '../utils/constants';
+import { unescapeEscapedUrlSlashes } from '../utils/helpers';
 
 /**
  * @class HistoryManager
@@ -129,12 +130,12 @@ export default class HistoryManager extends EventEmitter {
       };
 
       if (item.message?.type === 'text') {
-        message.text = item.message.text;
+        message.text = unescapeEscapedUrlSlashes(item.message.text);
       }
 
       if (item.message?.media_url) {
         message.media = item.message.media_url;
-        message.caption = item.message.caption;
+        message.caption = unescapeEscapedUrlSlashes(item.message.caption);
       }
 
       if (item.message?.quick_replies) {
@@ -147,14 +148,14 @@ export default class HistoryManager extends EventEmitter {
 
       if (item.message?.type === 'interactive') {
         const { interactive } = item.message;
-        message.text = item.message.text;
+        message.text = unescapeEscapedUrlSlashes(item.message.text);
 
         if (interactive?.header) {
-          message.header = interactive.header.text;
+          message.header = unescapeEscapedUrlSlashes(interactive.header.text);
         }
 
         if (interactive?.footer) {
-          message.footer = interactive.footer.text;
+          message.footer = unescapeEscapedUrlSlashes(interactive.footer.text);
         }
 
         if (interactive?.type === 'product_list') {

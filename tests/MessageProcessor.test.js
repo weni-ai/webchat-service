@@ -660,6 +660,24 @@ describe('MessageProcessor', () => {
       );
     });
 
+    it('should unescape JSON-escaped slashes in stream_end content URLs', () => {
+      processor._processStreamEnd({
+        type: 'stream_end',
+        id: 'stream-123',
+        content:
+          'https:\\/\\/www.uniformeasy.com.br\\/colegio-franco\\/14\\/masculino\\/fundamental-anos-iniciais\\/franco?map=category-1,tamanho,genero,serie,colegio',
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'stream-123',
+        expect.objectContaining({
+          text: 'https://www.uniformeasy.com.br/colegio-franco/14/masculino/fundamental-anos-iniciais/franco?map=category-1,tamanho,genero,serie,colegio',
+          status: 'delivered',
+        }),
+      );
+    });
+
     it('should use stream_end content over accumulated stream text when provided', () => {
       processor._processStreamEnd({
         type: 'stream_end',
@@ -1366,6 +1384,21 @@ describe('MessageProcessor', () => {
         direction: 'incoming',
         status: 'delivered',
       });
+    });
+
+    it('should unescape JSON-escaped slashes inside URLs in text', () => {
+      const raw = {
+        type: 'message',
+        message: {
+          text: 'https:\\/\\/www.uniformeasy.com.br\\/colegio-franco\\/14\\/masculino\\/fundamental-anos-iniciais\\/franco?map=category-1,tamanho,genero,serie,colegio',
+        },
+      };
+
+      const normalized = processor._normalizeMessage(raw);
+
+      expect(normalized.text).toBe(
+        'https://www.uniformeasy.com.br/colegio-franco/14/masculino/fundamental-anos-iniciais/franco?map=category-1,tamanho,genero,serie,colegio',
+      );
     });
 
     it('should normalize message with media', () => {
