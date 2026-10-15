@@ -406,29 +406,29 @@ describe('Helpers', () => {
   });
 
   describe('unescapeEscapedUrlSlashes', () => {
-    const escapedUniformEasyUrl =
-      'https:\\/\\/www.uniformeasy.com.br\\/colegio-franco\\/14\\/masculino\\/fundamental-anos-iniciais\\/franco?map=category-1,tamanho,genero,serie,colegio';
-    const normalizedUniformEasyUrl =
-      'https://www.uniformeasy.com.br/colegio-franco/14/masculino/fundamental-anos-iniciais/franco?map=category-1,tamanho,genero,serie,colegio';
+    const escapedCatalogUrl =
+      'https:\\/\\/shop.example.com\\/catalog\\/uniforms\\/14\\/boys\\/early-years\\/school?map=category,size,gender,grade,school';
+    const normalizedCatalogUrl =
+      'https://shop.example.com/catalog/uniforms/14/boys/early-years/school?map=category,size,gender,grade,school';
 
     it('should unescape JSON-escaped slashes inside http(s) URLs', () => {
-      expect(helpers.unescapeEscapedUrlSlashes(escapedUniformEasyUrl)).toBe(
-        normalizedUniformEasyUrl,
+      expect(helpers.unescapeEscapedUrlSlashes(escapedCatalogUrl)).toBe(
+        normalizedCatalogUrl,
       );
     });
 
     it('should leave already-valid URLs unchanged', () => {
-      expect(helpers.unescapeEscapedUrlSlashes(normalizedUniformEasyUrl)).toBe(
-        normalizedUniformEasyUrl,
+      expect(helpers.unescapeEscapedUrlSlashes(normalizedCatalogUrl)).toBe(
+        normalizedCatalogUrl,
       );
     });
 
     it('should unescape URLs inside surrounding text', () => {
       expect(
         helpers.unescapeEscapedUrlSlashes(
-          `Confira o uniforme em ${escapedUniformEasyUrl} agora`,
+          `See the catalog at ${escapedCatalogUrl} now`,
         ),
-      ).toBe(`Confira o uniforme em ${normalizedUniformEasyUrl} agora`);
+      ).toBe(`See the catalog at ${normalizedCatalogUrl} now`);
     });
 
     it('should leave escaped slashes that are not part of a URL', () => {

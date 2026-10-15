@@ -410,13 +410,13 @@ describe('HistoryManager', () => {
           direction: 'in',
           message: {
             type: 'text',
-            text: 'https:\\/\\/www.uniformeasy.com.br\\/colegio-franco\\/14\\/masculino\\/fundamental-anos-iniciais\\/franco?map=category-1,tamanho,genero,serie,colegio',
+            text: 'https:\\/\\/shop.example.com\\/catalog\\/uniforms\\/14\\/boys\\/early-years\\/school?map=category,size,gender,grade,school',
           },
         },
       ]);
 
       expect(result[0].text).toBe(
-        'https://www.uniformeasy.com.br/colegio-franco/14/masculino/fundamental-anos-iniciais/franco?map=category-1,tamanho,genero,serie,colegio',
+        'https://shop.example.com/catalog/uniforms/14/boys/early-years/school?map=category,size,gender,grade,school',
       );
     });
 

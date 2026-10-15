@@ -665,14 +665,14 @@ describe('MessageProcessor', () => {
         type: 'stream_end',
         id: 'stream-123',
         content:
-          'https:\\/\\/www.uniformeasy.com.br\\/colegio-franco\\/14\\/masculino\\/fundamental-anos-iniciais\\/franco?map=category-1,tamanho,genero,serie,colegio',
+          'https:\\/\\/shop.example.com\\/catalog\\/uniforms\\/14\\/boys\\/early-years\\/school?map=category,size,gender,grade,school',
       });
 
       expect(mockEmit).toHaveBeenCalledWith(
         SERVICE_EVENTS.MESSAGE_UPDATED,
         MESSAGE_ID_PREFIX + 'stream-123',
         expect.objectContaining({
-          text: 'https://www.uniformeasy.com.br/colegio-franco/14/masculino/fundamental-anos-iniciais/franco?map=category-1,tamanho,genero,serie,colegio',
+          text: 'https://shop.example.com/catalog/uniforms/14/boys/early-years/school?map=category,size,gender,grade,school',
           status: 'delivered',
         }),
       );
@@ -1390,14 +1390,14 @@ describe('MessageProcessor', () => {
       const raw = {
         type: 'message',
         message: {
-          text: 'https:\\/\\/www.uniformeasy.com.br\\/colegio-franco\\/14\\/masculino\\/fundamental-anos-iniciais\\/franco?map=category-1,tamanho,genero,serie,colegio',
+          text: 'https:\\/\\/shop.example.com\\/catalog\\/uniforms\\/14\\/boys\\/early-years\\/school?map=category,size,gender,grade,school',
         },
       };
 
       const normalized = processor._normalizeMessage(raw);
 
       expect(normalized.text).toBe(
-        'https://www.uniformeasy.com.br/colegio-franco/14/masculino/fundamental-anos-iniciais/franco?map=category-1,tamanho,genero,serie,colegio',
+        'https://shop.example.com/catalog/uniforms/14/boys/early-years/school?map=category,size,gender,grade,school',
       );
     });
 
