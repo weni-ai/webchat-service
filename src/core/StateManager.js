@@ -29,6 +29,7 @@ export default class StateManager extends EventEmitter {
       context: '',
       isTyping: false,
       isThinking: false,
+      thinkingText: null,
       error: null,
     };
   }
@@ -161,11 +162,25 @@ export default class StateManager extends EventEmitter {
   }
 
   /**
-   * Sets thinking indicator
+   * Sets thinking indicator.
+   * Stopping thinking also clears the rationale text in the same update.
    * @param {boolean} isThinking
    */
   setThinking(isThinking) {
-    this.setState({ isThinking });
+    if (isThinking) {
+      this.setState({ isThinking: true });
+      return;
+    }
+
+    this.setState({ isThinking: false, thinkingText: null });
+  }
+
+  /**
+   * Sets the rationale text shown while thinking
+   * @param {string|null} text
+   */
+  setThinkingText(text) {
+    this.setState({ thinkingText: text });
   }
 
   /**
@@ -200,6 +215,7 @@ export default class StateManager extends EventEmitter {
       context: '',
       isTyping: false,
       isThinking: false,
+      thinkingText: null,
       error: null,
     };
 

@@ -200,6 +200,22 @@ export async function retry(fn, retries = 3, delay = 1000) {
   }
 }
 
+const HTTP_URL_TOKEN = /https?:(?:\/\/|\\\/\\\/)[^\s<>"']+/gi;
+
+/**
+ * Replaces JSON-escaped slashes (`\/`) inside http(s) URL tokens.
+ * Leaves the rest of the text unchanged, including `\/` outside URLs.
+ * @param {unknown} text
+ * @returns {unknown}
+ */
+export function unescapeEscapedUrlSlashes(text) {
+  if (typeof text !== 'string' || !text.includes('\\/')) {
+    return text;
+  }
+
+  return text.replace(HTTP_URL_TOKEN, (url) => url.replace(/\\\//g, '/'));
+}
+
 /**
  * Returns true when a value is a JSON object (parsed from string or already an object).
  * Arrays and primitives are not treated as JSON objects.

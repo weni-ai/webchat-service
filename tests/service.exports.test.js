@@ -5,6 +5,7 @@ import WeniWebchatService, {
   ALLOWED_AUDIO_TYPES,
   ALLOWED_DOCUMENT_TYPES,
   MESSAGE_TYPES,
+  MESSAGE_KINDS,
   MESSAGE_STATUS,
   MESSAGE_DIRECTIONS,
   CONNECTION_STATUS,
@@ -29,6 +30,7 @@ describe('WeniWebchatService — public surface', () => {
       ['ALLOWED_AUDIO_TYPES', 'ALLOWED_AUDIO_TYPES'],
       ['ALLOWED_DOCUMENT_TYPES', 'ALLOWED_DOCUMENT_TYPES'],
       ['MESSAGE_TYPES', 'MESSAGE_TYPES'],
+      ['MESSAGE_KINDS', 'MESSAGE_KINDS'],
       ['MESSAGE_STATUS', 'MESSAGE_STATUS'],
       ['MESSAGE_DIRECTIONS', 'MESSAGE_DIRECTIONS'],
       ['CONNECTION_STATUS', 'CONNECTION_STATUS'],
@@ -73,6 +75,10 @@ describe('WeniWebchatService — public surface', () => {
 
     it('re-exports MESSAGE_TYPES identical to constants', () => {
       expect(MESSAGE_TYPES).toBe(Constants.MESSAGE_TYPES);
+    });
+
+    it('re-exports MESSAGE_KINDS identical to constants', () => {
+      expect(MESSAGE_KINDS).toBe(Constants.MESSAGE_KINDS);
     });
 
     it('re-exports MESSAGE_STATUS identical to constants', () => {
@@ -138,6 +144,7 @@ describe('WeniWebchatService — public surface', () => {
         'getContext',
         'setCustomField',
         'getState',
+        'setThinkingText',
         'getSession',
         'getMessages',
         'getSessionId',

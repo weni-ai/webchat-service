@@ -534,6 +534,30 @@ describe('validators', () => {
       ]);
     });
 
+    it('keeps a product image URL on each item', () => {
+      expect(
+        normalizeAddToCartItems({
+          items: [
+            {
+              id: 'sku-1',
+              seller: 'seller-1',
+              quantity: 2,
+              image: ' https://cdn.example/shoe.webp ',
+            },
+            { id: 'sku-2', seller: 'seller-1', image: '   ' },
+          ],
+        }),
+      ).toEqual([
+        {
+          id: 'sku-1',
+          seller: 'seller-1',
+          image: 'https://cdn.example/shoe.webp',
+          quantity: 2,
+        },
+        { id: 'sku-2', seller: 'seller-1' },
+      ]);
+    });
+
     it('wraps the legacy single-item shape', () => {
       expect(
         normalizeAddToCartItems({

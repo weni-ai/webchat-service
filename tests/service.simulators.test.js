@@ -1,4 +1,4 @@
-import WeniWebchatService from '../src/index';
+import WeniWebchatService, { SERVICE_EVENTS } from '../src/index';
 import { installBrowserMocks, makeConfig } from './_helpers/serviceMocks';
 
 describe('WeniWebchatService — local simulators', () => {
@@ -56,6 +56,60 @@ describe('WeniWebchatService — local simulators', () => {
       });
 
       expect(processSpy.mock.calls[0][0].persisted).toBe(true);
+    });
+
+    it('stores rationale text on state and does not append a chat message', () => {
+      jest.useFakeTimers();
+      const listener = jest.fn();
+      service.on(SERVICE_EVENTS.THINKING_TEXT_CHANGED, listener);
+      service.messageProcessor.startTypingOnMessageSent();
+
+      service.simulateMessageReceived({
+        type: 'message',
+        message_kind: 'rationale',
+        from: 'agent',
+        message: { type: 'text', text: '  Checking your order...  ' },
+      });
+
+      expect(service.getState().thinkingText).toBe('Checking your order...');
+      expect(service.getState().isThinking).toBe(true);
+      expect(service.getMessages()).toEqual([]);
+      expect(service.session.getConversation()).toEqual([]);
+      expect(listener).toHaveBeenCalledWith('Checking your order...');
+      jest.useRealTimers();
+    });
+  });
+
+  describe('setThinkingText()', () => {
+    it('throws when text is missing, blank, or not a string', () => {
+      expect(() => service.setThinkingText('')).toThrow(
+        'Thinking text is required',
+      );
+      expect(() => service.setThinkingText('   ')).toThrow(
+        'Thinking text is required',
+      );
+      expect(() => service.setThinkingText(null)).toThrow(
+        'Thinking text is required',
+      );
+      expect(() => service.setThinkingText(undefined)).toThrow(
+        'Thinking text is required',
+      );
+      expect(() => service.setThinkingText(1)).toThrow(
+        'Thinking text is required',
+      );
+    });
+
+    it('sets state.thinkingText and emits thinking:text:changed', () => {
+      jest.useFakeTimers();
+      const listener = jest.fn();
+      service.on(SERVICE_EVENTS.THINKING_TEXT_CHANGED, listener);
+
+      service.setThinkingText('  Looking that up  ');
+
+      expect(service.getState().thinkingText).toBe('Looking that up');
+      expect(service.getState().isThinking).toBe(true);
+      expect(listener).toHaveBeenCalledWith('Looking that up');
+      jest.useRealTimers();
     });
   });
 

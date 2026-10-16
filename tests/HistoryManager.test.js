@@ -402,6 +402,24 @@ describe('HistoryManager', () => {
       });
     });
 
+    it('should unescape JSON-escaped slashes inside URLs in history text', () => {
+      const result = historyManager.processHistory([
+        {
+          ID: 'msg-url',
+          timestamp: 1700000000,
+          direction: 'in',
+          message: {
+            type: 'text',
+            text: 'https:\\/\\/shop.example.com\\/catalog\\/uniforms\\/14\\/boys\\/early-years\\/school?map=category,size,gender,grade,school',
+          },
+        },
+      ]);
+
+      expect(result[0].text).toBe(
+        'https://shop.example.com/catalog/uniforms/14/boys/early-years/school?map=category,size,gender,grade,school',
+      );
+    });
+
     it('should normalize direction "out" to "outgoing"', () => {
       const rawHistory = [
         {

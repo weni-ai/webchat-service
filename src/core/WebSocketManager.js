@@ -242,7 +242,7 @@ export default class WebSocketManager extends EventEmitter {
    * @param {Object} props
    * @param {string} props.VTEXAccountName
    * @param {string} props.orderFormId
-   * @param {Array<{ id: string, seller: string, quantity?: number }>} [props.items]
+   * @param {Array<{ id: string, seller: string, quantity?: number, image?: string }>} [props.items]
    * @param {string} [props.seller]
    * @param {string} [props.id]
    * @param {number} [props.quantity]

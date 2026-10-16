@@ -204,12 +204,19 @@ export function normalizeSendUtmData(data) {
   return { vtex_account, order_form_id, utm_source };
 }
 
+function productImage(item) {
+  if (typeof item?.image !== 'string') return undefined;
+  const image = item.image.trim();
+  return image || undefined;
+}
+
 /**
  * Normalizes add-to-cart items from the batch `items` shape or the legacy
  * single-item `{ id, seller, quantity? }` shape.
+ * A non-empty `image` is kept so the order thumbnail can use it.
  *
  * @param {Object} props
- * @returns {Array<{ id: string, seller: string, quantity?: number }>}
+ * @returns {Array<{ id: string, seller: string, quantity?: number, image?: string }>}
  * @throws {Error}
  */
 export function normalizeAddToCartItems(props) {
@@ -238,6 +245,8 @@ export function normalizeAddToCartItems(props) {
       }
 
       const normalized = { id: item.id, seller: item.seller };
+      const image = productImage(item);
+      if (image) normalized.image = image;
 
       if (item.quantity !== undefined) {
         if (
@@ -263,6 +272,8 @@ export function normalizeAddToCartItems(props) {
   }
 
   const item = { id, seller };
+  const image = productImage(props);
+  if (image) item.image = image;
 
   if (quantity !== undefined) {
     if (

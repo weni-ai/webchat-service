@@ -120,6 +120,7 @@ export interface ChatState {
   connection: ConnectionState
   context: string
   isTyping: boolean
+  thinkingText: string | null
   error?: Error | null
 }
 
@@ -156,6 +157,17 @@ export interface WebSocketMessage {
   callback?: string
   token?: string
   trigger?: string
+}
+
+/**
+ * Socket event sent before the first answer delta of a stream.
+ * Shown as thinking text; not stored as a chat message.
+ */
+export interface StreamRationaleMessage {
+  type: 'stream_rationale'
+  id: string
+  content: string
+  index?: number
 }
 
 /**
@@ -347,6 +359,8 @@ export interface AddToCartItem {
   id: string
   seller: string
   quantity?: number
+  /** Product image URL copied onto the order message thumbnail */
+  image?: string
 }
 
 export interface AddProductToCartProps {
@@ -421,6 +435,11 @@ export default class WeniWebchatService {
 
   // State
   getState(): ChatState
+  /**
+   * Shows rationale text on the thinking indicator and emits `thinking:text:changed`.
+   * Throws when `text` is not a non-empty string.
+   */
+  setThinkingText(text: string): void
   getMessages(): Message[]
   getSessionId(): string | null
   getConnectionStatus(): string
@@ -455,6 +474,7 @@ export default class WeniWebchatService {
   // Static constants
   static ALLOWED_FILE_TYPES: string[]
   static MESSAGE_TYPES: Record<string, MessageType>
+  static MESSAGE_KINDS: { RATIONALE: 'rationale'; FINAL_RESPONSE: 'final_response' }
   static MESSAGE_STATUS: Record<string, string>
   static MESSAGE_DIRECTIONS: Record<string, string>
   static CONNECTION_STATUS: Record<string, string>
@@ -468,6 +488,7 @@ export default class WeniWebchatService {
 // Named exports for constants
 export const ALLOWED_FILE_TYPES: string[]
 export const MESSAGE_TYPES: Record<string, MessageType>
+export const MESSAGE_KINDS: { RATIONALE: 'rationale'; FINAL_RESPONSE: 'final_response' }
 export const MESSAGE_STATUS: Record<string, string>
 export const MESSAGE_DIRECTIONS: Record<string, string>
 export const CONNECTION_STATUS: Record<string, string>
