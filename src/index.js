@@ -1103,14 +1103,24 @@ export default class WeniWebchatService extends EventEmitter {
       if (this._latestStartersFingerprint !== null) {
         this._latestStartersFingerprint = null;
         this.emit(SERVICE_EVENTS.STARTERS_RECEIVED, data);
+        return;
       }
+      this.emit(SERVICE_EVENTS.STARTERS_DISCARDED, {
+        reason: 'stale_fingerprint',
+        data,
+      });
     });
 
     this.websocket.on(SERVICE_EVENTS.STARTERS_ERROR, (data) => {
       if (this._latestStartersFingerprint !== null) {
         this._latestStartersFingerprint = null;
         this.emit(SERVICE_EVENTS.STARTERS_ERROR, data);
+        return;
       }
+      this.emit(SERVICE_EVENTS.STARTERS_DISCARDED, {
+        reason: 'stale_fingerprint',
+        data,
+      });
     });
 
     this.websocket.on(SERVICE_EVENTS.VOICE_ENABLED, () => {
