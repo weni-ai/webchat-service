@@ -1,39 +1,28 @@
 <!--
   SYNC IMPACT REPORT
   ==================
-  Version change: 1.0.0 → 2.0.0 (MAJOR: principles redefined and renumbered
-  to adopt the VTEX CX engineering + frontend base constitutions)
+  Version change: 2.0.0 → 2.1.0 (MINOR: re-sync with the engineering base
+  constitution, which adds an engineering-origin path to Specification
+  Traceability; every spec compliant with 2.0.0 remains compliant)
 
   Modified principles:
-    - I. Clear, Idiomatic JavaScript Modules → split into IX. Code as
-      Documentation, X. Type Safety (TypeScript-first, redefined),
-      XI. Single Responsibility (350-line SHOULD added; 500-line MUST kept)
-    - II. WebSocket Contract & Configuration Discipline → XIV. WebSocket
-      Contract & Data Boundaries (adds camelCase normalization at adapters)
-    - III. Security & Least Privilege → VII. Security & Secrets (adds
-      runtime injection and dependency vulnerability checks)
-    - IV. Test-First Quality Gates → Quality Standards / Testing (adds
-      colocation and behavior-focused rules)
-    - V. Resilience & Error Handling → VIII. Observability +
-      XVI. Resilience & Error Handling
-    - VI. Release & Package Distribution → IV. Versioned Public Contracts +
-      V. Release & Changelog Maintenance
-  Added principles:
-    - I. Version Control and Review
-    - II. Specification Traceability
-    - III. No Silent Divergence
-    - VI. Commit Messages
-    - XII. Naming Conventions
-    - XIII. Module & Public API Architecture
-    - XV. State Management & Async Correctness
-  Added sections:
-    - Quality Standards (Testing, Accessibility, Performance,
-      Internationalization, Defensive Programming, Maintainability)
-    - UI and Styling Standards (Styling Standards, BEM Methodology)
-  Removed sections: None (Engineering Standards, Delivery Workflow and
-    Governance retained and updated)
+    - II. Specification Traceability → specs either derive from a pinned
+      product spec (existing "Inheritance from Product Spec" section) or
+      originate in engineering (new "Origin Without Product Spec" section
+      with problem and acceptance criteria)
+    - III. No Silent Divergence → scoped to specs derived from a product spec
+  Modified sections:
+    - Delivery Workflow → specs open with the inheritance or origin section;
+      Constitution Check covers the spec origin path
+  Added principles: None
+  Added sections: None
+  Removed sections: None
 
-  Project exceptions (approved by maintainer on 2026-10-01):
+  Previous amendment (2.0.0, 2026-10-01): adopted the VTEX CX engineering +
+  frontend base constitutions; principles renumbered I–XVI; added Quality
+  Standards and UI and Styling Standards.
+
+  Project exceptions (approved by maintainer on 2026-10-01, unchanged):
     - X. Type Safety: base MUST kept; the first change that adds a source
       file MUST also add TypeScript support to the toolchain.
     - XII. Naming Conventions: files exporting a single class keep
@@ -43,9 +32,9 @@
 
   Templates requiring updates:
     - .specify/templates/plan-template.md ✅ Constitution Check present
-    - .specify/templates/spec-template.md ⚠ lacks the mandatory
-      "Inheritance from Product Spec" section (template not modified by
-      this amendment; add the section manually in each new spec)
+    - .specify/presets/vtex-cx-engineering/templates/spec-template.md ✅
+      replaces the core spec template and provides both opening sections
+      ("Inheritance from Product Spec" / "Origin Without Product Spec")
     - .specify/templates/tasks-template.md ✅ phased structure compatible
 
   Follow-up TODOs:
@@ -58,12 +47,16 @@
     - TODO(TS_TOOLCHAIN): Rollup input is src/index.js without a TS plugin,
       Babel has no TS preset, Jest matches *.test.js only, ESLint lints .js
       only. Must be resolved by the first change that adds a source file.
-    - TODO(CHANGELOG_BACKFILL): CHANGELOG.md stops at 1.10.3 while
-      package.json is 1.17.2; backfill 1.11.0–1.17.2.
-    - TODO(RELEASE_COMMITS): npm version commits use bare "1.x.y" messages;
-      switch to `npm version <bump> -m "chore: release %s"`.
-    - TODO(SPEC_001_INHERITANCE): specs/001-pdp-starters-bridge/spec.md
-      lacks the "Inheritance from Product Spec" section.
+    - TODO(CHANGELOG_BACKFILL): CHANGELOG.md jumps from 1.10.3 to 1.18.0
+      and lacks 1.19.2 (package.json is 1.19.2); backfill 1.11.0–1.17.2
+      and add the 1.19.2 entry.
+    - TODO(RELEASE_COMMITS): release commits are inconsistent (bare
+      "1.19.2" alongside "chore: bump version to 1.19.1"); standardize on
+      `npm version <bump> -m "chore: release %s"`.
+    - TODO(SPEC_001_ORIGIN): specs/001-pdp-starters-bridge/spec.md opens
+      with neither the "Inheritance from Product Spec" nor the "Origin
+      Without Product Spec" section; the maintainer must decide which path
+      applies (its input references the get_pdp_starters architecture).
     - TODO(SNAKE_CASE_PAYLOADS): emitted message payloads expose
       snake_case fields (e.g. product_items); normalizing them is a breaking
       change and needs a deprecation path per IV.
@@ -94,18 +87,24 @@ prevent unreviewed changes from reaching the published NPM package.
 
 ### II. Specification Traceability
 
-Every engineering spec under `specs/<feature>/` MUST derive from exactly one
-approved product spec and MUST reference it through an immutable, pinned
-version (commit or tag); a mutable URL or ID alone MUST NOT be used. The
-product spec MUST exist and be tagged before its engineering spec is created.
-An engineering spec MUST NOT redefine the "what" it inherits: problem, scope,
-success criteria, and binding decisions belong to the product spec. A
-technical architecture document SHOULD be produced for non-trivial features;
-when it exists it MUST be linked from the engineering spec, pinned by
-commit/tag, but its absence MUST NOT block the engineering spec.
+An engineering spec under `specs/<feature>/` either derives from a product
+spec or originates in engineering (e.g. a hotfix, bug fix, or technical
+debt). Both are regular paths; neither requires a justification, and either
+MAY follow the full or the lite cycle.
 
-Every engineering spec MUST open with an inheritance section in exactly this
-format:
+When the change has a product spec, the engineering spec MUST derive from
+exactly one approved product spec and MUST reference it through an
+immutable, pinned version (commit or tag); a mutable URL or ID alone MUST NOT
+be used. The product spec MUST exist and be tagged before its engineering
+spec is created. An engineering spec MUST NOT redefine the "what" it
+inherits: problem, scope, success criteria, and binding decisions belong to
+the product spec. A technical architecture document SHOULD be produced for
+non-trivial features; when it exists it MUST be linked from the engineering
+spec, pinned by commit/tag, but its absence MUST NOT block the engineering
+spec.
+
+An engineering spec derived from a product spec MUST open with an
+inheritance section in exactly this format:
 
 ```
 ## Inheritance from Product Spec
@@ -121,10 +120,23 @@ For this repository, "Scope of this spec" MUST state which slice of the
 cross-repo flow (e.g. webchat-react ↔ webchat-service ↔ weni-webchat-socket)
 the library implements.
 
-**Rationale:** traceability from product intent to technical execution keeps
-decisions auditable. Pinning the version guarantees every repository in the
-flow implements the same version of the feature. A single inheritance format
-keeps the link machine-checkable across repositories.
+An engineering spec without a product spec states its own "what" and MUST
+open with an origin section in exactly this format:
+
+```
+## Origin Without Product Spec
+- Product Spec: none
+- Problem: <what is wrong or missing, in one or two sentences>
+- Acceptance criteria: <observable outcomes that prove the change is done>
+```
+
+**Rationale:** traceability from intent to technical execution keeps
+decisions auditable and lets any change be traced back to the need that
+justified it. For product-driven changes, pinning the version guarantees
+every repository in the flow implements the same version of the feature; for
+engineering-driven changes, the spec's problem and acceptance criteria are
+what the change is verified against. A fixed opening format for each path
+keeps the origin machine-checkable across repositories.
 
 ### III. No Silent Divergence
 
@@ -135,7 +147,9 @@ repository and recorded in the `Divergences` field of the engineering spec's
 inheritance section, linking to that amendment. Once the amendment is approved
 and produces a new tag, the engineering spec's `Pinned version` MUST be
 updated to it. A technical difference that contradicts nothing inherited is an
-implementation decision and MUST live in the engineering spec.
+implementation decision and MUST live in the engineering spec. This
+principle applies only to engineering specs derived from a product spec; a
+spec without one inherits nothing it could diverge from.
 
 **Rationale:** with the product spec as single source of truth, a silent code
 deviation makes intent and implementation drift apart with no audit trail.
@@ -508,11 +522,12 @@ with the host storefront's styles.
 
 ## Delivery Workflow
 
-- Specs MUST open with the "Inheritance from Product Spec" section (II) and
-  capture user scenarios, edge cases, functional and non-functional
-  requirements, and measurable success criteria before planning.
-- Plans MUST include a Constitution Check covering: spec traceability and
-  divergences, public contract and SemVer impact, security, observability,
+- Specs MUST open with the "Inheritance from Product Spec" or the "Origin
+  Without Product Spec" section (II) and capture user scenarios, edge
+  cases, functional and non-functional requirements, and measurable success
+  criteria before planning.
+- Plans MUST include a Constitution Check covering: spec origin path,
+  traceability and divergences, public contract and SemVer impact, security, observability,
   type safety and toolchain, file size and naming, transport and data
   boundaries, async state correctness, tests and coverage, and changelog.
 - Tasks MUST include test work, security or configuration work, changelog
@@ -558,4 +573,4 @@ MUST enforce it.
 - Open exceptions MUST be documented in the plan or pull request and
   approved explicitly.
 
-**Version**: 2.0.0 | **Ratified**: 2026-03-09 | **Last Amended**: 2026-10-01
+**Version**: 2.1.0 | **Ratified**: 2026-03-09 | **Last Amended**: 2026-10-27

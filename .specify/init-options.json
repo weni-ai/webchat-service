@@ -1,0 +1,7 @@
+{
+  "ai": "cursor-agent",
+  "ai_skills": true,
+  "integration": "cursor-agent",
+  "script": "sh",
+  "speckit_version": "1.2.3"
+}
