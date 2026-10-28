@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "presets": {
+    "vtex-cx-engineering": {
+      "version": "1.1.0",
+      "source": "local",
+      "manifest_hash": "sha256:9ae42d0b075d3881ef55a27d4e6cfa8bd25076bb5a47177c67964fda1fb46faa",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {},
+      "registered_skills": {},
+      "installed_at": "2026-10-27T13:48:41.574896+00:00"
+    }
+  }
+}
