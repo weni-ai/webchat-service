@@ -6,6 +6,8 @@ describe('WeniWebchatService — local simulators', () => {
 
   beforeEach(() => {
     installBrowserMocks();
+    global.URL.createObjectURL = jest.fn(() => 'blob:preview');
+    global.URL.revokeObjectURL = jest.fn();
     service = new WeniWebchatService(makeConfig());
     service.session.createNewSession();
   });
@@ -219,11 +221,12 @@ describe('WeniWebchatService — local simulators', () => {
         expect(addSpy.mock.calls[0][0]).toMatchObject({
           id: `media_${type}`,
           type,
-          media,
+          media: 'blob:preview',
           direction: 'outgoing',
           status: 'sent',
           metadata: { foo: 'bar' },
         });
+        expect(addSpy.mock.calls[0][0].media).not.toBe(media);
       },
     );
 

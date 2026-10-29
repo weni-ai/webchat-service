@@ -231,6 +231,7 @@ export const SERVICE_EVENTS = {
   MESSAGE_REMOVED: 'message:removed',
   MESSAGE_PROCESSED: 'message:processed',
   MESSAGE_UNKNOWN: 'message:unknown',
+  MESSAGE_MEDIA_ACK: 'message:media-ack',
   MESSAGES_CLEARED: 'messages:cleared',
 
   // Language

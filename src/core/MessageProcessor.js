@@ -13,6 +13,7 @@ import {
   MESSAGE_KINDS,
   STREAM_INITIAL_SEQUENCE,
 } from '../utils/constants';
+import { isOfficialHttpUrl } from '../utils/messageBuilder';
 
 /**
  * MessageProcessor
@@ -104,6 +105,9 @@ export default class MessageProcessor extends EventEmitter {
         case 'typing_start':
           this._handleTypingIndicator(rawMessage);
           break;
+        case 'ack':
+          this._processMediaAck(rawMessage);
+          break;
         default:
           this.emit(SERVICE_EVENTS.MESSAGE_UNKNOWN, rawMessage);
       }
@@ -152,6 +156,30 @@ export default class MessageProcessor extends EventEmitter {
     } catch (error) {
       this.emit(SERVICE_EVENTS.ERROR, error);
     }
+  }
+
+  /**
+   * Accepts an upload acknowledgement. The official link must be http(s).
+   * The ack is not queued as a chat message.
+   * @private
+   * @param {Object} raw
+   */
+  _processMediaAck(raw) {
+    const messageType = raw?.message?.type;
+    const mediaUrl = raw?.message?.media_url;
+
+    if (!messageType || !isOfficialHttpUrl(mediaUrl)) {
+      console.warn('MessageProcessor: media ack ignored', {
+        operation: 'media-ack',
+        messageType,
+      });
+      return;
+    }
+
+    this.emit(SERVICE_EVENTS.MESSAGE_MEDIA_ACK, {
+      type: messageType,
+      media: mediaUrl,
+    });
   }
 
   /**

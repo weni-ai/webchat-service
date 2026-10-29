@@ -232,6 +232,7 @@ export default class AudioRecorder extends EventEmitter {
       const result = {
         type: 'audio',
         base64,
+        blob: mp3Blob,
         duration,
         mimeType: mp3Blob.type,
         size: mp3Blob.size,

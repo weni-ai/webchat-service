@@ -555,10 +555,7 @@ describe('SessionManager', () => {
         lastActivity: now,
         lastMessageSentAt: now,
       };
-      manager = createManager(
-        { autoClearCache: false },
-        makeStorage(stored),
-      );
+      manager = createManager({ autoClearCache: false }, makeStorage(stored));
       manager.config.contactTimeout = 0;
 
       expect(manager.getOrCreate()).not.toBe('forced-expire');
@@ -690,15 +687,31 @@ describe('SessionManager', () => {
       ]);
     });
 
+    it('omits data: and blob: media from storage and keeps text messages', () => {
+      manager.appendToConversation({ id: 'text', type: 'text', text: 'hi' });
+      manager.appendToConversation({
+        id: 'data',
+        type: 'video',
+        media: 'data:video/mp4;base64,xx',
+      });
+      manager.appendToConversation({
+        id: 'blob',
+        type: 'image',
+        media: 'blob:http://localhost/1',
+      });
+
+      expect(manager.storage._peek().conversation).toEqual([
+        { id: 'text', type: 'text', text: 'hi' },
+      ]);
+      expect(manager.session.conversation).toHaveLength(3);
+    });
+
     it('appendToConversation honors the `limit` option by trimming the oldest entries', () => {
       manager.setConversation([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
 
       manager.appendToConversation({ id: 'd' }, { limit: 2 });
 
-      expect(manager.session.conversation).toEqual([
-        { id: 'c' },
-        { id: 'd' },
-      ]);
+      expect(manager.session.conversation).toEqual([{ id: 'c' }, { id: 'd' }]);
     });
 
     it('appendToConversation ignores a non-positive limit', () => {

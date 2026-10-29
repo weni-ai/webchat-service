@@ -22,6 +22,8 @@ describe('WeniWebchatService — outgoing send paths', () => {
 
   beforeEach(() => {
     installBrowserMocks();
+    global.URL.createObjectURL = jest.fn(() => 'blob:preview');
+    global.URL.revokeObjectURL = jest.fn();
   });
 
   afterEach(() => {
@@ -201,7 +203,7 @@ describe('WeniWebchatService — outgoing send paths', () => {
       expect(addMessageSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'image',
-          media: processed.base64,
+          media: 'blob:preview',
           direction: 'outgoing',
           metadata: {
             filename: 'pic.png',
@@ -311,7 +313,7 @@ describe('WeniWebchatService — outgoing send paths', () => {
       expect(addMessageSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'audio',
-          media: 'data:audio/mpeg;base64,xxx',
+          media: 'blob:preview',
           direction: 'outgoing',
           metadata: { duration: 12, mimeType: 'audio/mpeg' },
         }),
@@ -632,6 +634,210 @@ describe('WeniWebchatService — outgoing send paths', () => {
 
       expect(socket.send).not.toHaveBeenCalled();
       expect(service.messagesQueue).toHaveLength(1);
+    });
+  });
+
+  describe('media preview and upload ack', () => {
+    function lastStoredConversation() {
+      const calls = service.session.storage.set.mock.calls;
+      return calls[calls.length - 1][1].conversation;
+    }
+
+    it.each(['image', 'video', 'file'])(
+      'previews %s as a blob URL and uploads the data URL',
+      async (type) => {
+        ({ service, socket } = createConnectedService());
+        jest.spyOn(service.session.storage, 'set');
+        service.session.createNewSession();
+        jest.spyOn(service.fileHandler, 'process').mockResolvedValue({
+          type,
+          base64: `data:${type}/x;base64,AAA`,
+          filename: 'a.bin',
+          size: 3,
+          mimeType: 'application/octet-stream',
+        });
+
+        await service.sendAttachment(new Blob(['x']));
+        await flushMicrotasks();
+
+        const storedMessage = service.state.getMessages().at(-1);
+        expect(storedMessage.media).toBe('blob:preview');
+        expect(JSON.stringify(storedMessage)).not.toContain('data:');
+        const payload = JSON.parse(socket.send.mock.calls[0][0]);
+        expect(payload.message.media).toBe(`data:${type}/x;base64,AAA`);
+        expect(
+          lastStoredConversation().some(
+            (item) =>
+              typeof item.media === 'string' &&
+              (item.media.startsWith('data:') ||
+                item.media.startsWith('blob:')),
+          ),
+        ).toBe(false);
+      },
+    );
+
+    it('previews audio from a blob and uploads the data URL', async () => {
+      ({ service, socket } = createConnectedService());
+      service.session.createNewSession();
+      const recording = new Blob(['audio'], { type: 'audio/mpeg' });
+
+      await service.sendAudio({
+        base64: 'data:audio/mpeg;base64,AAA',
+        blob: recording,
+        duration: 2,
+        mimeType: 'audio/mpeg',
+      });
+      await flushMicrotasks();
+
+      expect(service.state.getMessages().at(-1).media).toBe('blob:preview');
+      expect(URL.createObjectURL).toHaveBeenCalledWith(recording);
+      const payload = JSON.parse(socket.send.mock.calls[0][0]);
+      expect(payload.message.media).toBe('data:audio/mpeg;base64,AAA');
+    });
+
+    it('replaces the blob with the official link and stores it once', async () => {
+      ({ service } = createConnectedService());
+      jest.spyOn(service.session.storage, 'set');
+      service.session.createNewSession();
+      jest.spyOn(service.fileHandler, 'process').mockResolvedValue({
+        type: 'video',
+        base64: 'data:video/mp4;base64,AAA',
+        filename: 'clip.mp4',
+        size: 3,
+        mimeType: 'video/mp4',
+      });
+
+      await service.sendAttachment(new Blob(['x']));
+      await flushMicrotasks();
+
+      service.messageProcessor.process({
+        type: 'ack',
+        to: 'user',
+        from: 'socket',
+        message: {
+          type: 'video',
+          timestamp: '1793296215',
+          media_url: 'https://cdn.example/real',
+          list_message: { button_text: '', list_items: null },
+        },
+      });
+
+      const videos = service.state
+        .getMessages()
+        .filter((item) => item.type === 'video');
+      expect(videos).toHaveLength(1);
+      expect(videos[0].media).toBe('https://cdn.example/real');
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview');
+      expect(
+        lastStoredConversation().filter((item) => item.type === 'video'),
+      ).toEqual([
+        expect.objectContaining({ media: 'https://cdn.example/real' }),
+      ]);
+
+      service.messageProcessor.process({
+        type: 'ack',
+        message: { type: 'video', media_url: 'https://cdn.example/again' },
+      });
+      expect(
+        service.state.getMessages().filter((item) => item.type === 'video'),
+      ).toHaveLength(1);
+      expect(videos[0].media).toBe('https://cdn.example/real');
+    });
+
+    it('matches a document ack to a local file message', async () => {
+      ({ service } = createConnectedService());
+      service.session.createNewSession();
+      jest.spyOn(service.fileHandler, 'process').mockResolvedValue({
+        type: 'file',
+        base64: 'data:application/pdf;base64,AAA',
+        filename: 'a.pdf',
+        size: 3,
+        mimeType: 'application/pdf',
+      });
+      await service.sendAttachment(new Blob(['x']));
+      await flushMicrotasks();
+
+      service.messageProcessor.process({
+        type: 'ack',
+        message: {
+          type: 'document',
+          media_url: 'https://cdn.example/file.pdf',
+        },
+      });
+
+      expect(service.state.getMessages().at(-1).media).toBe(
+        'https://cdn.example/file.pdf',
+      );
+    });
+
+    it('ignores a non-http ack and an unmatched ack', async () => {
+      ({ service } = createConnectedService());
+      service.session.createNewSession();
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      jest.spyOn(service.fileHandler, 'process').mockResolvedValue({
+        type: 'image',
+        base64: 'data:image/png;base64,AAA',
+        filename: 'a.png',
+        size: 1,
+        mimeType: 'image/png',
+      });
+      await service.sendAttachment(new Blob(['x']));
+      await flushMicrotasks();
+
+      service.messageProcessor.process({
+        type: 'ack',
+        message: { type: 'image', media_url: 'javascript:alert(1)' },
+      });
+      expect(service.state.getMessages().at(-1).media).toBe('blob:preview');
+
+      service.messageProcessor.process({
+        type: 'ack',
+        message: { type: 'audio', media_url: 'https://cdn.example/nope' },
+      });
+      expect(warn).toHaveBeenCalledWith(
+        'WeniWebchatService: media ack unmatched',
+        expect.objectContaining({
+          operation: 'media-ack',
+          messageType: 'audio',
+          reason: 'no-pending-media',
+        }),
+      );
+      warn.mockRestore();
+    });
+
+    it('revokes the blob when the socket send fails', async () => {
+      ({ service, socket } = createConnectedService());
+      service.session.createNewSession();
+      socket.send.mockImplementationOnce(() => {
+        throw new Error('offline');
+      });
+      jest.spyOn(service.fileHandler, 'process').mockResolvedValue({
+        type: 'image',
+        base64: 'data:image/png;base64,AAA',
+        filename: 'a.png',
+        size: 1,
+        mimeType: 'image/png',
+      });
+
+      const originalForEach = Array.prototype.forEach;
+      Array.prototype.forEach = function (callback, thisArg) {
+        return originalForEach.call(this, function (item, index, array) {
+          const result = callback.call(thisArg, item, index, array);
+          if (result && typeof result.catch === 'function') {
+            result.catch(() => {});
+          }
+        });
+      };
+
+      try {
+        await service.sendAttachment(new Blob(['x']));
+        await flushMicrotasks();
+      } finally {
+        Array.prototype.forEach = originalForEach;
+      }
+
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:preview');
+      expect(service.state.getMessages().at(-1).status).toBe('error');
     });
   });
 });

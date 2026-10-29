@@ -4,22 +4,100 @@
 
 import { generateMessageId } from './helpers';
 
+export function isOfficialHttpUrl(value) {
+  if (typeof value !== 'string' || value.length === 0) {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Oldest outgoing message still showing a blob preview for this ack type.
+ * `document` matches a local `file` message. Other types match exactly.
+ * @param {Array} messages
+ * @param {string} type
+ * @returns {Object|null}
+ */
+export function findPendingMediaPreview(messages, type) {
+  const wanted = type === 'document' ? 'file' : type;
+  if (!Array.isArray(messages) || !wanted) {
+    return null;
+  }
+
+  return (
+    messages.find(
+      (message) =>
+        message &&
+        message.direction === 'outgoing' &&
+        message.type === wanted &&
+        typeof message.media === 'string' &&
+        message.media.startsWith('blob:'),
+    ) || null
+  );
+}
+
+/**
+ * Builds a Blob from a data URL or a raw string so the preview can be an
+ * object URL. The data URL itself is not kept on the chat message.
+ * @param {string} value
+ * @returns {Blob}
+ */
+export function blobFromEncodedMedia(value) {
+  if (typeof value !== 'string') {
+    return new Blob([]);
+  }
+
+  const comma = value.indexOf(',');
+  if (!value.startsWith('data:') || comma === -1) {
+    return new Blob([value]);
+  }
+
+  const meta = value.slice('data:'.length, comma);
+  const body = value.slice(comma + 1);
+  const mime = meta.split(';')[0] || 'application/octet-stream';
+
+  if (!meta.includes('base64') || typeof atob !== 'function') {
+    return new Blob([body], { type: mime });
+  }
+
+  try {
+    const binary = atob(body);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return new Blob([bytes], { type: mime });
+  } catch {
+    return new Blob([value], { type: mime });
+  }
+}
+
 export function buildMessagePayload(sessionId, message, options = {}) {
+  const outbound =
+    typeof options.uploadMedia === 'string'
+      ? { ...message, media: options.uploadMedia }
+      : message;
   const from = sessionId;
   const context = options.context || '';
 
   const hasCustomFields =
-    message &&
-    typeof message.__customFields === 'object' &&
-    message.__customFields !== null &&
-    Object.keys(message.__customFields).length > 0;
+    outbound &&
+    typeof outbound.__customFields === 'object' &&
+    outbound.__customFields !== null &&
+    Object.keys(outbound.__customFields).length > 0;
 
   const messageType = hasCustomFields ? 'message_with_fields' : 'message';
-  const messageData = hasCustomFields ? message.__customFields : undefined;
+  const messageData = hasCustomFields ? outbound.__customFields : undefined;
 
-  if (message.type === 'text') {
-    const textPayload = { type: 'text', text: message.text };
-    if (message.fromConversationStarter) {
+  if (outbound.type === 'text') {
+    const textPayload = { type: 'text', text: outbound.text };
+    if (outbound.fromConversationStarter) {
       textPayload.from_conversation_starter = true;
     }
 
@@ -28,30 +106,30 @@ export function buildMessagePayload(sessionId, message, options = {}) {
       from,
       data: messageData,
     });
-  } else if (['image', 'video', 'audio', 'file'].includes(message.type)) {
+  } else if (['image', 'video', 'audio', 'file'].includes(outbound.type)) {
     return buildWebSocketMessage(
       messageType,
-      { type: message.type, media: message.media },
+      { type: outbound.type, media: outbound.media },
       {
         context,
         from,
         data: messageData,
       },
     );
-  } else if (message.type === 'order') {
+  } else if (outbound.type === 'order') {
     return buildWebSocketMessage(
       messageType,
-      { type: 'order', timestamp: message.timestamp, order: message.order },
+      { type: 'order', timestamp: outbound.timestamp, order: outbound.order },
       {
         context,
         from,
         data: messageData,
       },
     );
-  } else if (message.type === 'set_custom_field') {
+  } else if (outbound.type === 'set_custom_field') {
     return {
-      type: message.type,
-      data: message.data,
+      type: outbound.type,
+      data: outbound.data,
     };
   }
 

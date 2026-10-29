@@ -14,6 +14,14 @@ import { SERVICE_EVENTS } from '../utils/constants';
  * - Contact timeout management
  * - Track whether user has sent any message
  */
+function isEphemeralMediaMessage(message) {
+  const media = message && message.media;
+  return (
+    typeof media === 'string' &&
+    (media.startsWith('data:') || media.startsWith('blob:'))
+  );
+}
+
 export default class SessionManager extends EventEmitter {
   constructor(storage, config = {}) {
     super();
@@ -347,7 +355,16 @@ export default class SessionManager extends EventEmitter {
       this.session.pendingCustomFields = {};
     }
 
-    this.storage.set(this.sessionKey, this.session);
+    const conversation = Array.isArray(this.session.conversation)
+      ? this.session.conversation.filter(
+          (item) => !isEphemeralMediaMessage(item),
+        )
+      : this.session.conversation;
+
+    this.storage.set(this.sessionKey, {
+      ...this.session,
+      conversation,
+    });
   }
 
   /**
