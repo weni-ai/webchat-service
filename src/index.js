@@ -38,6 +38,8 @@ import {
   buildMediaMessage,
   buildOrderMessage,
   buildMessagePayload,
+  blobFromEncodedMedia,
+  findPendingMediaPreview,
   buildCustomFieldMessage,
   buildStartersRequest,
   buildConversationStatusMessage,
@@ -70,6 +72,12 @@ import {
  * await service.init()
  * service.sendMessage('Hello!')
  */
+function revokeBlobUrl(value) {
+  if (typeof value === 'string' && value.startsWith('blob:')) {
+    URL.revokeObjectURL(value);
+  }
+}
+
 export default class WeniWebchatService extends EventEmitter {
   constructor(config = {}) {
     super();
@@ -293,12 +301,14 @@ export default class WeniWebchatService extends EventEmitter {
     }
 
     if (this.isConnected()) {
-      this.messagesQueue.forEach(async (message) => {
+      this.messagesQueue.forEach(async (entry) => {
+        const message = entry && entry.uploadMedia ? entry.message : entry;
         const payload = buildMessagePayload(
           this.session.getSessionId(),
           message,
           {
             context: this.state.getContext(),
+            uploadMedia: entry && entry.uploadMedia,
           },
         );
 
@@ -306,6 +316,7 @@ export default class WeniWebchatService extends EventEmitter {
           await this.websocket.send(payload);
           this.emit(SERVICE_EVENTS.MESSAGE_SENT, message);
         } catch (error) {
+          revokeBlobUrl(message && message.media);
           this.state.updateMessage(message.id, { status: 'error' });
           this.emit(SERVICE_EVENTS.ERROR, error);
           throw error;
@@ -359,8 +370,13 @@ export default class WeniWebchatService extends EventEmitter {
           status: 'sent',
         });
       } else if (['image', 'video', 'audio', 'file'].includes(input.type)) {
-        message = buildMediaMessage(input.type, input.media, {
+        const media =
+          typeof input.media === 'string' && input.media.startsWith('data:')
+            ? URL.createObjectURL(blobFromEncodedMedia(input.media))
+            : input.media;
+        message = buildMediaMessage(input.type, media, {
           ...input,
+          media,
           direction: 'outgoing',
           status: 'sent',
         });
@@ -469,14 +485,18 @@ export default class WeniWebchatService extends EventEmitter {
     try {
       const fileData = await this.fileHandler.process(file);
 
-      const message = buildMediaMessage(fileData.type, fileData.base64, {
-        direction: 'outgoing',
-        metadata: {
-          filename: fileData.filename,
-          size: fileData.size,
-          mimeType: fileData.mimeType,
+      const message = buildMediaMessage(
+        fileData.type,
+        URL.createObjectURL(file),
+        {
+          direction: 'outgoing',
+          metadata: {
+            filename: fileData.filename,
+            size: fileData.size,
+            mimeType: fileData.mimeType,
+          },
         },
-      });
+      );
 
       if (!this.session.hasUserSentAnyMessage()) {
         const pendingFields = this.session.getPendingCustomFields();
@@ -489,7 +509,7 @@ export default class WeniWebchatService extends EventEmitter {
       this.state.addMessage(message);
       this.session.appendToConversation(message);
 
-      this.enqueueMessages([message]);
+      this.enqueueMessages([{ message, uploadMedia: fileData.base64 }]);
       this.runQueue();
     } catch (error) {
       this.emit(SERVICE_EVENTS.ERROR, error);
@@ -509,13 +529,19 @@ export default class WeniWebchatService extends EventEmitter {
     }
 
     try {
-      const message = buildMediaMessage('audio', audioData.base64, {
-        direction: 'outgoing',
-        metadata: {
-          duration: audioData.duration,
-          mimeType: audioData.mimeType,
+      const previewSource =
+        audioData.blob || blobFromEncodedMedia(audioData.base64);
+      const message = buildMediaMessage(
+        'audio',
+        URL.createObjectURL(previewSource),
+        {
+          direction: 'outgoing',
+          metadata: {
+            duration: audioData.duration,
+            mimeType: audioData.mimeType,
+          },
         },
-      });
+      );
 
       if (!this.session.hasUserSentAnyMessage()) {
         const pendingFields = this.session.getPendingCustomFields();
@@ -528,7 +554,7 @@ export default class WeniWebchatService extends EventEmitter {
       this.state.addMessage(message);
       this.session.appendToConversation(message);
 
-      this.enqueueMessages([message]);
+      this.enqueueMessages([{ message, uploadMedia: audioData.base64 }]);
       this.runQueue();
     } catch (error) {
       this.emit(SERVICE_EVENTS.ERROR, error);
@@ -1004,6 +1030,9 @@ export default class WeniWebchatService extends EventEmitter {
    * Destroys service instance
    */
   destroy() {
+    this.state.getMessages().forEach((message) => {
+      revokeBlobUrl(message && message.media);
+    });
     this.disconnect();
     this.removeAllListeners();
     this._initialized = false;
@@ -1153,6 +1182,38 @@ export default class WeniWebchatService extends EventEmitter {
       this.session.appendToConversation(msg);
       this.emit(SERVICE_EVENTS.MESSAGE_RECEIVED, msg);
     });
+
+    this.messageProcessor.on(
+      SERVICE_EVENTS.MESSAGE_MEDIA_ACK,
+      ({ type, media }) => {
+        const pending = findPendingMediaPreview(this.state.getMessages(), type);
+        if (!pending) {
+          console.warn('WeniWebchatService: media ack unmatched', {
+            operation: 'media-ack',
+            messageType: type,
+            reason: 'no-pending-media',
+          });
+          return;
+        }
+
+        const preview = pending.media;
+        this.state.updateMessage(pending.id, { media });
+        revokeBlobUrl(preview);
+
+        const updated = this.state
+          .getMessages()
+          .find((item) => item.id === pending.id);
+        const stored = this.session
+          .getConversation()
+          .some((item) => item.id === pending.id);
+
+        if (stored) {
+          this.session.updateConversation(pending.id, { media });
+        } else if (updated) {
+          this.session.appendToConversation(updated);
+        }
+      },
+    );
 
     this.messageProcessor.on(
       SERVICE_EVENTS.MESSAGE_UPDATED,

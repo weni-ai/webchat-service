@@ -2329,4 +2329,34 @@ describe('MessageProcessor', () => {
       expect(mockEmit).not.toHaveBeenCalledWith(SERVICE_EVENTS.THINKING_START);
     });
   });
+
+  describe('media ack', () => {
+    it('emits message:media-ack and does not enqueue a chat message', () => {
+      const ack = jest.fn();
+      const processed = jest.fn();
+      const unknown = jest.fn();
+      processor.on(SERVICE_EVENTS.MESSAGE_MEDIA_ACK, ack);
+      processor.on(SERVICE_EVENTS.MESSAGE_PROCESSED, processed);
+      processor.on(SERVICE_EVENTS.MESSAGE_UNKNOWN, unknown);
+
+      processor.process({
+        type: 'ack',
+        to: 'user',
+        from: 'socket',
+        message: {
+          type: 'video',
+          timestamp: '1793296215',
+          media_url: 'https://cdn.example/real',
+          list_message: { button_text: '', list_items: null },
+        },
+      });
+
+      expect(ack).toHaveBeenCalledWith({
+        type: 'video',
+        media: 'https://cdn.example/real',
+      });
+      expect(processed).not.toHaveBeenCalled();
+      expect(unknown).not.toHaveBeenCalled();
+    });
+  });
 });
