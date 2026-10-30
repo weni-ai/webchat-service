@@ -10,6 +10,24 @@ import HistoryManager from './modules/HistoryManager';
 import FileHandler from './modules/FileHandler';
 import CameraRecorder from './modules/CameraRecorder';
 import AudioRecorder from './modules/AudioRecorder';
+import {
+  VoiceService,
+  VoiceSessionState,
+  AudioCapture,
+  STTConnection,
+  TTSPlayer,
+  TextChunker,
+  EchoGuard,
+  SessionGuard,
+  VoiceError,
+  VoiceErrorCode,
+  createVoiceError,
+  DEFAULT_VOICE_CONFIG,
+  validateVoiceConfig,
+  mergeVoiceConfig,
+  buildSTTWebSocketURL,
+  buildTTSWebSocketURL,
+} from './modules/voice';
 
 import RetryStrategy from './network/RetryStrategy';
 
@@ -1367,6 +1385,7 @@ export default class WeniWebchatService extends EventEmitter {
 
 // Static methods
 WeniWebchatService.isAudioRecordingSupported = AudioRecorder.isSupported;
+WeniWebchatService.isVoiceSupported = VoiceService.isSupported;
 
 // Static constants
 WeniWebchatService.ALLOWED_FILE_TYPES = ALLOWED_FILE_TYPES;
@@ -1405,4 +1424,20 @@ export {
   DEFAULTS,
   UTM_SOURCES,
   ALLOWED_UTM_SOURCES,
+  VoiceService,
+  VoiceSessionState,
+  AudioCapture,
+  STTConnection,
+  TTSPlayer,
+  TextChunker,
+  EchoGuard,
+  SessionGuard,
+  VoiceError,
+  VoiceErrorCode,
+  createVoiceError,
+  DEFAULT_VOICE_CONFIG,
+  validateVoiceConfig,
+  mergeVoiceConfig,
+  buildSTTWebSocketURL,
+  buildTTSWebSocketURL,
 };
