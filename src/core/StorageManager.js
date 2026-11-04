@@ -71,6 +71,39 @@ export default class StorageManager {
    * Removes item from storage
    * @param {string} key
    */
+  /**
+   * Storefront snapshot and pending cart. A missing or unreadable value
+   * is an empty record. This key is not the session conversation blob.
+   *
+   * @returns {{ snapshot: object | null, pendingCart: Record<string, object> }}
+   */
+  getStorefrontRecord() {
+    const value = this.get('storefront');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return { snapshot: null, pendingCart: {} };
+    }
+    const pendingCart =
+      value.pendingCart &&
+      typeof value.pendingCart === 'object' &&
+      !Array.isArray(value.pendingCart)
+        ? value.pendingCart
+        : {};
+    return {
+      snapshot: value.snapshot ?? null,
+      pendingCart,
+    };
+  }
+
+  /**
+   * @param {{ snapshot: object | null, pendingCart: Record<string, object> }} record
+   */
+  setStorefrontRecord(record) {
+    this.set('storefront', {
+      snapshot: record.snapshot ?? null,
+      pendingCart: record.pendingCart ?? {},
+    });
+  }
+
   remove(key) {
     try {
       const fullKey = this._getFullKey(key);
