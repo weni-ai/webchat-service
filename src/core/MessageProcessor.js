@@ -3,6 +3,7 @@ import EventEmitter from 'eventemitter3';
 import {
   generateMessageId,
   isJsonObject,
+  readCustomData,
   shouldIgnoreJsonObjectPayload,
   unescapeEscapedUrlSlashes,
 } from '../utils/helpers';
@@ -299,6 +300,18 @@ export default class MessageProcessor extends EventEmitter {
 
     if (interactive?.footer) {
       message.footer = unescapeEscapedUrlSlashes(interactive.footer.text);
+    }
+
+    const { customData, discardedKind } = readCustomData(raw.message);
+
+    if (customData) {
+      message.customData = customData;
+    } else if (discardedKind) {
+      console.warn('MessageProcessor: custom_data discarded', {
+        operation: 'normalize-custom-data',
+        messageType: message.type,
+        receivedKind: discardedKind,
+      });
     }
 
     return message;
