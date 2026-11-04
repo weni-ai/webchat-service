@@ -310,6 +310,16 @@ export const SERVICE_EVENTS = {
   // Chat
   CHAT_OPEN_CHANGED: 'chat:open:changed',
 
+  // Storefront
+  STOREFRONT_CHANGED: 'storefront:changed',
+  STOREFRONT_ENTERED_CHECKOUT: 'storefront:entered-checkout',
+  CART_FAILED: 'cart:failed',
+
+  // Voice session
+  VOICE_STATE: 'voice:state',
+  VOICE_TRANSCRIPT: 'voice:transcript',
+  VOICE_ERROR: 'voice:error',
+
   // Starters
   STARTERS_RECEIVED: 'starters:received',
   STARTERS_ERROR: 'starters:error',

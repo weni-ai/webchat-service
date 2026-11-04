@@ -12,6 +12,12 @@ import CameraRecorder from './modules/CameraRecorder';
 import AudioRecorder from './modules/AudioRecorder';
 
 import RetryStrategy from './network/RetryStrategy';
+import VtexPageReader from './modules/storefront/VtexPageReader';
+import OrderForm from './modules/storefront/OrderForm';
+import AvailabilityNotify from './modules/storefront/AvailabilityNotify';
+import { getHostSegment } from './modules/storefront/segment';
+import StarterSession from './modules/conversation/StarterSession';
+import VoiceService from './modules/voice/VoiceService';
 
 import { validateConfig, validateStartersData } from './utils/validators';
 import {
@@ -135,6 +141,12 @@ export default class WeniWebchatService extends EventEmitter {
     this.fileHandler = new FileHandler(this.config);
     this.audioRecorder = new AudioRecorder(this.config);
     this.cameraRecorder = new CameraRecorder(this.config);
+    this.pageReader = new VtexPageReader();
+    this.starterSession = new StarterSession(this);
+    this.orderForm = new OrderForm(this);
+    this.availabilityNotify = new AvailabilityNotify(this);
+    this.voiceSession = new VoiceService(this);
+    this._storefrontTimer = null;
 
     this._setupEventListeners();
 
@@ -618,6 +630,71 @@ export default class WeniWebchatService extends EventEmitter {
    */
   clearStarters() {
     this._latestStartersFingerprint = null;
+  }
+
+  /**
+   * Starts reading the host page. A second call does not add another listener.
+   */
+  watchStorefront() {
+    if (this._storefrontTimer) return;
+    const publish = () => {
+      const snapshot = this.pageReader.read();
+      const record = this.storage.getStorefrontRecord();
+      this.storage.setStorefrontRecord({
+        snapshot,
+        pendingCart: record.pendingCart,
+      });
+      this.emit(SERVICE_EVENTS.STOREFRONT_CHANGED, snapshot);
+      this.starterSession.onSnapshot(snapshot);
+      this.orderForm.onSnapshot(snapshot);
+    };
+    publish();
+    window.addEventListener('popstate', publish);
+    this._storefrontTimer = setInterval(publish, 300);
+    this._storefrontPublish = publish;
+  }
+
+  unwatchStorefront() {
+    if (this._storefrontPublish) {
+      window.removeEventListener('popstate', this._storefrontPublish);
+    }
+    if (this._storefrontTimer) clearInterval(this._storefrontTimer);
+    this._storefrontTimer = null;
+    this._storefrontPublish = null;
+  }
+
+  getStorefrontSnapshot() {
+    return (
+      this.storage.getStorefrontRecord().snapshot ?? this.pageReader.read()
+    );
+  }
+
+  setPendingCartItem(key, quantity, origin) {
+    this.orderForm.setPendingCartItem(key, quantity, origin);
+  }
+
+  flushPendingCart(keys) {
+    return this.orderForm.flushPendingCart(keys);
+  }
+
+  requestAvailabilityNotify(skuId, sellerId, contact) {
+    return this.availabilityNotify.request(skuId, sellerId, contact);
+  }
+
+  getHostSegment() {
+    return getHostSegment();
+  }
+
+  enterVoiceSession() {
+    return this.voiceSession.enter();
+  }
+
+  exitVoiceSession() {
+    this.voiceSession.exit();
+  }
+
+  speakIncomingText(text, messageId) {
+    return this.voiceSession.speak(text, messageId);
   }
 
   /**

@@ -17,6 +17,8 @@ Framework-agnostic JavaScript library for Weni WebChat integration. Provides a c
 - ✅ **State Management**: Event-driven state updates (no Redux required)
 - ✅ **TypeScript Support**: Full type definitions included
 - ✅ **Framework Agnostic**: Works with React, Vue, Angular, or vanilla JS
+- ✅ **Storefront**: Product-page snapshot, starter triggering, and pending cart
+- ✅ **Voice session**: Microphone entry, transcripts, and speech playback
 
 ## Installation
 

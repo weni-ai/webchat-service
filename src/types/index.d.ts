@@ -411,6 +411,25 @@ export default class WeniWebchatService {
     statusType: string,
     options?: any
   ): Message
+  watchStorefront(): void
+  unwatchStorefront(): void
+  getStorefrontSnapshot(): import('../modules/storefront/types').StorefrontSnapshot
+  setPendingCartItem(
+    key: string,
+    quantity: number,
+    origin: 'conversation' | 'catalog'
+  ): void
+  flushPendingCart(keys?: string[]): Promise<void>
+  requestAvailabilityNotify(
+    skuId: string,
+    sellerId: string,
+    contact: string
+  ): Promise<void>
+  getHostSegment(): Promise<string | null>
+  enterVoiceSession(): Promise<void>
+  exitVoiceSession(): void
+  speakIncomingText(text: string, messageId: string): Promise<void>
+
   addProductToCart(
     props: AddProductToCartProps,
     timeoutMs?: number

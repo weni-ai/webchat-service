@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `watchStorefront`, pending-cart methods, and availability notify. The host page snapshot and pending cart are stored under `weni:webchat:storefront`.
+- `enterVoiceSession`, `exitVoiceSession`, and `speakIncomingText`, with `voice:state`, `voice:transcript`, and `voice:error`.
+
 ### Fixed
 
 - Outgoing image, video, audio, and file messages preview from a blob URL while the upload is in progress. Browser storage keeps the message only after the socket ack replaces that preview with the official http(s) link, so a media send no longer overflows the quota and clears the conversation.
