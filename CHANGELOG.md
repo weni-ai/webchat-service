@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Incoming and history messages expose the optional `customData` field when the socket sends `message.custom_data` as a JSON object. Inner keys are passed through unchanged. The field is kept in `state.messages` and in the stored session conversation, and `getHistory` fills it into a cached message that lacks it. A `custom_data` that is not an object is dropped with a warning and the message is still delivered.
+
 ### Fixed
 
 - Outgoing image, video, audio, and file messages preview from a blob URL while the upload is in progress. Browser storage keeps the message only after the socket ack replaces that preview with the official http(s) link, so a media send no longer overflows the quota and clears the conversation.
