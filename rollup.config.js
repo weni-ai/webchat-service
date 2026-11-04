@@ -1,6 +1,7 @@
 import resolve from '@rollup/plugin-node-resolve'
 import commonjs from '@rollup/plugin-commonjs'
 import terser from '@rollup/plugin-terser'
+import typescript from '@rollup/plugin-typescript'
 
 export default {
   input: 'src/index.js',
@@ -28,6 +29,11 @@ export default {
   ],
   external: ['eventemitter3'],
   plugins: [
+    typescript({
+      tsconfig: './tsconfig.json',
+      declaration: false,
+      declarationMap: false,
+    }),
     resolve({
       browser: true,
       preferBuiltins: false

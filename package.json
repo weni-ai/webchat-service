@@ -12,7 +12,7 @@
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build",
     "postversion": "git push --follow-tags",
-    "lint": "eslint src --ext .js"
+    "lint": "eslint src"
   },
   "repository": {
     "type": "git",
@@ -37,9 +37,11 @@
   "devDependencies": {
     "@babel/core": "^7.23.7",
     "@babel/preset-env": "^7.23.7",
+    "@babel/preset-typescript": "^7.29.7",
     "@rollup/plugin-commonjs": "^25.0.7",
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.3.1",
     "@types/jest": "^29.5.11",
     "babel-jest": "^29.7.0",
     "eslint": "^9.39.1",
@@ -50,7 +52,8 @@
     "jest-environment-jsdom": "^29.7.0",
     "prettier": "^3.7.4",
     "rollup": "^4.9.4",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.72.1"
   },
   "resolutions": {
     "source-map": "^0.7.4"

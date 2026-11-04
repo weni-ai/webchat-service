@@ -1,9 +1,14 @@
-import { defineConfig } from "eslint/config";
-import prettier from "eslint-plugin-prettier";
-import globals from "globals";
+import { defineConfig } from 'eslint/config';
+import prettier from 'eslint-plugin-prettier';
+import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 export default defineConfig([
   {
+    ignores: ['dist/**', 'coverage/**', 'node_modules/**', '**/*.min.js'],
+  },
+  {
+    files: ['**/*.js'],
     languageOptions: {
       ecmaVersion: 12,
       sourceType: 'module',
@@ -17,16 +22,41 @@ export default defineConfig([
     },
 
     rules: {
-      "prettier/prettier": [
-        "error",
+      'prettier/prettier': [
+        'error',
         {
           tabWidth: 2,
           semi: true,
           singleQuote: true,
           bracketSpacing: true,
           printWidth: 80,
-          trailingComma: "all",
-          endOfLine: "lf",
+          trailingComma: 'all',
+          endOfLine: 'lf',
+          singleAttributePerLine: true,
+        },
+      ],
+    },
+  },
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ['**/*.ts'],
+  })),
+  {
+    files: ['**/*.ts'],
+    plugins: {
+      prettier,
+    },
+    rules: {
+      'prettier/prettier': [
+        'error',
+        {
+          tabWidth: 2,
+          semi: true,
+          singleQuote: true,
+          bracketSpacing: true,
+          printWidth: 80,
+          trailingComma: 'all',
+          endOfLine: 'lf',
           singleAttributePerLine: true,
         },
       ],
