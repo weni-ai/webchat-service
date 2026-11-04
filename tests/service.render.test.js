@@ -9,6 +9,7 @@ describe('WeniWebchatService — render gating', () => {
   let setItemSpy;
   let removeItemSpy;
   let originalWindowLocalStorage;
+  let storedRender;
 
   beforeEach(() => {
     installBrowserMocks();
@@ -16,9 +17,11 @@ describe('WeniWebchatService — render gating', () => {
     // jest-environment-jsdom, `window.localStorage` is a WebIDL-bound
     // `Storage` instance whose methods can't be re-bound via `jest.spyOn`.
     // Replace it with a plain mock for the duration of the test, then
-    // restore afterwards.
+    // restore afterwards. Construction also reads the storefront record,
+    // so only the render key returns the staged value.
     originalWindowLocalStorage = window.localStorage;
-    getItemSpy = jest.fn().mockReturnValue(null);
+    storedRender = null;
+    getItemSpy = jest.fn((key) => (key === RENDER_KEY ? storedRender : null));
     setItemSpy = jest.fn();
     removeItemSpy = jest.fn();
     Object.defineProperty(window, 'localStorage', {
@@ -71,7 +74,7 @@ describe('WeniWebchatService — render gating', () => {
     });
 
     it('reuses stored decision when stored percentage matches (true)', () => {
-      getItemSpy.mockReturnValueOnce('50:true');
+      storedRender = '50:true';
       service = new WeniWebchatService(makeConfig({ renderPercentage: 50 }));
 
       const result = service._ensureRenderDecision();
@@ -81,7 +84,7 @@ describe('WeniWebchatService — render gating', () => {
     });
 
     it('reuses stored decision when stored percentage matches (false)', () => {
-      getItemSpy.mockReturnValueOnce('50:false');
+      storedRender = '50:false';
       service = new WeniWebchatService(makeConfig({ renderPercentage: 50 }));
 
       const result = service._ensureRenderDecision();
@@ -91,7 +94,7 @@ describe('WeniWebchatService — render gating', () => {
     });
 
     it('recalculates and overwrites when the stored percentage differs', () => {
-      getItemSpy.mockReturnValueOnce('25:true');
+      storedRender = '25:true';
       jest.spyOn(Math, 'random').mockReturnValue(0.49);
       service = new WeniWebchatService(makeConfig({ renderPercentage: 50 }));
 
@@ -102,7 +105,7 @@ describe('WeniWebchatService — render gating', () => {
     });
 
     it('randomizes a new decision (true) when nothing is stored and Math.random < percentage', () => {
-      getItemSpy.mockReturnValueOnce(null);
+      storedRender = null;
       jest.spyOn(Math, 'random').mockReturnValue(0.49);
       service = new WeniWebchatService(makeConfig({ renderPercentage: 50 }));
 
@@ -113,7 +116,7 @@ describe('WeniWebchatService — render gating', () => {
     });
 
     it('randomizes a new decision (false) when nothing is stored and Math.random >= percentage', () => {
-      getItemSpy.mockReturnValueOnce(null);
+      storedRender = null;
       jest.spyOn(Math, 'random').mockReturnValue(0.51);
       service = new WeniWebchatService(makeConfig({ renderPercentage: 50 }));
 
@@ -124,7 +127,7 @@ describe('WeniWebchatService — render gating', () => {
     });
 
     it('ignores garbage stored values that do not contain a colon', () => {
-      getItemSpy.mockReturnValueOnce('garbage');
+      storedRender = 'garbage';
       jest.spyOn(Math, 'random').mockReturnValue(0.49);
       service = new WeniWebchatService(makeConfig({ renderPercentage: 50 }));
 
@@ -182,7 +185,7 @@ describe('WeniWebchatService — render gating', () => {
   // ---------------------------------------------------------------------------
   describe('init() render gating', () => {
     it('returns { shouldRender: false }, sets _renderEnabled=false, and skips bootstrap', async () => {
-      getItemSpy.mockReturnValueOnce('50:false');
+      storedRender = '50:false';
       service = new WeniWebchatService(makeConfig({ renderPercentage: 50 }));
       const restoreSpy = jest.spyOn(service, 'restoreOrCreateSession');
       const connectSpy = jest.spyOn(service, 'connect');
