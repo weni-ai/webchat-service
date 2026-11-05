@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional `backInStock` init object (`subscribePath`, `timeoutMs`, `maxRetries`, `retryBaseDelayMs`). Omitting it keeps the defaults: `/_v/private/availability-notify/subscribe`, 10 seconds, 2 retries, and a 500 ms base delay.
 - Runtime dependency `libphonenumber-js` for phone validation. CommonJS and ESM builds leave `libphonenumber-js/max` external. The UMD build bundles it.
 
+## [1.19.3] - 2026-10-30
+
 ### Fixed
 
 - Outgoing image, video, audio, and file messages preview from a blob URL while the upload is in progress. Browser storage keeps the message only after the socket ack replaces that preview with the official http(s) link, so a media send no longer overflows the quota and clears the conversation.
