@@ -107,6 +107,10 @@ describe('WeniWebchatService — public surface', () => {
 
     it('re-exports SERVICE_EVENTS identical to constants', () => {
       expect(SERVICE_EVENTS).toBe(Constants.SERVICE_EVENTS);
+      expect(SERVICE_EVENTS.BACK_IN_STOCK_SUBSCRIBED).toBe(
+        'backInStock:subscribed',
+      );
+      expect(SERVICE_EVENTS.BACK_IN_STOCK_ERROR).toBe('backInStock:error');
     });
 
     it('re-exports DEFAULTS identical to constants', () => {

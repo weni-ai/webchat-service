@@ -43,6 +43,40 @@ export function validateConfig(config) {
   if (config.pingInterval && typeof config.pingInterval !== 'number') {
     throw new Error('pingInterval must be a number');
   }
+
+  const backInStock = config.backInStock;
+  if (backInStock == null) return;
+
+  if (typeof backInStock !== 'object') {
+    throw new Error('backInStock must be an object');
+  }
+
+  ['timeoutMs', 'retryBaseDelayMs'].forEach((key) => {
+    const value = backInStock[key];
+    if (value == null) return;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      throw new Error(`${key} must be a finite number >= 0`);
+    }
+  });
+
+  if (backInStock.maxRetries != null) {
+    const { maxRetries } = backInStock;
+    if (
+      typeof maxRetries !== 'number' ||
+      !Number.isInteger(maxRetries) ||
+      maxRetries < 0
+    ) {
+      throw new Error('maxRetries must be an integer >= 0');
+    }
+  }
+
+  if (
+    backInStock.subscribePath != null &&
+    (typeof backInStock.subscribePath !== 'string' ||
+      backInStock.subscribePath.trim() === '')
+  ) {
+    throw new Error('subscribePath must be a non-empty string');
+  }
 }
 
 /**
