@@ -466,6 +466,43 @@ describe('Helpers', () => {
     });
   });
 
+  describe('readCustomData', () => {
+    it('should return a plain object by reference and unchanged', () => {
+      const customData = { order_id: 'ord_1', nested: { expires_at: 'x' } };
+
+      const result = helpers.readCustomData({ custom_data: customData });
+
+      expect(result).toEqual({ customData });
+      expect(result.customData).toBe(customData);
+    });
+
+    it('should pass an empty object through', () => {
+      expect(helpers.readCustomData({ custom_data: {} })).toEqual({
+        customData: {},
+      });
+    });
+
+    it.each([
+      ['no message body', undefined],
+      ['null message body', null],
+      ['missing custom_data', {}],
+      ['null custom_data', { custom_data: null }],
+    ])('should report nothing for %s', (_, body) => {
+      expect(helpers.readCustomData(body)).toEqual({});
+    });
+
+    it.each([
+      ['array', []],
+      ['string', '{"a":1}'],
+      ['number', 0],
+      ['boolean', false],
+    ])('should discard a %s and report its kind only', (kind, value) => {
+      expect(helpers.readCustomData({ custom_data: value })).toEqual({
+        discardedKind: kind,
+      });
+    });
+  });
+
   describe('shouldIgnoreJsonObjectPayload', () => {
     it('should ignore a top-level JSON object without message envelope', () => {
       expect(

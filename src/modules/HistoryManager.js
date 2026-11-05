@@ -1,6 +1,6 @@
 import EventEmitter from 'eventemitter3';
 import { SERVICE_EVENTS } from '../utils/constants';
-import { unescapeEscapedUrlSlashes } from '../utils/helpers';
+import { readCustomData, unescapeEscapedUrlSlashes } from '../utils/helpers';
 
 /**
  * @class HistoryManager
@@ -180,6 +180,18 @@ export default class HistoryManager extends EventEmitter {
         };
       }
 
+      const { customData, discardedKind } = readCustomData(item.message);
+
+      if (customData) {
+        message.customData = customData;
+      } else if (discardedKind) {
+        console.warn('HistoryManager: custom_data discarded', {
+          operation: 'normalize-custom-data',
+          messageType: message.type,
+          receivedKind: discardedKind,
+        });
+      }
+
       return message;
     });
   }
@@ -213,8 +225,12 @@ export default class HistoryManager extends EventEmitter {
     historyMessages.forEach((msg) => {
       if (msg.id || msg.ID) {
         const id = msg.id || msg.ID;
-        if (!messageMap.has(id)) {
+        const cachedMessage = messageMap.get(id);
+
+        if (!cachedMessage) {
           messageMap.set(id, msg);
+        } else if (msg.customData && !cachedMessage.customData) {
+          messageMap.set(id, { ...cachedMessage, customData: msg.customData });
         }
       }
     });

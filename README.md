@@ -423,6 +423,23 @@ service.on('history:loaded', (messages) => {})
 service.on('error', (error) => {})
 ```
 
+### Message `customData`
+
+When the platform sends a message with a `custom_data` JSON object, the `Message` delivered by `message:received` and `history:loaded` (and kept in `getMessages()` and in the stored session) carries it as `customData`:
+
+```javascript
+service.on('message:received', (message) => {
+  if (message.customData) {
+    console.log(message.customData.order_id)
+  }
+})
+```
+
+- The inner keys belong to the integrator and are passed through exactly as received (for example `order_id` is **not** converted to `orderId`).
+- `customData` is absent when the message has no custom data. If the socket sends a value that is not a JSON object (an array, string, number or boolean), the field is dropped, a `console.warn` is written without the value, and the message is still delivered.
+- The service does not validate size, depth or keys of the object, and does not render it. When a message is split into several parts, only the part that carries it exposes `customData`.
+- It is unrelated to the `customData` option of the service configuration.
+
 ### Typing & Thinking Indicators
 
 The service distinguishes between two types of indicators:

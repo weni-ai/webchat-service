@@ -242,6 +242,28 @@ describe('WeniWebchatService — _setupEventListeners wiring', () => {
       expect(processedListener).not.toHaveBeenCalled();
     });
 
+    it('keeps customData on message:received, in state and in the stored conversation', () => {
+      service.session.createNewSession();
+      const receivedListener = jest.fn();
+      service.on(SERVICE_EVENTS.MESSAGE_RECEIVED, receivedListener);
+      const customData = {
+        order_id: 'ord_123',
+        coupon: { expires_at: '2026-11-30T23:59:59Z' },
+      };
+
+      const msg = service.messageProcessor._normalizeMessage({
+        type: 'message',
+        message: { type: 'text', text: 'hi', custom_data: customData },
+      });
+      service.messageProcessor.emit(SERVICE_EVENTS.MESSAGE_PROCESSED, msg);
+
+      expect(receivedListener.mock.calls[0][0].customData).toEqual(customData);
+      expect(service.state.getMessages()[0].customData).toEqual(customData);
+      expect(service.session.getConversation()[0].customData).toEqual(
+        customData,
+      );
+    });
+
     it('on MESSAGE_UPDATED: updateMessage + updateConversation + re-emits with same args', () => {
       service.session.createNewSession();
       const updateStateSpy = jest.spyOn(service.state, 'updateMessage');
