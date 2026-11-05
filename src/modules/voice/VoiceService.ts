@@ -1,4 +1,5 @@
 import AudioCapture from './AudioCapture';
+import { buildTTSWebSocketURL, resolveTtsSettings } from './config';
 import EchoGuard from './EchoGuard';
 import SessionGuard from './SessionGuard';
 import TTSPlayer from './TTSPlayer';
@@ -9,7 +10,16 @@ export type VoiceStateName = 'idle' | 'listening' | 'speaking';
 
 interface VoiceHost {
   emit(event: string, payload?: unknown): void;
-  config: { maxReconnectAttempts?: number };
+  config: {
+    maxReconnectAttempts?: number;
+    voiceMode?: {
+      elevenLabs?: { voiceId?: string };
+      ttsModel?: string;
+      audioFormat?: string;
+      languageCode?: string;
+    };
+  };
+  requestVoiceTokens(): Promise<{ sttToken: string; ttsToken: string }>;
 }
 
 /**
@@ -21,7 +31,7 @@ export default class VoiceService {
 
   private readonly capture = new AudioCapture();
 
-  private readonly player = new TTSPlayer();
+  private readonly player: TTSPlayer;
 
   private readonly echo = new EchoGuard();
 
@@ -31,7 +41,15 @@ export default class VoiceService {
 
   private lastSpokenMessageId = '';
 
-  constructor(private readonly host: VoiceHost) {}
+  constructor(private readonly host: VoiceHost) {
+    this.player = new TTSPlayer(() => this.ttsUrl());
+  }
+
+  private async ttsUrl(): Promise<string> {
+    const settings = resolveTtsSettings(this.host.config?.voiceMode);
+    const tokens = await this.host.requestVoiceTokens();
+    return buildTTSWebSocketURL(settings.voiceId, settings, tokens.ttsToken);
+  }
 
   getState(): VoiceStateName {
     return this.state;
