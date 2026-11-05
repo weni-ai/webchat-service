@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.19.4] - 2026-11-05
+
 ### Added
 
 - Incoming and history messages expose the optional `customData` field when the socket sends `message.custom_data` as a JSON object. Inner keys are passed through unchanged. The field is kept in `state.messages` and in the stored session conversation, and `getHistory` fills it into a cached message that lacks it. A `custom_data` that is not an object is dropped with a warning and the message is still delivered.
+
+## [1.19.3] - 2026-10-30
 
 ### Fixed
 
