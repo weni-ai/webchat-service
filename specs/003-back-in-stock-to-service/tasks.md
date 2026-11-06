@@ -21,12 +21,12 @@
 
 **Purpose**: Make Rollup, Jest, ESLint, and `tsc` accept the first TypeScript files
 
-- [ ] T001 Add runtime dependency `libphonenumber-js` and devDependencies `@babel/preset-typescript`, `@rollup/plugin-babel`, and `typescript-eslint` in `package.json`, add scripts `typecheck` (`tsc --noEmit`) and `lint` (`eslint src tests --ext .js,.ts`), then run `npm install`
-- [ ] T002 [P] Add `@babel/preset-typescript` after `@babel/preset-env` in `babel.config.js` so Babel runs the TypeScript preset first
-- [ ] T003 [P] Set `noEmit: true`, `allowJs: false`, and `isolatedModules: true` in `tsconfig.json`, remove `rootDir`, and set `include` to `src/**/*.ts`
-- [ ] T004 [P] In `jest.config.js`, match `tests/**/*.test.ts`, transform `^.+\\.(js|ts)$` with `babel-jest`, and add `src/**/*.ts` to `collectCoverageFrom`
-- [ ] T005 [P] Parse `src/**/*.ts` and `tests/**/*.ts` with `typescript-eslint` in `eslint.config.mjs`, keeping the existing Prettier rules
-- [ ] T006 [P] In `rollup.config.js`, compile `.ts` with `@rollup/plugin-babel` (`extensions: ['.js', '.ts']`). Emit CJS and ESM with `eventemitter3` and `libphonenumber-js/max` external. Emit UMD with only `eventemitter3` external so the phone library is bundled
+- [x] T001 Add runtime dependency `libphonenumber-js` and devDependencies `@babel/preset-typescript`, `@rollup/plugin-babel`, and `typescript-eslint` in `package.json`, add scripts `typecheck` (`tsc --noEmit`) and `lint` (`eslint src tests --ext .js,.ts`), then run `npm install`
+- [x] T002 [P] Add `@babel/preset-typescript` after `@babel/preset-env` in `babel.config.js` so Babel runs the TypeScript preset first
+- [x] T003 [P] Set `noEmit: true`, `allowJs: false`, and `isolatedModules: true` in `tsconfig.json`, remove `rootDir`, and set `include` to `src/**/*.ts`
+- [x] T004 [P] In `jest.config.js`, match `tests/**/*.test.ts`, transform `^.+\\.(js|ts)$` with `babel-jest`, and add `src/**/*.ts` to `collectCoverageFrom`
+- [x] T005 [P] Parse `src/**/*.ts` and `tests/**/*.ts` with `typescript-eslint` in `eslint.config.mjs`, keeping the existing Prettier rules
+- [x] T006 [P] In `rollup.config.js`, compile `.ts` with `@rollup/plugin-babel` (`extensions: ['.js', '.ts']`). Emit CJS and ESM with `eventemitter3` and `libphonenumber-js/max` external. Emit UMD with only `eventemitter3` external so the phone library is bundled
 
 ---
 
@@ -36,9 +36,9 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T007 Create `src/modules/backInStock/error.ts` exporting `BackInStockError` with `code` of `VALIDATION`, `HTTP`, `TIMEOUT`, or `NETWORK`, plus optional `skuId`, `status`, `attempt`, and `fields`. Constraint from `data-model.md`: `fields` is `{ name?: 'required', phone?: 'invalid', skuId?: 'required' }`
-- [ ] T008 [P] Add `BACK_IN_STOCK_SUBSCRIBED: 'backInStock:subscribed'` and `BACK_IN_STOCK_ERROR: 'backInStock:error'` to `SERVICE_EVENTS` in `src/utils/constants.js`, plus defaults `subscribePath` `/_v/private/availability-notify/subscribe`, `timeoutMs` `10000`, `maxRetries` `2`, and `retryBaseDelayMs` `500`
-- [ ] T009 Run `npm run typecheck`, `npm run lint`, and `npm run build`, and confirm `dist/index.cjs.js` and `dist/index.esm.js` import `libphonenumber-js/max` only once the contact module exists (this task only checks the bundles emit and the error module typechecks)
+- [x] T007 Create `src/modules/backInStock/error.ts` exporting `BackInStockError` with `code` of `VALIDATION`, `HTTP`, `TIMEOUT`, or `NETWORK`, plus optional `skuId`, `status`, `attempt`, and `fields`. Constraint from `data-model.md`: `fields` is `{ name?: 'required', phone?: 'invalid', skuId?: 'required' }`
+- [x] T008 [P] Add `BACK_IN_STOCK_SUBSCRIBED: 'backInStock:subscribed'` and `BACK_IN_STOCK_ERROR: 'backInStock:error'` to `SERVICE_EVENTS` in `src/utils/constants.js`, plus defaults `subscribePath` `/_v/private/availability-notify/subscribe`, `timeoutMs` `10000`, `maxRetries` `2`, and `retryBaseDelayMs` `500`
+- [x] T009 Run `npm run typecheck`, `npm run lint`, and `npm run build`, and confirm `dist/index.cjs.js` and `dist/index.esm.js` import `libphonenumber-js/max` only once the contact module exists (this task only checks the bundles emit and the error module typechecks)
 
 **Checkpoint**: Toolchain builds `.ts`. Story work can start
 
@@ -54,11 +54,11 @@
 
 > **NOTE: Write this test FIRST, ensure it FAILS before T011**
 
-- [ ] T010 [US1] Write `tests/backInStock.offer.test.ts` for quantity `0` (`isUnavailable: true`), quantity above `0`, unknown quantity, unmatched SKU, missing sellers, `null` product, missing `items`, and non-array `sellers` (all `isUnavailable: false` and no throw). Include a leading-zero match (`"000326125867"` vs `"326125867"`) and an alphanumeric SKU that is not stripped. Seller cases: `sellerDefault`, else the first seller, else `'1'`
+- [x] T010 [US1] Write `tests/backInStock.offer.test.ts` for quantity `0` (`isUnavailable: true`), quantity above `0`, unknown quantity, unmatched SKU, missing sellers, `null` product, missing `items`, and non-array `sellers` (all `isUnavailable: false` and no throw). Include a leading-zero match (`"000326125867"` vs `"326125867"`) and an alphanumeric SKU that is not stripped. Seller cases: `sellerDefault`, else the first seller, else `'1'`
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Implement `evaluateBackInStockOffer` in `src/modules/backInStock/offer.ts`. Constraint from `data-model.md`: `isUnavailable` is `true` only when a matched item has `availableQuantity <= 0`. Unmatched SKU, missing sellers, unknown quantity, or a product that is not an object returns `false` and never throws. `skuId` is `selectedSkuId` with leading zeros stripped when it is all digits, and `''` when absent. `seller` is the `sellerId` of the seller with `sellerDefault`, else the first seller, else `'1'`. SKU match is string equality, then equality after stripping leading zeros from numeric ids. A non-numeric id is not stripped. Read `items[].itemId`, `sellers[].sellerId`, `sellers[].sellerDefault`, and `commertialOffer.AvailableQuantity` only inside this function
+- [x] T011 [US1] Implement `evaluateBackInStockOffer` in `src/modules/backInStock/offer.ts`. Constraint from `data-model.md`: `isUnavailable` is `true` only when a matched item has `availableQuantity <= 0`. Unmatched SKU, missing sellers, unknown quantity, or a product that is not an object returns `false` and never throws. `skuId` is `selectedSkuId` with leading zeros stripped when it is all digits, and `''` when absent. `seller` is the `sellerId` of the seller with `sellerDefault`, else the first seller, else `'1'`. SKU match is string equality, then equality after stripping leading zeros from numeric ids. A non-numeric id is not stripped. Read `items[].itemId`, `sellers[].sellerId`, `sellers[].sellerDefault`, and `commertialOffer.AvailableQuantity` only inside this function
 
 **Checkpoint**: Offer verdicts match today's widget rules with no network and no `window` access
 
@@ -74,11 +74,11 @@
 
 > **NOTE: Write this test FIRST, ensure it FAILS before T013**
 
-- [ ] T012 [P] [US2] Write `tests/backInStock.contact.test.ts` for a valid BR mobile, a too-short number, an empty calling code, an empty national number, separators, and a leading `+`. A blank name and a whitespace-only name return `errors.name === 'required'`. Valid input returns `isValid: true` and empty `errors`
+- [x] T012 [P] [US2] Write `tests/backInStock.contact.test.ts` for a valid BR mobile, a too-short number, an empty calling code, an empty national number, separators, and a leading `+`. A blank name and a whitespace-only name return `errors.name === 'required'`. Valid input returns `isValid: true` and empty `errors`
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Implement `validateBackInStockContact` in `src/modules/backInStock/contact.ts` using `isValidPhoneNumber` from `libphonenumber-js/max`. Constraint from `data-model.md`: `name` is valid when trim is non-empty. `phone` is valid when `isValidPhoneNumber('+' + digits)` is true. `errors.name` is `'required'` or absent. `errors.phone` is `'invalid'` or absent. Return no display strings
+- [x] T013 [US2] Implement `validateBackInStockContact` in `src/modules/backInStock/contact.ts` using `isValidPhoneNumber` from `libphonenumber-js/max`. Constraint from `data-model.md`: `name` is valid when trim is non-empty. `phone` is valid when `isValidPhoneNumber('+' + digits)` is true. `errors.name` is `'required'` or absent. `errors.phone` is `'invalid'` or absent. Return no display strings
 
 **Checkpoint**: Contact validation is synchronous and does not read the page
 
@@ -94,17 +94,17 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before T016**
 
-- [ ] T014 [P] [US3] Write `tests/backInStock.subscription.test.ts` with a stubbed `fetch` and fake timers. Cover the body for full input, `seller` and `salesChannel` defaulting to `'1'`, stripped SKU, digits-only phone, trimmed name, and every locale branch: first regional entry of `storeLocales` (including a non-regional first entry followed by a regional one), regional `language`, mapped `pt`/`en`/`es`/`ro`, an unmapped language passed through, and the `pt-BR` default. Cover 2xx with no body resolving `{ accepted: true }`, `200 { accepted: false }` resolving `false`, 400 rejecting `HTTP` with no retry, 503 then 200 resolving after one retry, 503 three times rejecting with `attempt: 3`, a hung `fetch` rejecting `TIMEOUT`, and a thrown `fetch` rejecting `NETWORK`. Two concurrent calls with the same SKU and phone call `fetch` once. Invalid phone, blank name, and empty SKU reject `VALIDATION` and do not call `fetch`. Event payloads have no `name` and no `phone`. Assert `src/modules/backInStock` has no `window` reference
-- [ ] T015 [P] [US3] Write `tests/service.backInStock.test.ts` so the three methods exist on an instance and delegate, and a custom `backInStock.subscribePath`, `timeoutMs`, and `maxRetries` are honored. Extend `tests/service.exports.test.js` so `SERVICE_EVENTS` contains `backInStock:subscribed` and `backInStock:error`
+- [x] T014 [P] [US3] Write `tests/backInStock.subscription.test.ts` with a stubbed `fetch` and fake timers. Cover the body for full input, `seller` and `salesChannel` defaulting to `'1'`, stripped SKU, digits-only phone, trimmed name, and every locale branch: first regional entry of `storeLocales` (including a non-regional first entry followed by a regional one), regional `language`, mapped `pt`/`en`/`es`/`ro`, an unmapped language passed through, and the `pt-BR` default. Cover 2xx with no body resolving `{ accepted: true }`, `200 { accepted: false }` resolving `false`, 400 rejecting `HTTP` with no retry, 503 then 200 resolving after one retry, 503 three times rejecting with `attempt: 3`, a hung `fetch` rejecting `TIMEOUT`, and a thrown `fetch` rejecting `NETWORK`. Two concurrent calls with the same SKU and phone call `fetch` once. Invalid phone, blank name, and empty SKU reject `VALIDATION` and do not call `fetch`. Event payloads have no `name` and no `phone`. Assert `src/modules/backInStock` has no `window` reference
+- [x] T015 [P] [US3] Write `tests/service.backInStock.test.ts` so the three methods exist on an instance and delegate, and a custom `backInStock.subscribePath`, `timeoutMs`, and `maxRetries` are honored. Extend `tests/service.exports.test.js` so `SERVICE_EVENTS` contains `backInStock:subscribed` and `backInStock:error`
 
 ### Implementation for User Story 3
 
-- [ ] T016 [P] [US3] Implement `src/utils/backInStockRequestBuilder.ts`. Constraint from `data-model.md`: the body is `{ sku_id, phone, name, seller, sales_channel, locale }` and this is the only snake_case object. `locale` is the first value containing `-` in `storeLocales`, then in `language`; otherwise `language` maps `{ pt: 'pt-BR', en: 'en-US', es: 'es-ES', ro: 'ro-RO' }`, then the raw `language`, then `pt-BR`. SKU leading zeros stripped when all digits. Phone digits only. Name trimmed. Empty `seller` or `salesChannel` becomes `'1'`
-- [ ] T017 [P] [US3] Implement `src/network/BackInStockClient.ts`. `POST` with `Content-Type: application/json` and `credentials: 'same-origin'`. Each attempt times out via `AbortController`. Retry only a network error, a timeout, 429, and 5xx, up to `maxRetries`, waiting `retryBaseDelayMs * 2^attempt` with no jitter. Do not use `src/network/RetryStrategy.js`. Constraint from `data-model.md`: a 2xx body with `accepted: false` is `false`; a 2xx body without `accepted`, or a body that is not JSON, is `true`
-- [ ] T018 [US3] Implement `subscribeBackInStock` in `src/modules/backInStock/subscription.ts` on a per-instance pending map. Run contact validation and reject an empty SKU with `BackInStockError` `VALIDATION` and `fields.skuId === 'required'` before any `fetch`. Pending key is `normalizedSkuId + ':' + phoneDigits`; a second call with that key returns the same promise. Clear the key in `finally`. On 2xx resolve `{ accepted }` and emit `backInStock:subscribed` with `{ skuId, accepted }`. On failure reject `BackInStockError` and emit `backInStock:error` with `{ code, skuId, status?, attempt?, fields? }`. `attempt` is 1-based. Warn `console.warn('[WebChatService:BackInStock]', context)` for `HTTP`, `TIMEOUT`, and `NETWORK` only, with `{ operation: 'subscribeBackInStock', code, skuId, status, attempt }` and no name or phone
-- [ ] T019 [P] [US3] Add the three methods, `BackInStockError`, the two events, and the optional `backInStock` init object to `src/types/index.d.ts` using the signatures in `specs/003-back-in-stock-to-service/contracts/back-in-stock-api.md`
-- [ ] T020 [US3] In `src/index.js`, construct one subscription per instance and add `evaluateBackInStockOffer`, `validateBackInStockContact`, and `subscribeBackInStock` as delegating methods. Do not put offer, phone, or HTTP logic in this file
-- [ ] T021 [P] [US3] In `src/utils/validators.js`, reject a `backInStock` option whose `timeoutMs` or `retryBaseDelayMs` is not a finite number `>= 0`, whose `maxRetries` is not an integer `>= 0`, or whose `subscribePath` is not a non-empty string. Constraint from `data-model.md`: those are the only constructor checks; omitting `backInStock` keeps today's construction
+- [x] T016 [P] [US3] Implement `src/utils/backInStockRequestBuilder.ts`. Constraint from `data-model.md`: the body is `{ sku_id, phone, name, seller, sales_channel, locale }` and this is the only snake_case object. `locale` is the first value containing `-` in `storeLocales`, then in `language`; otherwise `language` maps `{ pt: 'pt-BR', en: 'en-US', es: 'es-ES', ro: 'ro-RO' }`, then the raw `language`, then `pt-BR`. SKU leading zeros stripped when all digits. Phone digits only. Name trimmed. Empty `seller` or `salesChannel` becomes `'1'`
+- [x] T017 [P] [US3] Implement `src/network/BackInStockClient.ts`. `POST` with `Content-Type: application/json` and `credentials: 'same-origin'`. Each attempt times out via `AbortController`. Retry only a network error, a timeout, 429, and 5xx, up to `maxRetries`, waiting `retryBaseDelayMs * 2^attempt` with no jitter. Do not use `src/network/RetryStrategy.js`. Constraint from `data-model.md`: a 2xx body with `accepted: false` is `false`; a 2xx body without `accepted`, or a body that is not JSON, is `true`
+- [x] T018 [US3] Implement `subscribeBackInStock` in `src/modules/backInStock/subscription.ts` on a per-instance pending map. Run contact validation and reject an empty SKU with `BackInStockError` `VALIDATION` and `fields.skuId === 'required'` before any `fetch`. Pending key is `normalizedSkuId + ':' + phoneDigits`; a second call with that key returns the same promise. Clear the key in `finally`. On 2xx resolve `{ accepted }` and emit `backInStock:subscribed` with `{ skuId, accepted }`. On failure reject `BackInStockError` and emit `backInStock:error` with `{ code, skuId, status?, attempt?, fields? }`. `attempt` is 1-based. Warn `console.warn('[WebChatService:BackInStock]', context)` for `HTTP`, `TIMEOUT`, and `NETWORK` only, with `{ operation: 'subscribeBackInStock', code, skuId, status, attempt }` and no name or phone
+- [x] T019 [P] [US3] Add the three methods, `BackInStockError`, the two events, and the optional `backInStock` init object to `src/types/index.d.ts` using the signatures in `specs/003-back-in-stock-to-service/contracts/back-in-stock-api.md`
+- [x] T020 [US3] In `src/index.js`, construct one subscription per instance and add `evaluateBackInStockOffer`, `validateBackInStockContact`, and `subscribeBackInStock` as delegating methods. Do not put offer, phone, or HTTP logic in this file
+- [x] T021 [P] [US3] In `src/utils/validators.js`, reject a `backInStock` option whose `timeoutMs` or `retryBaseDelayMs` is not a finite number `>= 0`, whose `maxRetries` is not an integer `>= 0`, or whose `subscribePath` is not a non-empty string. Constraint from `data-model.md`: those are the only constructor checks; omitting `backInStock` keeps today's construction
 
 **Checkpoint**: A valid subscribe sends one POST. A repeat while in flight does not send a second. Invalid input sends nothing
 
@@ -114,9 +114,9 @@
 
 **Purpose**: Release notes and the quickstart gate
 
-- [ ] T022 Add Added entries to `CHANGELOG.md` for the three methods, the two events, the `backInStock` option, and the `libphonenumber-js` dependency. State that CJS and ESM leave `libphonenumber-js/max` external and UMD bundles it
-- [ ] T023 [P] Document the three methods and the `backInStock` defaults in `README.md`, including that an overridden `subscribePath` on another origin is the caller's CORS and session problem
-- [ ] T024 Run the commands in `specs/003-back-in-stock-to-service/quickstart.md` (`npm run typecheck`, `npm run lint`, `npm test`, `npm run build`)
+- [x] T022 Add Added entries to `CHANGELOG.md` for the three methods, the two events, the `backInStock` option, and the `libphonenumber-js` dependency. State that CJS and ESM leave `libphonenumber-js/max` external and UMD bundles it
+- [x] T023 [P] Document the three methods and the `backInStock` defaults in `README.md`, including that an overridden `subscribePath` on another origin is the caller's CORS and session problem
+- [x] T024 Run the commands in `specs/003-back-in-stock-to-service/quickstart.md` (`npm run typecheck`, `npm run lint`, `npm test`, `npm run build`)
 
 ---
 
