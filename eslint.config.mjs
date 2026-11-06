@@ -1,8 +1,18 @@
 import { defineConfig } from "eslint/config";
 import prettier from "eslint-plugin-prettier";
 import globals from "globals";
+import tseslint from "typescript-eslint";
 
 export default defineConfig([
+  {
+    ignores: [
+      "node_modules/**",
+      "dist/**",
+      "coverage/**",
+      "**/*.min.js",
+      "**/*.d.ts",
+    ],
+  },
   {
     languageOptions: {
       ecmaVersion: 12,
@@ -30,6 +40,12 @@ export default defineConfig([
           singleAttributePerLine: true,
         },
       ],
+    },
+  },
+  {
+    files: ["**/*.ts"],
+    languageOptions: {
+      parser: tseslint.parser,
     },
   },
 ]);

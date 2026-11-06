@@ -461,17 +461,20 @@ describe('validators', () => {
       expect(normalizeSendUtmData(validData)).toEqual(validData);
     });
 
-    it.each(ALLOWED_UTM_SOURCES)('accepts allowed utm_source %p', (utm_source) => {
-      expect(
-        normalizeSendUtmData({
+    it.each(ALLOWED_UTM_SOURCES)(
+      'accepts allowed utm_source %p',
+      (utm_source) => {
+        expect(
+          normalizeSendUtmData({
+            ...validData,
+            utm_source,
+          }),
+        ).toEqual({
           ...validData,
           utm_source,
-        }),
-      ).toEqual({
-        ...validData,
-        utm_source,
-      });
-    });
+        });
+      },
+    );
 
     it('throws when data is missing', () => {
       expect(() => normalizeSendUtmData(null)).toThrow('UTM data is required');
@@ -513,9 +516,7 @@ describe('validators', () => {
           ...validData,
           utm_source: 'invalid_source',
         }),
-      ).toThrow(
-        `utm_source must be one of: ${ALLOWED_UTM_SOURCES.join(', ')}`,
-      );
+      ).toThrow(`utm_source must be one of: ${ALLOWED_UTM_SOURCES.join(', ')}`);
     });
   });
 
@@ -589,12 +590,12 @@ describe('validators', () => {
     });
 
     it('throws when legacy seller or id is missing', () => {
-      expect(() =>
-        normalizeAddToCartItems({ id: 'sku-1' }),
-      ).toThrow('seller is required');
-      expect(() =>
-        normalizeAddToCartItems({ seller: 'seller-1' }),
-      ).toThrow('id is required');
+      expect(() => normalizeAddToCartItems({ id: 'sku-1' })).toThrow(
+        'seller is required',
+      );
+      expect(() => normalizeAddToCartItems({ seller: 'seller-1' })).toThrow(
+        'id is required',
+      );
     });
 
     it('throws when quantity is invalid', () => {

@@ -7,6 +7,7 @@ export default {
           node: 'current'
         }
       }
-    ]
+    ],
+    '@babel/preset-typescript'
   ]
 }

@@ -14,6 +14,10 @@ import AudioRecorder from './modules/AudioRecorder';
 import RetryStrategy from './network/RetryStrategy';
 
 import { validateConfig, validateStartersData } from './utils/validators';
+import { BackInStockError } from './modules/backInStock/error';
+import { evaluateBackInStockOffer } from './modules/backInStock/offer';
+import { validateBackInStockContact } from './modules/backInStock/contact';
+import { BackInStockSubscription } from './modules/backInStock/subscription';
 import {
   DEFAULTS,
   SERVICE_EVENTS,
@@ -109,6 +113,18 @@ export default class WeniWebchatService extends EventEmitter {
       renderPercentage: config.renderPercentage || DEFAULTS.RENDER_PERCENTAGE,
       mode: config.mode || DEFAULTS.MODE,
       ...config,
+      backInStock: {
+        subscribePath:
+          config.backInStock?.subscribePath ||
+          DEFAULTS.BACK_IN_STOCK_SUBSCRIBE_PATH,
+        timeoutMs:
+          config.backInStock?.timeoutMs ?? DEFAULTS.BACK_IN_STOCK_TIMEOUT_MS,
+        maxRetries:
+          config.backInStock?.maxRetries ?? DEFAULTS.BACK_IN_STOCK_MAX_RETRIES,
+        retryBaseDelayMs:
+          config.backInStock?.retryBaseDelayMs ??
+          DEFAULTS.BACK_IN_STOCK_RETRY_BASE_DELAY_MS,
+      },
     };
 
     // Initialize retry strategy for WebSocket reconnection
@@ -131,6 +147,11 @@ export default class WeniWebchatService extends EventEmitter {
     this.messageProcessor = new MessageProcessor(this.config);
 
     // Initialize feature modules
+    this.backInStockSubscription = new BackInStockSubscription({
+      emit: (event, payload) => this.emit(event, payload),
+      options: this.config.backInStock,
+    });
+
     this.history = new HistoryManager(this.websocket);
     this.fileHandler = new FileHandler(this.config);
     this.audioRecorder = new AudioRecorder(this.config);
@@ -625,6 +646,38 @@ export default class WeniWebchatService extends EventEmitter {
    *
    * @param {string} context Context string
    */
+  /**
+   * Whether the selected SKU should offer a back-in-stock notice.
+   * Unknown stock is treated as available.
+   *
+   * @param {{ product?: unknown, selectedSkuId?: string }} input
+   * @returns {{ isUnavailable: boolean, skuId: string, seller: string }}
+   */
+  evaluateBackInStockOffer(input) {
+    return evaluateBackInStockOffer(input);
+  }
+
+  /**
+   * Checks the name and international phone. Error values are codes.
+   *
+   * @param {{ name?: string, phone?: string }} input
+   * @returns {{ isValid: boolean, errors: { name?: 'required', phone?: 'invalid' } }}
+   */
+  validateBackInStockContact(input) {
+    return validateBackInStockContact(input);
+  }
+
+  /**
+   * Posts a back-in-stock subscription. Rejects with BackInStockError and
+   * also emits backInStock:error. Name and phone are never in that payload.
+   *
+   * @param {Object} input
+   * @returns {Promise<{ accepted: boolean }>}
+   */
+  subscribeBackInStock(input) {
+    return this.backInStockSubscription.subscribe(input);
+  }
+
   setContext(context) {
     this.state.setContext(context);
     this.emit(SERVICE_EVENTS.CONTEXT_CHANGED, context);
@@ -1405,4 +1458,5 @@ export {
   DEFAULTS,
   UTM_SOURCES,
   ALLOWED_UTM_SOURCES,
+  BackInStockError,
 };

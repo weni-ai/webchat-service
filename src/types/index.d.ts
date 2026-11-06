@@ -37,6 +37,14 @@ export interface ServiceConfig {
   customData?: Record<string, any>
   params?: Record<string, any>
 
+  // Back in stock. Every field is optional.
+  backInStock?: {
+    subscribePath?: string
+    timeoutMs?: number
+    maxRetries?: number
+    retryBaseDelayMs?: number
+  }
+
   // NEW: Professional logging system
   logLevel?: 'debug' | 'info' | 'warn' | 'error'
   logEnabled?: boolean
@@ -403,6 +411,24 @@ export interface SendUtmData {
 /**
  * Main service class
  */
+export type BackInStockErrorCode =
+  | 'VALIDATION'
+  | 'HTTP'
+  | 'TIMEOUT'
+  | 'NETWORK'
+
+export class BackInStockError extends Error {
+  code: BackInStockErrorCode
+  skuId: string
+  status?: number
+  attempt?: number
+  fields?: {
+    name?: 'required'
+    phone?: 'invalid'
+    skuId?: 'required'
+  }
+}
+
 export default class WeniWebchatService {
   constructor(config: ServiceConfig)
 
@@ -436,6 +462,28 @@ export default class WeniWebchatService {
   // Starters
   getStarters(productData: StartersData): void
   clearStarters(): void
+
+  // Back in stock
+  evaluateBackInStockOffer(input: {
+    product?: unknown
+    selectedSkuId?: string
+  }): { isUnavailable: boolean; skuId: string; seller: string }
+  validateBackInStockContact(input: {
+    name?: string
+    phone?: string
+  }): {
+    isValid: boolean
+    errors: { name?: 'required'; phone?: 'invalid' }
+  }
+  subscribeBackInStock(input: {
+    name?: string
+    phone?: string
+    skuId?: string
+    seller?: string | null
+    salesChannel?: string | null
+    storeLocales?: string[]
+    language?: string
+  }): Promise<{ accepted: boolean }>
 
   // Context
   setContext(context: string): void

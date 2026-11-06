@@ -294,7 +294,9 @@ describe('StateManager', () => {
     it('does not throw and does not change the contents when the id is unknown', () => {
       const before = manager.getMessages();
 
-      expect(() => manager.updateMessage('missing', { text: 'x' })).not.toThrow();
+      expect(() =>
+        manager.updateMessage('missing', { text: 'x' }),
+      ).not.toThrow();
 
       expect(manager.getMessages()).toEqual(before);
     });

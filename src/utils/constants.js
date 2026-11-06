@@ -126,6 +126,12 @@ export const DEFAULTS = {
   CACHE_TIMEOUT: 30 * 60 * 1000, // 30 minutes
   CONTACT_TIMEOUT: 24 * 60 * 60 * 1000, // 24 hours
 
+  // Back in stock
+  BACK_IN_STOCK_SUBSCRIBE_PATH: '/_v/private/availability-notify/subscribe',
+  BACK_IN_STOCK_TIMEOUT_MS: 10000,
+  BACK_IN_STOCK_MAX_RETRIES: 2,
+  BACK_IN_STOCK_RETRY_BASE_DELAY_MS: 500,
+
   // Files
   MAX_FILE_SIZE: 32 * 1024 * 1024, // 32MB
   COMPRESS_IMAGES: true,
@@ -314,6 +320,10 @@ export const SERVICE_EVENTS = {
   STARTERS_RECEIVED: 'starters:received',
   STARTERS_ERROR: 'starters:error',
   STARTERS_DISCARDED: 'starters:discarded',
+
+  // Back in stock
+  BACK_IN_STOCK_SUBSCRIBED: 'backInStock:subscribed',
+  BACK_IN_STOCK_ERROR: 'backInStock:error',
 };
 
 export const LOG_LEVELS = {

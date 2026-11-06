@@ -107,8 +107,18 @@ const service = new WeniWebchatService({
   
   // Mode
   mode: 'live',                            // 'live' (default) or 'preview' (no socket)
+
+  // Back in stock. Omit the object to keep these defaults.
+  backInStock: {
+    subscribePath: '/_v/private/availability-notify/subscribe',
+    timeoutMs: 10000,
+    maxRetries: 2,
+    retryBaseDelayMs: 500,
+  },
 })
 ```
+
+An overridden `subscribePath` that points at another origin is the caller's CORS and session-cookie problem. The service does not attach a token.
 
 ## API Reference
 
@@ -421,7 +431,19 @@ service.on('history:loaded', (messages) => {})
 
 // Error events
 service.on('error', (error) => {})
+
+// Back in stock
+service.on('backInStock:subscribed', ({ skuId, accepted }) => {})
+service.on('backInStock:error', ({ code, skuId, status, attempt, fields }) => {})
 ```
+
+### Back in stock
+
+`evaluateBackInStockOffer({ product, selectedSkuId })` returns `{ isUnavailable, skuId, seller }`. The product is the normalized VTEX catalog object. The offer is unavailable only when the matched item's first seller has a numeric quantity of `0` or less. Unknown stock is treated as available.
+
+`validateBackInStockContact({ name, phone })` returns `{ isValid, errors }`. `errors.name` is `'required'` when the trimmed name is empty. `errors.phone` is `'invalid'` when `libphonenumber-js` rejects the digits. The widget keeps as-you-type formatting.
+
+`subscribeBackInStock({ name, phone, skuId, seller, salesChannel, storeLocales, language })` resolves `{ accepted }` or rejects `BackInStockError` (`VALIDATION`, `HTTP`, `TIMEOUT`, `NETWORK`). Empty seller and sales channel become `'1'`. The same SKU and phone already in flight share one request.
 
 ### Message `customData`
 

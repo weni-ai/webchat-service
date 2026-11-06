@@ -1,6 +1,6 @@
 {
   "name": "@weni/webchat-service",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "description": "Framework-agnostic JavaScript library for Weni WebChat integration",
   "main": "dist/index.cjs.js",
   "module": "dist/index.esm.js",
@@ -12,7 +12,8 @@
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build",
     "postversion": "git push --follow-tags",
-    "lint": "eslint src --ext .js"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests --ext .js,.ts"
   },
   "repository": {
     "type": "git",
@@ -32,11 +33,14 @@
   },
   "homepage": "https://github.com/weni-ai/webchat-service#readme",
   "dependencies": {
-    "eventemitter3": "^5.0.1"
+    "eventemitter3": "^5.0.1",
+    "libphonenumber-js": "^1.13.14"
   },
   "devDependencies": {
     "@babel/core": "^7.23.7",
     "@babel/preset-env": "^7.23.7",
+    "@babel/preset-typescript": "^7.27.1",
+    "@rollup/plugin-babel": "^6.0.4",
     "@rollup/plugin-commonjs": "^25.0.7",
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-terser": "^0.4.4",
@@ -50,7 +54,8 @@
     "jest-environment-jsdom": "^29.7.0",
     "prettier": "^3.7.4",
     "rollup": "^4.9.4",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^8.46.2"
   },
   "resolutions": {
     "source-map": "^0.7.4"
