@@ -1,5 +1,6 @@
 import EventEmitter from 'eventemitter3';
 import HistoryManager from '../src/modules/HistoryManager';
+import MessageProcessor from '../src/core/MessageProcessor';
 import { SERVICE_EVENTS } from '../src/utils/constants';
 
 function createWebSocketMock() {
@@ -927,6 +928,103 @@ describe('HistoryManager', () => {
       });
     });
 
+    describe('custom_data', () => {
+      const customData = {
+        order_id: 'ord_123',
+        coupon: { code: 'BLACK10', expires_at: '2026-11-30T23:59:59Z' },
+        tags: ['vip', 'campaign'],
+      };
+
+      const historyItem = (customDataValue) => ({
+        ID: 'msg-1',
+        timestamp: 1700000000,
+        direction: 'in',
+        message: { type: 'text', text: 'Hello', custom_data: customDataValue },
+      });
+
+      afterEach(() => {
+        jest.restoreAllMocks();
+      });
+
+      it('should expose a JSON object as customData with inner keys unchanged', () => {
+        const [message] = historyManager.processHistory([
+          historyItem(customData),
+        ]);
+
+        expect(message.customData).toEqual(customData);
+        expect(message).not.toHaveProperty('custom_data');
+      });
+
+      it('should produce the same customData as the live path for the same wire value', () => {
+        const processor = new MessageProcessor({});
+        const live = processor._normalizeMessage({
+          type: 'message',
+          message: { type: 'text', text: 'Hello', custom_data: customData },
+        });
+
+        const [history] = historyManager.processHistory([
+          historyItem(customData),
+        ]);
+
+        expect(history.customData).toEqual(live.customData);
+      });
+
+      it.each([
+        ['missing', undefined],
+        ['null', null],
+      ])('should omit customData without warning when it is %s', (_, value) => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+        const [message] = historyManager.processHistory([historyItem(value)]);
+
+        expect('customData' in message).toBe(false);
+        expect(warnSpy).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['array', ['a']],
+        ['string', 'secret-value'],
+        ['number', 42],
+        ['boolean', true],
+      ])(
+        'should drop a %s custom_data with one content-free warning',
+        (receivedKind, value) => {
+          const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+          const [message] = historyManager.processHistory([historyItem(value)]);
+
+          expect('customData' in message).toBe(false);
+          expect(message.text).toBe('Hello');
+          expect(warnSpy).toHaveBeenCalledTimes(1);
+          expect(warnSpy).toHaveBeenCalledWith(
+            'HistoryManager: custom_data discarded',
+            {
+              operation: 'normalize-custom-data',
+              messageType: 'text',
+              receivedKind,
+            },
+          );
+          expect(JSON.stringify(warnSpy.mock.calls[0])).not.toContain(
+            'secret-value',
+          );
+        },
+      );
+
+      it('should emit history:loaded with customData from a history frame', async () => {
+        const loaded = jest.fn();
+        historyManager.on(SERVICE_EVENTS.HISTORY_LOADED, loaded);
+
+        const promise = historyManager.request();
+        mockWebSocket.emit(SERVICE_EVENTS.MESSAGE, {
+          type: 'history',
+          history: [historyItem(customData)],
+        });
+        await promise;
+
+        expect(loaded.mock.calls[0][0][0].customData).toEqual(customData);
+      });
+    });
+
     describe('mixed message types', () => {
       it('should handle a mix of text, interactive, and order messages', () => {
         const rawHistory = [
@@ -1078,6 +1176,55 @@ describe('HistoryManager', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].text).toBe('new');
+    });
+
+    it('should fill customData from history into a cached copy that has none', () => {
+      const customData = { order_id: 'ord_1' };
+      const history = [{ id: 'shared', timestamp: 100, customData }];
+      const current = [{ id: 'shared', timestamp: 100, text: 'cached' }];
+
+      const result = historyManager.merge(history, current);
+
+      expect(result).toEqual([
+        { id: 'shared', timestamp: 100, text: 'cached', customData },
+      ]);
+      expect(result[0]).not.toBe(current[0]);
+    });
+
+    it('should keep the cached copy untouched when it already has customData', () => {
+      const history = [
+        {
+          id: 'shared',
+          timestamp: 100,
+          customData: { order_id: 'from-history' },
+        },
+      ];
+      const current = [
+        { id: 'shared', timestamp: 100, customData: { order_id: 'cached' } },
+      ];
+
+      const result = historyManager.merge(history, current);
+
+      expect(result[0]).toBe(current[0]);
+    });
+
+    it('should keep the cached copy untouched when history has no customData', () => {
+      const history = [{ id: 'shared', timestamp: 100 }];
+      const current = [{ id: 'shared', timestamp: 100, customData: { a: 1 } }];
+
+      const result = historyManager.merge(history, current);
+
+      expect(result[0]).toBe(current[0]);
+    });
+
+    it('should not touch local-only messages when merging customData', () => {
+      const local = { id: 'local', timestamp: 50, text: 'only here' };
+      const history = [{ id: 'h1', timestamp: 100, customData: { a: 1 } }];
+
+      const result = historyManager.merge(history, [local]);
+
+      expect(result[0]).toBe(local);
+      expect('customData' in result[0]).toBe(false);
     });
 
     it('should sort merged messages by ascending timestamp', () => {

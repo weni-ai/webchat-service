@@ -105,6 +105,14 @@ export interface Message {
   
   // Additional data
   metadata?: Record<string, any>
+  /**
+   * Structured data the integrator attached to the message at send time.
+   * Present only when the socket delivers `custom_data` as a JSON object.
+   * The inner keys are owned by the integrator and are passed through
+   * exactly as received (no camelCase conversion). Unrelated to
+   * `ServiceConfig.customData`.
+   */
+  customData?: Record<string, unknown>
   persisted?: boolean
   /** True when the outgoing text came from a conversation-starter click */
   from_conversation_starter?: boolean

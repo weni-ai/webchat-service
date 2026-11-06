@@ -248,6 +248,39 @@ export function isJsonObject(value) {
 }
 
 /**
+ * Describes the kind of a wire value without exposing its content,
+ * so it is safe to log.
+ * @param {unknown} value
+ * @returns {string} `array`, or the `typeof` of the value
+ */
+function describeValueKind(value) {
+  return Array.isArray(value) ? 'array' : typeof value;
+}
+
+/**
+ * Reads `custom_data` from a socket message body (live `message` frame or a
+ * `history[].message`). Only a plain JSON object is accepted; it is returned
+ * by reference and unchanged, because its inner keys belong to the integrator.
+ * `undefined` and `null` mean "absent". Any other value is discarded and its
+ * kind is reported so the caller can warn without logging the content.
+ * @param {{ custom_data?: unknown } | null | undefined} messageBody
+ * @returns {{ customData?: Record<string, unknown>, discardedKind?: string }}
+ */
+export function readCustomData(messageBody) {
+  const value = messageBody?.custom_data;
+
+  if (value === undefined || value === null) {
+    return {};
+  }
+
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return { customData: value };
+  }
+
+  return { discardedKind: describeValueKind(value) };
+}
+
+/**
  * Returns true when a socket payload should be ignored because it is a JSON object
  * @param {unknown} raw
  * @returns {boolean}

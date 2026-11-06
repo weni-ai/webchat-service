@@ -1689,6 +1689,94 @@ describe('MessageProcessor', () => {
       expect(normalized.footer).toBeUndefined();
     });
 
+    describe('custom_data', () => {
+      const customData = {
+        order_id: 'ord_123',
+        coupon: { code: 'BLACK10', expires_at: '2026-11-30T23:59:59Z' },
+        tags: ['vip', 'campaign'],
+      };
+
+      afterEach(() => {
+        jest.restoreAllMocks();
+      });
+
+      it('should expose a JSON object as customData with inner keys unchanged', () => {
+        const raw = {
+          type: 'message',
+          message: { type: 'text', text: 'Hello', custom_data: customData },
+        };
+
+        const normalized = processor._normalizeMessage(raw);
+
+        expect(normalized.customData).toEqual(customData);
+        expect(normalized.customData).toBe(customData);
+        expect(normalized).not.toHaveProperty('custom_data');
+      });
+
+      it.each([
+        ['missing', undefined],
+        ['null', null],
+      ])('should omit customData without warning when it is %s', (_, value) => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+        const raw = {
+          type: 'message',
+          message: { text: 'Hello', custom_data: value },
+        };
+
+        const normalized = processor._normalizeMessage(raw);
+
+        expect('customData' in normalized).toBe(false);
+        expect(warnSpy).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['array', ['a']],
+        ['string', 'secret-value'],
+        ['number', 42],
+        ['boolean', true],
+      ])(
+        'should drop a %s custom_data with one content-free warning',
+        (receivedKind, value) => {
+          const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+          const raw = {
+            type: 'message',
+            message: { text: 'Hello', custom_data: value },
+          };
+
+          const normalized = processor._normalizeMessage(raw);
+
+          expect('customData' in normalized).toBe(false);
+          expect(normalized.text).toBe('Hello');
+          expect(warnSpy).toHaveBeenCalledTimes(1);
+          expect(warnSpy).toHaveBeenCalledWith(
+            'MessageProcessor: custom_data discarded',
+            {
+              operation: 'normalize-custom-data',
+              messageType: 'message',
+              receivedKind,
+            },
+          );
+          expect(JSON.stringify(warnSpy.mock.calls[0])).not.toContain(
+            'secret-value',
+          );
+        },
+      );
+
+      it('should emit message:processed with customData for a live frame', () => {
+        const processed = jest.fn();
+        processor.on(SERVICE_EVENTS.MESSAGE_PROCESSED, processed);
+
+        processor.process({
+          type: 'message',
+          message: { type: 'text', text: 'Hello', custom_data: customData },
+        });
+        jest.runAllTimers();
+
+        expect(processed).toHaveBeenCalledTimes(1);
+        expect(processed.mock.calls[0][0].customData).toEqual(customData);
+      });
+    });
+
     it('should fall back to generateMessageId when no id is provided', () => {
       const raw = { type: 'message', message: { text: 'Hello' } };
 

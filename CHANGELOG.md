@@ -5,13 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.21.0] - 2026-11-06
 
 ### Added
 
 - `evaluateBackInStockOffer`, `validateBackInStockContact`, and `subscribeBackInStock` decide whether to offer a back-in-stock notice, check the contact, and POST the storefront subscribe route. Failures emit `backInStock:error` and success emits `backInStock:subscribed`.
 - Optional `backInStock` init object (`subscribePath`, `timeoutMs`, `maxRetries`, `retryBaseDelayMs`). Omitting it keeps the defaults: `/_v/private/availability-notify/subscribe`, 10 seconds, 2 retries, and a 500 ms base delay.
 - Runtime dependency `libphonenumber-js` for phone validation. CommonJS and ESM builds leave `libphonenumber-js/max` external. The UMD build bundles it.
+
+## [1.20.0] - 2026-11-05
+
+### Added
+
+- Incoming and history messages expose the optional `customData` field when the socket sends `message.custom_data` as a JSON object. Inner keys are passed through unchanged. The field is kept in `state.messages` and in the stored session conversation, and `getHistory` fills it into a cached message that lacks it. A `custom_data` that is not an object is dropped with a warning and the message is still delivered.
 
 ## [1.19.3] - 2026-10-30
 
