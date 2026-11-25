@@ -744,14 +744,17 @@ describe('MessageProcessor', () => {
 
       processor._processStreamEnd({ type: 'stream_end', id: 'empty-stream' });
 
-      expect(mockEmit).toHaveBeenCalledWith(
+      const emptyStreamId = MESSAGE_ID_PREFIX + 'empty-stream';
+      expect(mockEmit).not.toHaveBeenCalledWith(
         SERVICE_EVENTS.MESSAGE_UPDATED,
-        MESSAGE_ID_PREFIX + 'empty-stream',
-        expect.objectContaining({
-          text: '',
-          status: 'delivered',
-        }),
+        emptyStreamId,
+        expect.anything(),
       );
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({ id: emptyStreamId }),
+      );
+      expect(processor.streams.has(emptyStreamId)).toBe(false);
     });
 
     it('should treat empty-string content as authoritative final text', () => {

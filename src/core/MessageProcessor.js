@@ -892,7 +892,6 @@ export default class MessageProcessor extends EventEmitter {
     }
 
     const streamData = this.streams.get(messageId);
-    const hasStream = this.streams.has(messageId);
     const contentIsLeakedJson =
       typeof raw.content === 'string' && isJsonObject(raw.content);
     const finalText = unescapeEscapedUrlSlashes(
@@ -919,7 +918,7 @@ export default class MessageProcessor extends EventEmitter {
     const wasEmitted = Boolean(streamData?.emitted);
     const now = Date.now();
 
-    if (wasEmitted || (hasStream && !hasComponents && finalText.length === 0)) {
+    if (wasEmitted) {
       this._emitStreamUpdate(messageId, {
         text: finalText,
         status: 'delivered',
@@ -928,6 +927,9 @@ export default class MessageProcessor extends EventEmitter {
         ...components,
         timestamp: now,
       });
+    } else if (!hasComponents && finalText.length === 0) {
+      // Never emitted and nothing to show: skip MESSAGE_UPDATED (consumers
+      // never received MESSAGE_PROCESSED for this id) and just clean up.
     } else if (contentIsLeakedJson && !hasComponents) {
       this._cleanupStream(messageId);
       this._rememberCompletedStreamId(messageId);
