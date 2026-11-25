@@ -271,7 +271,11 @@ describe('streamComponents utilities', () => {
         },
       });
 
-      for (const inheritedKey of ['constructor', 'toString', 'hasOwnProperty']) {
+      for (const inheritedKey of [
+        'constructor',
+        'toString',
+        'hasOwnProperty',
+      ]) {
         expect(
           normalizeComponentHint({ component_type: inheritedKey }, 'msg_4'),
         ).toEqual({
