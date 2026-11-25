@@ -867,5 +867,173 @@ describe('WeniWebchatService — _setupEventListeners wiring', () => {
         ).toBe(true);
       },
     );
+
+    it('preserves early stream_component payloads delivered before text deltas across cta_message, quick_replies, and list_message without stream_text_end', () => {
+      service.session.createNewSession();
+
+      // 1. cta_message
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_start',
+        id: '0b27ff642e9d6e3a',
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'typing_start',
+        from: 'ai-assistant',
+        message: {
+          type: '',
+          timestamp: '',
+          list_message: { button_text: '', list_items: null },
+        },
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component_hint',
+        id: '0b27ff642e9d6e3a',
+        component_type: 'cta_message',
+        labels: ['Acessar'],
+        count: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component',
+        id: '0b27ff642e9d6e3a',
+        component_type: 'cta_message',
+        cta_message: { url: 'https://weni.ai', display_text: 'Acessar' },
+      });
+
+      const midCta = service.getMessages()[0];
+      expect(midCta).toMatchObject({
+        id: 'msg_0b27ff642e9d6e3a',
+        text: '',
+        status: 'streaming',
+        streamPhase: 'streaming_text',
+        componentHints: [
+          { componentType: 'cta_message', labels: ['Acessar'], count: 1 },
+        ],
+        cta_message: { url: 'https://weni.ai', display_text: 'Acessar' },
+      });
+
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, { v: 'Claro', seq: 1 });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        v: '! Aqui está o CTA:',
+        seq: 2,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_end',
+        id: '0b27ff642e9d6e3a',
+        content: 'Claro! Aqui está o CTA:',
+        cta_message: { url: 'https://weni.ai', display_text: 'Acessar' },
+      });
+
+      // 2. quick_replies
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_start',
+        id: '3043634f97a2c5ba',
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component_hint',
+        id: '3043634f97a2c5ba',
+        component_type: 'quick_replies',
+        labels: ['Sim', 'Não'],
+        count: 2,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component',
+        id: '3043634f97a2c5ba',
+        component_type: 'quick_replies',
+        quick_replies: ['Sim', 'Não'],
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        v: 'Aqui estão as opções:',
+        seq: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_end',
+        id: '3043634f97a2c5ba',
+        content: 'Aqui estão as opções:',
+        quick_replies: ['Sim', 'Não'],
+      });
+
+      // 3. list_message
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_start',
+        id: '5e6ddc3e098eeb01',
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component_hint',
+        id: '5e6ddc3e098eeb01',
+        component_type: 'list_message',
+        labels: ['Ver opções'],
+        count: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component',
+        id: '5e6ddc3e098eeb01',
+        component_type: 'list_message',
+        list_message: {
+          button_text: 'Ver opções',
+          list_items: [
+            {
+              uuid: '7c3f8d08-20ae-54ea-990b-ca8338884cc8',
+              title: 'Primeira',
+              description: 'Opção primeira',
+            },
+          ],
+        },
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        v: 'Aqui está a lista de opções:',
+        seq: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_end',
+        id: '5e6ddc3e098eeb01',
+        content: 'Aqui está a lista de opções:',
+        list_message: {
+          button_text: 'Ver opções',
+          list_items: [
+            {
+              uuid: '7c3f8d08-20ae-54ea-990b-ca8338884cc8',
+              title: 'Primeira',
+              description: 'Opção primeira',
+            },
+          ],
+        },
+      });
+
+      const messages = service.getMessages();
+      expect(messages).toHaveLength(3);
+      expect(messages[0]).toMatchObject({
+        id: 'msg_0b27ff642e9d6e3a',
+        text: 'Claro! Aqui está o CTA:',
+        status: 'delivered',
+        streamPhase: 'completed',
+        cta_message: { url: 'https://weni.ai', display_text: 'Acessar' },
+      });
+      expect(messages[1]).toMatchObject({
+        id: 'msg_3043634f97a2c5ba',
+        text: 'Aqui estão as opções:',
+        status: 'delivered',
+        streamPhase: 'completed',
+        quick_replies: ['Sim', 'Não'],
+      });
+      expect(messages[2]).toMatchObject({
+        id: 'msg_5e6ddc3e098eeb01',
+        text: 'Aqui está a lista de opções:',
+        status: 'delivered',
+        streamPhase: 'completed',
+        list_message: {
+          button_text: 'Ver opções',
+          list_items: [
+            {
+              uuid: '7c3f8d08-20ae-54ea-990b-ca8338884cc8',
+              title: 'Primeira',
+              description: 'Opção primeira',
+            },
+          ],
+        },
+      });
+      messages.forEach((m) => {
+        expect('componentHints' in m).toBe(false);
+      });
+    });
   });
 });

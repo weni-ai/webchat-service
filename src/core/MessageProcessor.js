@@ -370,6 +370,7 @@ export default class MessageProcessor extends EventEmitter {
       text: '',
       timestamp: Date.now(),
       emitted: false,
+      queuedMessage: null,
       streamPhase: STREAM_PHASES.STREAMING_TEXT,
       componentHints: [],
     });
@@ -423,12 +424,34 @@ export default class MessageProcessor extends EventEmitter {
     }
 
     streamData.emitted = true;
+    streamData.queuedMessage = message;
     if (this.activeStreamId === streamId) {
       this.streamMessageEmitted = true;
     }
 
     this.queue.push(message);
     this._processQueue();
+  }
+
+  /**
+   * Emits a stream update event or merges it into the still-queued initial message
+   * when `_processQueue` is busy (e.g. `stream_component` arriving 1ms after
+   * `stream_component_hint` while an earlier message is awaiting `messageDelay`).
+   * @private
+   * @param {string} streamId
+   * @param {Object} updates
+   */
+  _emitStreamUpdate(streamId, updates) {
+    const streamData = this.streams.get(streamId);
+    if (streamData?.queuedMessage) {
+      Object.assign(streamData.queuedMessage, updates);
+      if ('componentHints' in updates && updates.componentHints === undefined) {
+        delete streamData.queuedMessage.componentHints;
+      }
+      return;
+    }
+
+    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, updates);
   }
 
   /**
@@ -476,7 +499,7 @@ export default class MessageProcessor extends EventEmitter {
       return;
     }
 
-    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
+    this._emitStreamUpdate(streamId, {
       componentHints: [...streamData.componentHints],
       status: 'streaming',
       streamPhase: streamData.streamPhase,
@@ -527,7 +550,7 @@ export default class MessageProcessor extends EventEmitter {
       return;
     }
 
-    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
+    this._emitStreamUpdate(streamId, {
       text: finalText,
       status: 'streaming',
       streamPhase: STREAM_PHASES.AWAITING_COMPONENTS,
@@ -581,7 +604,7 @@ export default class MessageProcessor extends EventEmitter {
       return;
     }
 
-    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
+    this._emitStreamUpdate(streamId, {
       [componentType]: payload,
       status: 'streaming',
       streamPhase: streamData.streamPhase,
@@ -602,7 +625,7 @@ export default class MessageProcessor extends EventEmitter {
     const now = Date.now();
     for (const [streamId, streamData] of this.streams.entries()) {
       if (streamData?.emitted) {
-        this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
+        this._emitStreamUpdate(streamId, {
           status: 'delivered',
           streamPhase: STREAM_PHASES.COMPLETED,
           componentHints: undefined,
@@ -733,6 +756,7 @@ export default class MessageProcessor extends EventEmitter {
     const message = this._createStreamingMessage(streamId, timestamp);
     if (streamData) {
       streamData.emitted = true;
+      streamData.queuedMessage = message;
     }
     this.streamMessageEmitted = true;
     this.queue.push(message);
@@ -835,7 +859,7 @@ export default class MessageProcessor extends EventEmitter {
       streamPhase,
     });
 
-    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
+    this._emitStreamUpdate(streamId, {
       text: mergedText,
       status: 'streaming',
       streamPhase,
@@ -896,7 +920,7 @@ export default class MessageProcessor extends EventEmitter {
     const now = Date.now();
 
     if (wasEmitted || (hasStream && !hasComponents && finalText.length === 0)) {
-      this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, {
+      this._emitStreamUpdate(messageId, {
         text: finalText,
         status: 'delivered',
         streamPhase: STREAM_PHASES.COMPLETED,
@@ -1029,6 +1053,10 @@ export default class MessageProcessor extends EventEmitter {
 
     while (this.queue.length > 0) {
       const message = this.queue.shift();
+      const streamData = message?.id ? this.streams.get(message.id) : null;
+      if (streamData && streamData.queuedMessage === message) {
+        streamData.queuedMessage = null;
+      }
 
       this.emit(SERVICE_EVENTS.MESSAGE_PROCESSED, message);
 

@@ -3015,5 +3015,269 @@ describe('MessageProcessor', () => {
       );
       expect(processor.streams.size).toBe(0);
     });
+
+    it('handles stream_start -> typing_start -> hint -> stream_component before deltas -> stream_end without stream_text_end for cta_message, quick_replies, and list_message', () => {
+      const cases = [
+        {
+          id: '0b27ff642e9d6e3a',
+          hint: {
+            type: 'stream_component_hint',
+            id: '0b27ff642e9d6e3a',
+            component_type: 'cta_message',
+            labels: ['Acessar'],
+            count: 1,
+          },
+          component: {
+            type: 'stream_component',
+            id: '0b27ff642e9d6e3a',
+            component_type: 'cta_message',
+            cta_message: { url: 'https://weni.ai', display_text: 'Acessar' },
+          },
+          deltas: ['Claro', '!', ' Aqui', ' está', ' o', ' CTA', ':'],
+          content: 'Claro! Aqui está o CTA:',
+          endExtra: {
+            cta_message: { url: 'https://weni.ai', display_text: 'Acessar' },
+          },
+          expectedHint: {
+            componentType: 'cta_message',
+            labels: ['Acessar'],
+            count: 1,
+          },
+          expectedComponent: {
+            cta_message: { url: 'https://weni.ai', display_text: 'Acessar' },
+          },
+        },
+        {
+          id: '3043634f97a2c5ba',
+          hint: {
+            type: 'stream_component_hint',
+            id: '3043634f97a2c5ba',
+            component_type: 'quick_replies',
+            labels: ['Sim', 'Não'],
+            count: 2,
+          },
+          component: {
+            type: 'stream_component',
+            id: '3043634f97a2c5ba',
+            component_type: 'quick_replies',
+            quick_replies: ['Sim', 'Não'],
+          },
+          deltas: ['Aqui', ' estão', ' as', ' opções', ':'],
+          content: 'Aqui estão as opções:',
+          endExtra: {
+            quick_replies: ['Sim', 'Não'],
+          },
+          expectedHint: {
+            componentType: 'quick_replies',
+            labels: ['Sim', 'Não'],
+            count: 2,
+          },
+          expectedComponent: {
+            quick_replies: ['Sim', 'Não'],
+          },
+        },
+        {
+          id: '5e6ddc3e098eeb01',
+          hint: {
+            type: 'stream_component_hint',
+            id: '5e6ddc3e098eeb01',
+            component_type: 'list_message',
+            labels: ['Ver opções'],
+            count: 1,
+          },
+          component: {
+            type: 'stream_component',
+            id: '5e6ddc3e098eeb01',
+            component_type: 'list_message',
+            list_message: {
+              button_text: 'Ver opções',
+              list_items: [
+                {
+                  uuid: '7c3f8d08-20ae-54ea-990b-ca8338884cc8',
+                  title: 'Primeira',
+                  description: 'Opção primeira',
+                },
+                {
+                  uuid: 'fb77e086-67df-58d1-b0fd-0adc7dad9ea0',
+                  title: 'Segunda',
+                  description: 'Opção segunda',
+                },
+              ],
+            },
+          },
+          deltas: ['Aqui', ' está', ' a', ' lista', ' de', ' opções', ':'],
+          content: 'Aqui está a lista de opções:',
+          endExtra: {
+            list_message: {
+              button_text: 'Ver opções',
+              list_items: [
+                {
+                  uuid: '7c3f8d08-20ae-54ea-990b-ca8338884cc8',
+                  title: 'Primeira',
+                  description: 'Opção primeira',
+                },
+                {
+                  uuid: 'fb77e086-67df-58d1-b0fd-0adc7dad9ea0',
+                  title: 'Segunda',
+                  description: 'Opção segunda',
+                },
+              ],
+            },
+          },
+          expectedHint: {
+            componentType: 'list_message',
+            labels: ['Ver opções'],
+            count: 1,
+          },
+          expectedComponent: {
+            list_message: {
+              button_text: 'Ver opções',
+              list_items: [
+                {
+                  uuid: '7c3f8d08-20ae-54ea-990b-ca8338884cc8',
+                  title: 'Primeira',
+                  description: 'Opção primeira',
+                },
+                {
+                  uuid: 'fb77e086-67df-58d1-b0fd-0adc7dad9ea0',
+                  title: 'Segunda',
+                  description: 'Opção segunda',
+                },
+              ],
+            },
+          },
+        },
+      ];
+
+      for (const tc of cases) {
+        mockEmit.mockClear();
+
+        processor.process({ type: 'stream_start', id: tc.id });
+        processor.process({
+          type: 'typing_start',
+          to: '971808443436@localhost',
+          from: 'ai-assistant',
+          message: {
+            type: '',
+            timestamp: '',
+            list_message: { button_text: '', list_items: null },
+          },
+          channel_uuid: 'cb738a74-8c7f-4d76-80ce-3a71f7796374',
+        });
+        expect(processor.isThinkingActive).toBe(true);
+
+        processor.process(tc.hint);
+        expect(processor.isThinkingActive).toBe(false);
+        expect(mockEmit).toHaveBeenCalledWith(
+          SERVICE_EVENTS.MESSAGE_PROCESSED,
+          expect.objectContaining({
+            id: MESSAGE_ID_PREFIX + tc.id,
+            text: '',
+            status: 'streaming',
+            streamPhase: 'streaming_text',
+            componentHints: [tc.expectedHint],
+          }),
+        );
+
+        processor.process(tc.component);
+        expect(mockEmit).toHaveBeenCalledWith(
+          SERVICE_EVENTS.MESSAGE_UPDATED,
+          MESSAGE_ID_PREFIX + tc.id,
+          expect.objectContaining({
+            ...tc.expectedComponent,
+            status: 'streaming',
+            streamPhase: 'streaming_text',
+          }),
+        );
+
+        tc.deltas.forEach((v, idx) => {
+          processor.process({ v, seq: idx + 1 });
+        });
+
+        processor.process({
+          type: 'stream_end',
+          id: tc.id,
+          content: tc.content,
+          ...tc.endExtra,
+        });
+
+        expect(mockEmit).toHaveBeenCalledWith(
+          SERVICE_EVENTS.MESSAGE_UPDATED,
+          MESSAGE_ID_PREFIX + tc.id,
+          expect.objectContaining({
+            text: tc.content,
+            status: 'delivered',
+            streamPhase: 'completed',
+            componentHints: undefined,
+            ...tc.expectedComponent,
+          }),
+        );
+      }
+    });
+
+    it('merges stream_component and delta updates into queued message while queue is busy', async () => {
+      jest.useFakeTimers();
+      try {
+        const busyProcessor = new MessageProcessor({ messageDelay: 500 });
+        const emitted = [];
+        const updated = [];
+        busyProcessor.on(SERVICE_EVENTS.MESSAGE_PROCESSED, (m) =>
+          emitted.push(m),
+        );
+        busyProcessor.on(SERVICE_EVENTS.MESSAGE_UPDATED, (id, patch) =>
+          updated.push({ id, patch }),
+        );
+
+        // Queue two prior messages so _processQueue enters its messageDelay await
+        busyProcessor.queue.push(
+          { id: 'prev-1', type: 'text', text: 'Anterior 1' },
+          { id: 'prev-2', type: 'text', text: 'Anterior 2' },
+        );
+        busyProcessor._processQueue();
+        expect(busyProcessor.isProcessing).toBe(true);
+
+        // Stream starts, hint queues the bubble, and stream_component + deltas + stream_end arrive before delay finishes
+        busyProcessor.process({ type: 'stream_start', id: 'queued-1' });
+        busyProcessor.process({
+          type: 'stream_component_hint',
+          id: 'queued-1',
+          component_type: 'quick_replies',
+          labels: ['Sim', 'Não'],
+          count: 2,
+        });
+        busyProcessor.process({
+          type: 'stream_component',
+          id: 'queued-1',
+          component_type: 'quick_replies',
+          quick_replies: ['Sim', 'Não'],
+        });
+        busyProcessor.process({ v: 'Aqui estão as opções:', seq: 1 });
+        busyProcessor.process({
+          type: 'stream_end',
+          id: 'queued-1',
+          content: 'Aqui estão as opções:',
+          quick_replies: ['Sim', 'Não'],
+        });
+
+        // No orphaned MESSAGE_UPDATED was emitted before MESSAGE_PROCESSED
+        expect(updated).toHaveLength(0);
+
+        await jest.advanceTimersByTimeAsync(1100);
+
+        const streamMsg = emitted.find(
+          (m) => m.id === MESSAGE_ID_PREFIX + 'queued-1',
+        );
+        expect(streamMsg).toMatchObject({
+          id: MESSAGE_ID_PREFIX + 'queued-1',
+          text: 'Aqui estão as opções:',
+          status: 'delivered',
+          streamPhase: 'completed',
+          quick_replies: ['Sim', 'Não'],
+        });
+        expect('componentHints' in streamMsg).toBe(false);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 });
