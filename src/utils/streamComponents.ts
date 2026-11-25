@@ -78,11 +78,13 @@ export const STREAM_PHASES = {
   COMPLETED: 'completed',
 } as const;
 
-const VALID_COMPONENT_TYPES: Readonly<Record<string, ComponentType>> = {
-  quick_replies: COMPONENT_TYPES.QUICK_REPLIES,
-  list_message: COMPONENT_TYPES.LIST_MESSAGE,
-  cta_message: COMPONENT_TYPES.CTA_MESSAGE,
-};
+const VALID_COMPONENT_TYPES = new Set<string>(Object.values(COMPONENT_TYPES));
+
+function resolveComponentType(rawType: unknown): ComponentType | undefined {
+  return typeof rawType === 'string' && VALID_COMPONENT_TYPES.has(rawType)
+    ? (rawType as ComponentType)
+    : undefined;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -280,8 +282,7 @@ export function normalizeComponentHint(
   }
 
   const rawType = raw.component_type;
-  const componentType =
-    typeof rawType === 'string' ? VALID_COMPONENT_TYPES[rawType] : undefined;
+  const componentType = resolveComponentType(rawType);
 
   if (!componentType) {
     return {
@@ -356,8 +357,7 @@ export function normalizeStreamComponent(
   }
 
   const rawType = raw.component_type;
-  const componentType =
-    typeof rawType === 'string' ? VALID_COMPONENT_TYPES[rawType] : undefined;
+  const componentType = resolveComponentType(rawType);
 
   if (!componentType) {
     return {

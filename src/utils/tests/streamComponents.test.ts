@@ -270,6 +270,19 @@ describe('streamComponents utilities', () => {
           reason: 'invalid_component_type',
         },
       });
+
+      for (const inheritedKey of ['constructor', 'toString', 'hasOwnProperty']) {
+        expect(
+          normalizeComponentHint({ component_type: inheritedKey }, 'msg_4'),
+        ).toEqual({
+          warning: {
+            operation: 'normalize-component-hint',
+            messageId: 'msg_4',
+            componentType: inheritedKey,
+            reason: 'invalid_component_type',
+          },
+        });
+      }
     });
   });
 
@@ -365,6 +378,16 @@ describe('streamComponents utilities', () => {
         operation: 'normalize-stream-component',
         messageId: 'msg_2',
         componentType: 'unknown_kind',
+        reason: 'invalid_component_type',
+      });
+
+      expect(
+        normalizeStreamComponent({ component_type: 'constructor' }, 'msg_2b')
+          .warning,
+      ).toEqual({
+        operation: 'normalize-stream-component',
+        messageId: 'msg_2b',
+        componentType: 'constructor',
         reason: 'invalid_component_type',
       });
 
