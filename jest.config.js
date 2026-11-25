@@ -6,6 +6,7 @@ export default {
     'src/**/*.js',
     'src/**/*.ts',
     '!src/**/*.test.js',
+    '!src/**/*.test.ts',
     '!src/**/*.d.ts',
   ],
   coverageDirectory: 'coverage',

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Support for Shopping Assistant streaming component WebSocket frames (`stream_component_hint`, `stream_component`, `stream_text_end`, and extended `stream_end` with `quick_replies`, `list_message` including optional `item_count`, and `cta_message`), normalized to camelCase `componentHints` and `streamPhase` (`streaming_text` | `awaiting_components` | `completed`) on emitted `Message` objects.
+- Exported `COMPONENT_TYPES` and `STREAM_PHASES` constants and updated TypeScript declarations (`src/types/index.d.ts`) for `ComponentHint`, `StreamPhase`, `ListMessage`, `CtaMessage`, and `Message.status` (`'streaming'`).
+- Automatic stream finalization on WebSocket `disconnected` and `closed` transitions, clearing active `componentHints` and preserving received text without error UI.
+- Transient streaming fields (`componentHints`, `streamPhase`, and `status: 'streaming'`) are stripped before persisting sessions to browser storage and on session restore so reloads never replay skeletons or animations.
+
+### Fixed
+
+- `HistoryManager.processHistory` now restores validated `cta_message` payloads (with unescaped `http(s)` URLs) and `HistoryManager.merge` backfills `cta_message` on cached entries lacking it.
+
 ## [1.21.0] - 2026-11-06
 
 ### Added

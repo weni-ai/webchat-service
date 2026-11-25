@@ -720,4 +720,152 @@ describe('WeniWebchatService — _setupEventListeners wiring', () => {
       expect(cb).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ===========================================================================
+  // Streaming components end-to-end relays & disconnect cleanup
+  // ===========================================================================
+  describe('streaming components relays', () => {
+    it('relays early hint, deltas, stream_text_end, stream_component, and stream_end without persisting transient fields', () => {
+      service.session.createNewSession();
+      const received = [];
+      const updated = [];
+      service.on(SERVICE_EVENTS.MESSAGE_RECEIVED, (msg) => received.push(msg));
+      service.on(SERVICE_EVENTS.MESSAGE_UPDATED, (id, patch) =>
+        updated.push({ id, patch }),
+      );
+
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_start',
+        id: 'e2e-1',
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component_hint',
+        id: 'e2e-1',
+        component_type: 'list_message',
+        labels: ['Ver 9 ofertas'],
+        count: 1,
+        item_count: 9,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component_hint',
+        id: 'e2e-1',
+        component_type: 'cta_message',
+        labels: ['Acompanhar pedido'],
+        count: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        v: 'Veja as ofertas:',
+        seq: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_text_end',
+        id: 'e2e-1',
+        content: 'Veja as ofertas:',
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component',
+        id: 'e2e-1',
+        component_type: 'cta_message',
+        cta_message: {
+          display_text: 'Acompanhar pedido',
+          url: 'https://loja.example/pedidos/48213/rastreio',
+        },
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_end',
+        id: 'e2e-1',
+        content: 'Veja as ofertas:',
+        list_message: {
+          button_text: 'Ver 9 ofertas',
+          item_count: 9,
+          list_items: [{ uuid: 'u1', title: 'Café' }],
+        },
+        cta_message: {
+          display_text: 'Acompanhar pedido',
+          url: 'https://loja.example/pedidos/48213/rastreio',
+        },
+      });
+
+      expect(received).toHaveLength(1);
+      expect(received[0].streamPhase).toBe('streaming_text');
+      expect(
+        updated.some(
+          (entry) => entry.patch.streamPhase === 'awaiting_components',
+        ),
+      ).toBe(true);
+
+      const finalMsg = service.getMessages()[0];
+      expect(finalMsg).toMatchObject({
+        id: 'msg_e2e-1',
+        text: 'Veja as ofertas:',
+        status: 'delivered',
+        streamPhase: 'completed',
+        list_message: {
+          button_text: 'Ver 9 ofertas',
+          item_count: 9,
+          list_items: [{ uuid: 'u1', title: 'Café' }],
+        },
+        cta_message: {
+          display_text: 'Acompanhar pedido',
+          url: 'https://loja.example/pedidos/48213/rastreio',
+        },
+      });
+      expect('componentHints' in finalMsg).toBe(false);
+
+      // Persisted session must never store streamPhase or componentHints
+      const storedSession = service.storage.get(service.session.sessionKey);
+      expect('streamPhase' in storedSession.conversation[0]).toBe(false);
+      expect('componentHints' in storedSession.conversation[0]).toBe(false);
+    });
+
+    it.each(['disconnected', 'closed'])(
+      'finalizes active streams and clears componentHints when WebSocket transitions to %s (FR-012)',
+      (status) => {
+        service.session.createNewSession();
+        const updated = [];
+        service.on(SERVICE_EVENTS.MESSAGE_UPDATED, (id, patch) =>
+          updated.push({ id, patch }),
+        );
+
+        service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+          type: 'stream_start',
+          id: `drop-${status}`,
+        });
+        service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+          type: 'stream_component_hint',
+          id: `drop-${status}`,
+          component_type: 'quick_replies',
+          labels: ['Sim', 'Não'],
+          count: 2,
+        });
+        service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+          v: 'Texto interrompido',
+          seq: 1,
+        });
+
+        service.websocket.emit(
+          SERVICE_EVENTS.CONNECTION_STATUS_CHANGED,
+          status,
+        );
+
+        const finalMsg = service.getMessages()[0];
+        expect(finalMsg).toMatchObject({
+          id: `msg_drop-${status}`,
+          text: 'Texto interrompido',
+          status: 'delivered',
+          streamPhase: 'completed',
+        });
+        expect('componentHints' in finalMsg).toBe(false);
+        expect(
+          updated.some(
+            (entry) =>
+              entry.id === `msg_drop-${status}` &&
+              entry.patch.status === 'delivered' &&
+              entry.patch.streamPhase === 'completed' &&
+              entry.patch.componentHints === undefined,
+          ),
+        ).toBe(true);
+      },
+    );
+  });
 });

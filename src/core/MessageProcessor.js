@@ -15,6 +15,16 @@ import {
   STREAM_INITIAL_SEQUENCE,
 } from '../utils/constants';
 import { isOfficialHttpUrl } from '../utils/messageBuilder';
+import {
+  STREAM_PHASES,
+  normalizeComponentHint,
+  normalizeStreamComponent,
+  normalizeStreamEndComponents,
+  upsertComponentHint,
+  warnComponentContract,
+} from '../utils/streamComponents';
+
+const MAX_COMPLETED_STREAM_IDS = 20;
 
 /**
  * MessageProcessor
@@ -47,6 +57,7 @@ export default class MessageProcessor extends EventEmitter {
     this.isThinkingActive = false;
     this.isAwaitingReply = false;
     this.streams = new Map();
+    this.completedStreamIds = new Set();
     this.recentIncomingTexts = [];
 
     // Streaming state
@@ -96,6 +107,15 @@ export default class MessageProcessor extends EventEmitter {
           break;
         case 'stream_rationale':
           this._processStreamRationale(rawMessage);
+          break;
+        case 'stream_component_hint':
+          this._processStreamComponentHint(rawMessage);
+          break;
+        case 'stream_component':
+          this._processStreamComponent(rawMessage);
+          break;
+        case 'stream_text_end':
+          this._processStreamTextEnd(rawMessage);
           break;
         case 'delta':
           this._processDelta(rawMessage);
@@ -339,13 +359,261 @@ export default class MessageProcessor extends EventEmitter {
 
   /**
    * Records a stream as active with an empty buffer.
-   * Does not emit a chat message; the first delta emits the streaming bubble.
+   * Does not emit a chat message; the first delta or component hint emits the streaming bubble.
    * @private
    * @param {string} streamId Prefixed message id
    */
   _beginStream(streamId) {
     this._resetStreamState(streamId);
-    this.streams.set(streamId, { text: '', timestamp: Date.now() });
+    this.completedStreamIds.delete(streamId);
+    this.streams.set(streamId, {
+      text: '',
+      timestamp: Date.now(),
+      emitted: false,
+      streamPhase: STREAM_PHASES.STREAMING_TEXT,
+      componentHints: [],
+    });
+  }
+
+  /**
+   * Resolves an existing stream entry or adopts one when stream_start was missed.
+   * Ignores frames for already-completed streams or unrelated active streams.
+   * @private
+   * @param {string} streamId
+   * @returns {Object|null}
+   */
+  _ensureStreamForFrame(streamId) {
+    if (this.completedStreamIds.has(streamId)) {
+      return null;
+    }
+
+    if (this.streams.has(streamId)) {
+      return this.streams.get(streamId);
+    }
+
+    if (this.activeStreamId && this.activeStreamId !== streamId) {
+      return null;
+    }
+
+    this._beginStream(streamId);
+    return this.streams.get(streamId);
+  }
+
+  /**
+   * Emits the initial streaming chat bubble for a stream.
+   * @private
+   * @param {string} streamId
+   * @param {Object} streamData
+   * @param {Object} [extraFields={}]
+   */
+  _emitInitialStreamMessage(streamId, streamData, extraFields = {}) {
+    if (this.isTypingActive || this.isThinkingActive) {
+      this._stopTyping();
+    }
+
+    const message = {
+      ...this._createStreamingMessage(streamId, streamData.timestamp),
+      text: streamData.text,
+      streamPhase: streamData.streamPhase,
+      ...extraFields,
+    };
+
+    if (streamData.componentHints.length > 0) {
+      message.componentHints = [...streamData.componentHints];
+    }
+
+    streamData.emitted = true;
+    if (this.activeStreamId === streamId) {
+      this.streamMessageEmitted = true;
+    }
+
+    this.queue.push(message);
+    this._processQueue();
+  }
+
+  /**
+   * Processes a stream_component_hint frame, normalizing hints to camelCase
+   * and emitting the streaming bubble immediately if not yet emitted (FR-008, FR-028).
+   * @private
+   * @param {Object} raw
+   */
+  _processStreamComponentHint(raw) {
+    const streamId = this._getMessageIdFromRaw(raw);
+    if (!streamId) {
+      warnComponentContract(
+        'MessageProcessor',
+        'invalid component hint discarded',
+        {
+          operation: 'normalize-component-hint',
+          reason: 'missing_id',
+        },
+      );
+      return;
+    }
+
+    const streamData = this._ensureStreamForFrame(streamId);
+    if (!streamData) {
+      return;
+    }
+
+    const { hint, warning } = normalizeComponentHint(raw, streamId);
+    if (warning || !hint) {
+      warnComponentContract(
+        'MessageProcessor',
+        'invalid component hint discarded',
+        warning,
+      );
+      return;
+    }
+
+    streamData.componentHints = upsertComponentHint(
+      streamData.componentHints,
+      hint,
+    );
+
+    if (!streamData.emitted) {
+      this._emitInitialStreamMessage(streamId, streamData);
+      return;
+    }
+
+    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
+      componentHints: [...streamData.componentHints],
+      status: 'streaming',
+      streamPhase: streamData.streamPhase,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Processes a stream_text_end frame, signaling that text streaming has ended
+   * while one or more hinted components are still pending (FR-009, FR-018).
+   * @private
+   * @param {Object} raw
+   */
+  _processStreamTextEnd(raw) {
+    const streamId = this._getMessageIdFromRaw(raw);
+    if (!streamId) {
+      warnComponentContract('MessageProcessor', 'stream_text_end ignored', {
+        operation: 'stream-text-end',
+        reason: 'missing_id',
+      });
+      return;
+    }
+
+    const streamData = this._ensureStreamForFrame(streamId);
+    if (!streamData) {
+      return;
+    }
+
+    if (this.isTypingActive || this.isThinkingActive) {
+      this._stopTyping();
+    }
+
+    const contentIsLeakedJson =
+      typeof raw.content === 'string' && isJsonObject(raw.content);
+    const finalText = unescapeEscapedUrlSlashes(
+      contentIsLeakedJson
+        ? streamData.text || ''
+        : typeof raw.content === 'string'
+          ? raw.content
+          : streamData.text || '',
+    );
+
+    streamData.text = finalText;
+    streamData.streamPhase = STREAM_PHASES.AWAITING_COMPONENTS;
+
+    if (!streamData.emitted) {
+      this._emitInitialStreamMessage(streamId, streamData);
+      return;
+    }
+
+    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
+      text: finalText,
+      status: 'streaming',
+      streamPhase: STREAM_PHASES.AWAITING_COMPONENTS,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Processes a stream_component frame delivering one validated component.
+   * Keeps active componentHints intact until stream_end so multi-component
+   * consumers hold remaining skeletons until every sibling resolves.
+   * @private
+   * @param {Object} raw
+   */
+  _processStreamComponent(raw) {
+    const streamId = this._getMessageIdFromRaw(raw);
+    if (!streamId) {
+      warnComponentContract(
+        'MessageProcessor',
+        'invalid stream component discarded',
+        {
+          operation: 'normalize-stream-component',
+          reason: 'missing_id',
+        },
+      );
+      return;
+    }
+
+    const streamData = this._ensureStreamForFrame(streamId);
+    if (!streamData) {
+      return;
+    }
+
+    const { componentType, payload, warning } = normalizeStreamComponent(
+      raw,
+      streamId,
+    );
+    if (warning || !componentType || !payload) {
+      warnComponentContract(
+        'MessageProcessor',
+        'invalid stream component discarded',
+        warning,
+      );
+      return;
+    }
+
+    if (!streamData.emitted) {
+      this._emitInitialStreamMessage(streamId, streamData, {
+        [componentType]: payload,
+      });
+      return;
+    }
+
+    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
+      [componentType]: payload,
+      status: 'streaming',
+      streamPhase: streamData.streamPhase,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Finalizes all active emitted streams when the WebSocket disconnects or closes,
+   * clearing componentHints and preserving partial text without error UI (FR-012).
+   * @public
+   */
+  handleConnectionLost() {
+    if (this.isTypingActive || this.isThinkingActive) {
+      this._stopTyping();
+    }
+
+    const now = Date.now();
+    for (const [streamId, streamData] of this.streams.entries()) {
+      if (streamData?.emitted) {
+        this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
+          status: 'delivered',
+          streamPhase: STREAM_PHASES.COMPLETED,
+          componentHints: undefined,
+          timestamp: now,
+        });
+      }
+      this._rememberCompletedStreamId(streamId);
+    }
+
+    this.streams.clear();
+    this._resetStreamState();
   }
 
   /**
@@ -378,7 +646,10 @@ export default class MessageProcessor extends EventEmitter {
       this._beginStream(streamId);
     }
 
-    if (this.nextExpectedSeq > STREAM_INITIAL_SEQUENCE) {
+    if (
+      this.streamMessageEmitted ||
+      this.nextExpectedSeq > STREAM_INITIAL_SEQUENCE
+    ) {
       return;
     }
 
@@ -460,6 +731,9 @@ export default class MessageProcessor extends EventEmitter {
     const timestamp = streamData?.timestamp || Date.now();
 
     const message = this._createStreamingMessage(streamId, timestamp);
+    if (streamData) {
+      streamData.emitted = true;
+    }
     this.streamMessageEmitted = true;
     this.queue.push(message);
     this._processQueue();
@@ -480,6 +754,7 @@ export default class MessageProcessor extends EventEmitter {
       timestamp,
       direction: 'incoming',
       status: 'streaming',
+      streamPhase: STREAM_PHASES.STREAMING_TEXT,
     };
   }
 
@@ -552,11 +827,18 @@ export default class MessageProcessor extends EventEmitter {
 
     const timestamp = Date.now();
     const mergedText = unescapeEscapedUrlSlashes(current.text + content);
-    this.streams.set(streamId, { text: mergedText, timestamp });
+    const streamPhase = current.streamPhase || STREAM_PHASES.STREAMING_TEXT;
+    this.streams.set(streamId, {
+      ...current,
+      text: mergedText,
+      timestamp,
+      streamPhase,
+    });
 
     this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, streamId, {
       text: mergedText,
       status: 'streaming',
+      streamPhase,
       timestamp,
     });
   }
@@ -567,7 +849,7 @@ export default class MessageProcessor extends EventEmitter {
    * When raw.content is a string, it is the authoritative final text (e.g. after missed stream_start)
    * JSON object strings in content are ignored (backend leak); fall back to accumulated stream text
    * @private
-   * @param {Object} raw - { type: 'stream_end', id: string, content?: string }
+   * @param {Object} raw - { type: 'stream_end', id: string, content?: string, quick_replies?, list_message?, cta_message? }
    */
   _processStreamEnd(raw) {
     const messageId = this._getMessageIdFromRaw(raw);
@@ -586,6 +868,7 @@ export default class MessageProcessor extends EventEmitter {
     }
 
     const streamData = this.streams.get(messageId);
+    const hasStream = this.streams.has(messageId);
     const contentIsLeakedJson =
       typeof raw.content === 'string' && isJsonObject(raw.content);
     const finalText = unescapeEscapedUrlSlashes(
@@ -596,29 +879,66 @@ export default class MessageProcessor extends EventEmitter {
           : streamData?.text || '',
     );
 
+    const { components, warnings } = normalizeStreamEndComponents(
+      raw,
+      messageId,
+    );
+    warnings.forEach((warning) => {
+      warnComponentContract(
+        'MessageProcessor',
+        'invalid stream component discarded',
+        warning,
+      );
+    });
+
+    const hasComponents = Object.keys(components).length > 0;
+    const wasEmitted = Boolean(streamData?.emitted);
     const now = Date.now();
 
-    if (this.streams.has(messageId)) {
+    if (wasEmitted || (hasStream && !hasComponents && finalText.length === 0)) {
       this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, {
         text: finalText,
         status: 'delivered',
+        streamPhase: STREAM_PHASES.COMPLETED,
+        componentHints: undefined,
+        ...components,
         timestamp: now,
       });
-    } else if (contentIsLeakedJson) {
-      // No local stream and content is leaked JSON — do not create a message
+    } else if (contentIsLeakedJson && !hasComponents) {
+      this._cleanupStream(messageId);
+      this._rememberCompletedStreamId(messageId);
       return;
     } else {
-      const message = this._createDeliveredTextMessage(
-        messageId,
-        finalText,
-        now,
-      );
+      const message = {
+        ...this._createDeliveredTextMessage(
+          messageId,
+          finalText,
+          streamData?.timestamp || now,
+        ),
+        streamPhase: STREAM_PHASES.COMPLETED,
+        ...components,
+      };
       this.queue.push(message);
       this._processQueue();
     }
 
     this._cleanupStream(messageId);
+    this._rememberCompletedStreamId(messageId);
     this._rememberIncomingText(finalText);
+  }
+
+  /**
+   * Records a finalized stream id in a bounded set so late component or hint
+   * frames arriving after stream_end/disconnect never reopen a bubble.
+   * @private
+   * @param {string} streamId
+   */
+  _rememberCompletedStreamId(streamId) {
+    this.completedStreamIds.add(streamId);
+    if (this.completedStreamIds.size > MAX_COMPLETED_STREAM_IDS) {
+      const oldest = this.completedStreamIds.values().next().value;
+      this.completedStreamIds.delete(oldest);
+    }
   }
 
   /**
@@ -749,7 +1069,8 @@ export default class MessageProcessor extends EventEmitter {
     }
 
     const answerAlreadyStreaming =
-      this.activeStreamId && this.nextExpectedSeq > STREAM_INITIAL_SEQUENCE;
+      this.streamMessageEmitted ||
+      (this.activeStreamId && this.nextExpectedSeq > STREAM_INITIAL_SEQUENCE);
     if (answerAlreadyStreaming) {
       return;
     }
@@ -775,8 +1096,11 @@ export default class MessageProcessor extends EventEmitter {
       return;
     }
 
-    // Do not display typing indicator if streaming has already received deltas
-    if (this.activeStreamId && this.nextExpectedSeq > STREAM_INITIAL_SEQUENCE) {
+    // Do not display typing indicator if streaming bubble is already visible
+    if (
+      this.streamMessageEmitted ||
+      (this.activeStreamId && this.nextExpectedSeq > STREAM_INITIAL_SEQUENCE)
+    ) {
       return;
     }
 

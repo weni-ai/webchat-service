@@ -67,6 +67,56 @@ export type MessageType =
   | 'conversation_status'
 
 /**
+ * Streaming component types supported in Shopping Assistant responses
+ */
+export type ComponentType = 'quick_replies' | 'list_message' | 'cta_message'
+
+/**
+ * Live streaming lifecycle phase on incoming streamed messages.
+ * Omitted on history and persisted messages so consumers render the final state directly.
+ */
+export type StreamPhase = 'streaming_text' | 'awaiting_components' | 'completed'
+
+/**
+ * Ephemeral early component hint active while a response is streaming.
+ * Cleared on stream completion or disconnect and never persisted to browser storage.
+ */
+export interface ComponentHint {
+  componentType: ComponentType
+  labels?: string[]
+  count?: number
+  itemCount?: number
+}
+
+/**
+ * Individual option inside a list message
+ */
+export interface ListMessageItem {
+  uuid: string
+  title: string
+  description?: string
+}
+
+/**
+ * Interactive list message payload
+ */
+export interface ListMessage {
+  button_text: string
+  list_items: ListMessageItem[]
+  /** Known item count surfaced to the shopper; omitted when unknown */
+  item_count?: number
+}
+
+/**
+ * Call-to-action link button payload
+ */
+export interface CtaMessage {
+  display_text: string
+  /** Complete absolute http(s) URL */
+  url: string
+}
+
+/**
  * Message structure
  */
 export interface Message {
@@ -86,10 +136,16 @@ export interface Message {
   timestamp?: number
   direction?: 'incoming' | 'outgoing' | 'in' | 'out'
   sender?: 'response' | 'client'
-  status?: 'pending' | 'sent' | 'delivered' | 'read' | 'error' // NEW: Message status tracking
-  
+  status?: 'pending' | 'sent' | 'delivered' | 'read' | 'streaming' | 'error'
+  /** Live streaming phase; omitted on history/persisted messages */
+  streamPhase?: StreamPhase
+  /** Ephemeral component hints active while streaming; cleared on stream_end or disconnect */
+  componentHints?: ComponentHint[]
+
   // Interactive elements
-  quick_replies?: QuickReply[]
+  quick_replies?: Array<string | QuickReply>
+  list_message?: ListMessage
+  cta_message?: CtaMessage
   header?: string
   footer?: string
   product_list?: {
@@ -184,6 +240,52 @@ export interface StreamRationaleMessage {
   id: string
   content: string
   index?: number
+}
+
+/**
+ * Socket event sent early during streaming to reserve skeleton placeholders.
+ * Never carries a CTA URL.
+ */
+export interface StreamComponentHintMessage {
+  type: 'stream_component_hint'
+  id: string
+  component_type: ComponentType
+  labels?: string[]
+  count?: number
+  item_count?: number
+}
+
+/**
+ * Socket event delivering one complete component during a live stream.
+ */
+export interface StreamComponentMessage {
+  type: 'stream_component'
+  id: string
+  component_type: ComponentType
+  quick_replies?: Array<string | QuickReply>
+  list_message?: ListMessage
+  cta_message?: CtaMessage
+}
+
+/**
+ * Socket event signaling text streaming has ended while components are still pending.
+ */
+export interface StreamTextEndMessage {
+  type: 'stream_text_end'
+  id: string
+  content: string
+}
+
+/**
+ * Socket event finalizing a stream with authoritative text and optional components.
+ */
+export interface StreamEndMessage {
+  type: 'stream_end'
+  id: string
+  content: string
+  quick_replies?: Array<string | QuickReply>
+  list_message?: ListMessage
+  cta_message?: CtaMessage
 }
 
 /**
@@ -532,6 +634,16 @@ export default class WeniWebchatService {
   static MESSAGE_TYPES: Record<string, MessageType>
   static MESSAGE_KINDS: { RATIONALE: 'rationale'; FINAL_RESPONSE: 'final_response' }
   static MESSAGE_STATUS: Record<string, string>
+  static COMPONENT_TYPES: {
+    QUICK_REPLIES: 'quick_replies'
+    LIST_MESSAGE: 'list_message'
+    CTA_MESSAGE: 'cta_message'
+  }
+  static STREAM_PHASES: {
+    STREAMING_TEXT: 'streaming_text'
+    AWAITING_COMPONENTS: 'awaiting_components'
+    COMPLETED: 'completed'
+  }
   static MESSAGE_DIRECTIONS: Record<string, string>
   static CONNECTION_STATUS: Record<string, string>
   static STORAGE_TYPES: Record<string, string>
@@ -546,6 +658,16 @@ export const ALLOWED_FILE_TYPES: string[]
 export const MESSAGE_TYPES: Record<string, MessageType>
 export const MESSAGE_KINDS: { RATIONALE: 'rationale'; FINAL_RESPONSE: 'final_response' }
 export const MESSAGE_STATUS: Record<string, string>
+export const COMPONENT_TYPES: {
+  QUICK_REPLIES: 'quick_replies'
+  LIST_MESSAGE: 'list_message'
+  CTA_MESSAGE: 'cta_message'
+}
+export const STREAM_PHASES: {
+  STREAMING_TEXT: 'streaming_text'
+  AWAITING_COMPONENTS: 'awaiting_components'
+  COMPLETED: 'completed'
+}
 export const MESSAGE_DIRECTIONS: Record<string, string>
 export const CONNECTION_STATUS: Record<string, string>
 export const STORAGE_TYPES: Record<string, string>

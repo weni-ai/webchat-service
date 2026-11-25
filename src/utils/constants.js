@@ -41,6 +41,18 @@ export const MESSAGE_STATUS = {
   ERROR: 'error',
 };
 
+export const COMPONENT_TYPES = {
+  QUICK_REPLIES: 'quick_replies',
+  LIST_MESSAGE: 'list_message',
+  CTA_MESSAGE: 'cta_message',
+};
+
+export const STREAM_PHASES = {
+  STREAMING_TEXT: 'streaming_text',
+  AWAITING_COMPONENTS: 'awaiting_components',
+  COMPLETED: 'completed',
+};
+
 export const WS_MESSAGE_TYPES = {
   REGISTER: 'register',
   MESSAGE: 'message',

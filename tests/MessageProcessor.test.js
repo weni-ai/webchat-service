@@ -899,6 +899,7 @@ describe('MessageProcessor', () => {
         timestamp,
         direction: 'incoming',
         status: 'streaming',
+        streamPhase: 'streaming_text',
       });
     });
   });
@@ -2445,6 +2446,574 @@ describe('MessageProcessor', () => {
       });
       expect(processed).not.toHaveBeenCalled();
       expect(unknown).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('streaming components lifecycle', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('emits streaming message on early stream_component_hint, streams deltas, and finalizes on stream_end', () => {
+      processor.isThinkingActive = true;
+
+      processor.process({ type: 'stream_start', id: 'comp-1' });
+      processor.process({
+        type: 'stream_component_hint',
+        id: 'comp-1',
+        component_type: 'quick_replies',
+        labels: ['Expressa · até 2h', 'Agendada · 18h–20h', 'Retirar na loja'],
+        count: 3,
+      });
+
+      expect(processor.isThinkingActive).toBe(false);
+      expect(mockEmit).toHaveBeenCalledWith(SERVICE_EVENTS.THINKING_STOP);
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({
+          id: MESSAGE_ID_PREFIX + 'comp-1',
+          type: 'text',
+          text: '',
+          direction: 'incoming',
+          status: 'streaming',
+          streamPhase: 'streaming_text',
+          componentHints: [
+            {
+              componentType: 'quick_replies',
+              labels: [
+                'Expressa · até 2h',
+                'Agendada · 18h–20h',
+                'Retirar na loja',
+              ],
+              count: 3,
+            },
+          ],
+        }),
+      );
+
+      // Late typing/rationale after hint emitted bubble is suppressed
+      processor.process({ type: 'typing_start', from: 'ai-assistant' });
+      processor.process({
+        type: 'stream_rationale',
+        id: 'comp-1',
+        content: 'Late rationale',
+      });
+      processor.process({
+        type: 'message',
+        message_kind: MESSAGE_KINDS.RATIONALE,
+        message: { type: 'text', text: 'Late legacy rationale' },
+      });
+      expect(processor.isThinkingActive).toBe(false);
+
+      // Deltas update text without emitting a second MESSAGE_PROCESSED
+      processor.process({ v: 'Escolha como ', seq: 1 });
+      processor.process({ v: 'receber:', seq: 2 });
+
+      const processedCalls = mockEmit.mock.calls.filter(
+        ([event]) => event === SERVICE_EVENTS.MESSAGE_PROCESSED,
+      );
+      expect(processedCalls).toHaveLength(1);
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'comp-1',
+        expect.objectContaining({
+          text: 'Escolha como receber:',
+          status: 'streaming',
+          streamPhase: 'streaming_text',
+        }),
+      );
+
+      processor.process({
+        type: 'stream_end',
+        id: 'comp-1',
+        content: 'Escolha como receber:',
+        quick_replies: [
+          'Expressa · até 2h',
+          'Agendada · 18h–20h',
+          'Retirar na loja',
+        ],
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'comp-1',
+        expect.objectContaining({
+          text: 'Escolha como receber:',
+          status: 'delivered',
+          streamPhase: 'completed',
+          componentHints: undefined,
+          quick_replies: [
+            'Expressa · até 2h',
+            'Agendada · 18h–20h',
+            'Retirar na loja',
+          ],
+        }),
+      );
+      expect(processor.activeStreamId).toBeNull();
+    });
+
+    it('supports mid-stream hints and idempotent upsert per componentType without duplicating skeletons', () => {
+      processor.process({ type: 'stream_start', id: 'mid-1' });
+      processor.process({ v: 'Parte do texto ', seq: 1 });
+      processor.process({
+        type: 'stream_component_hint',
+        id: 'mid-1',
+        component_type: 'quick_replies',
+        count: 3,
+      });
+      processor.process({
+        type: 'stream_component_hint',
+        id: 'mid-1',
+        component_type: 'quick_replies',
+        labels: ['Até R$ 40', 'R$ 40 a R$ 80'],
+        count: 2,
+      });
+      processor.process({
+        type: 'stream_component_hint',
+        id: 'mid-1',
+        component_type: 'list_message',
+        labels: ['Ver 9 ofertas'],
+        count: 1,
+        item_count: 9,
+      });
+
+      const hintUpdates = mockEmit.mock.calls.filter(
+        ([event, , patch]) =>
+          event === SERVICE_EVENTS.MESSAGE_UPDATED && patch?.componentHints,
+      );
+      expect(hintUpdates).toHaveLength(3);
+      expect(hintUpdates[2][2].componentHints).toEqual([
+        {
+          componentType: 'quick_replies',
+          labels: ['Até R$ 40', 'R$ 40 a R$ 80'],
+          count: 2,
+        },
+        {
+          componentType: 'list_message',
+          labels: ['Ver 9 ofertas'],
+          count: 1,
+          itemCount: 9,
+        },
+      ]);
+    });
+
+    it('handles stream_text_end -> delayed stream_component (CTA) -> stream_end', () => {
+      processor.process({ type: 'stream_start', id: 'cta-1' });
+      processor.process({
+        type: 'stream_component_hint',
+        id: 'cta-1',
+        component_type: 'cta_message',
+        labels: ['Abrir portal de trocas'],
+        count: 1,
+        url: 'https://must-be-stripped.example/secret',
+      });
+
+      const received = mockEmit.mock.calls.find(
+        ([event]) => event === SERVICE_EVENTS.MESSAGE_PROCESSED,
+      )[1];
+      expect(received.componentHints).toEqual([
+        {
+          componentType: 'cta_message',
+          labels: ['Abrir portal de trocas'],
+          count: 1,
+        },
+      ]);
+      expect('url' in received.componentHints[0]).toBe(false);
+
+      processor.process({ v: 'Gerando link seguro:', seq: 1 });
+      processor.process({
+        type: 'stream_text_end',
+        id: 'cta-1',
+        content: 'Gerando link seguro:',
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'cta-1',
+        expect.objectContaining({
+          text: 'Gerando link seguro:',
+          status: 'streaming',
+          streamPhase: 'awaiting_components',
+        }),
+      );
+      expect(processor.streams.has(MESSAGE_ID_PREFIX + 'cta-1')).toBe(true);
+
+      processor.process({
+        type: 'stream_component',
+        id: 'cta-1',
+        component_type: 'cta_message',
+        cta_message: {
+          display_text: 'Abrir portal de trocas',
+          url: 'https:\\/\\/loja.example\\/trocas\\/48213',
+        },
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'cta-1',
+        expect.objectContaining({
+          status: 'streaming',
+          streamPhase: 'awaiting_components',
+          cta_message: {
+            display_text: 'Abrir portal de trocas',
+            url: 'https://loja.example/trocas/48213',
+          },
+        }),
+      );
+
+      processor.process({
+        type: 'stream_end',
+        id: 'cta-1',
+        content: 'Gerando link seguro:',
+        cta_message: {
+          display_text: 'Abrir portal de trocas',
+          url: 'https://loja.example/trocas/48213',
+        },
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'cta-1',
+        expect.objectContaining({
+          status: 'delivered',
+          streamPhase: 'completed',
+          componentHints: undefined,
+          cta_message: {
+            display_text: 'Abrir portal de trocas',
+            url: 'https://loja.example/trocas/48213',
+          },
+        }),
+      );
+    });
+
+    it('supports textless component responses and stream_start -> stream_end without deltas (BD-008 / FR-028)', () => {
+      // Textless with early hint
+      processor.process({ type: 'stream_start', id: 'textless-1' });
+      processor.process({
+        type: 'stream_component_hint',
+        id: 'textless-1',
+        component_type: 'quick_replies',
+        labels: ['Sim', 'Não'],
+      });
+      processor.process({
+        type: 'stream_end',
+        id: 'textless-1',
+        content: '',
+        quick_replies: ['Sim', 'Não'],
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({
+          id: MESSAGE_ID_PREFIX + 'textless-1',
+          text: '',
+          status: 'streaming',
+          streamPhase: 'streaming_text',
+        }),
+      );
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'textless-1',
+        expect.objectContaining({
+          text: '',
+          status: 'delivered',
+          streamPhase: 'completed',
+          componentHints: undefined,
+          quick_replies: ['Sim', 'Não'],
+        }),
+      );
+
+      mockEmit.mockClear();
+
+      // No-hint stream_start -> stream_end directly with components
+      processor.process({ type: 'stream_start', id: 'no-hint-1' });
+      processor.process({
+        type: 'stream_end',
+        id: 'no-hint-1',
+        content: 'Sem aviso prévio',
+        list_message: {
+          button_text: 'Ver receitas',
+          list_items: [{ uuid: 'r1', title: 'Bolo' }],
+        },
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({
+          id: MESSAGE_ID_PREFIX + 'no-hint-1',
+          text: 'Sem aviso prévio',
+          status: 'delivered',
+          streamPhase: 'completed',
+          list_message: {
+            button_text: 'Ver receitas',
+            list_items: [{ uuid: 'r1', title: 'Bolo' }],
+          },
+        }),
+      );
+    });
+
+    it('adopts a stream when stream_component or stream_text_end arrives without stream_start', () => {
+      processor.process({
+        type: 'stream_component',
+        id: 'adopt-comp',
+        component_type: 'quick_replies',
+        quick_replies: ['Opção A'],
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({
+          id: MESSAGE_ID_PREFIX + 'adopt-comp',
+          status: 'streaming',
+          quick_replies: ['Opção A'],
+        }),
+      );
+
+      processor.process({ type: 'stream_end', id: 'adopt-comp', content: '' });
+      mockEmit.mockClear();
+
+      processor.process({
+        type: 'stream_text_end',
+        id: 'adopt-text-end',
+        content: 'Texto pronto',
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({
+          id: MESSAGE_ID_PREFIX + 'adopt-text-end',
+          text: 'Texto pronto',
+          status: 'streaming',
+          streamPhase: 'awaiting_components',
+        }),
+      );
+    });
+
+    it('falls back to accumulated text when stream_text_end content is leaked JSON or missing', () => {
+      processor.process({ type: 'stream_start', id: 'leak-te' });
+      processor.process({ v: 'Texto bom', seq: 1 });
+      processor.process({
+        type: 'stream_text_end',
+        id: 'leak-te',
+        content: '{"leaked":true}',
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'leak-te',
+        expect.objectContaining({
+          text: 'Texto bom',
+          streamPhase: 'awaiting_components',
+        }),
+      );
+
+      processor.process({ type: 'stream_text_end', id: 'leak-te' });
+      expect(mockEmit).toHaveBeenLastCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'leak-te',
+        expect.objectContaining({
+          text: 'Texto bom',
+          streamPhase: 'awaiting_components',
+        }),
+      );
+    });
+
+    it('discards malformed hint, stream_component, and stream_end components with PII-free warnings without error event', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      processor.process({ type: 'stream_start', id: 'bad-1' });
+      processor.process({
+        type: 'stream_component_hint',
+        component_type: 'cta_message',
+      });
+      processor.process({
+        type: 'stream_component_hint',
+        id: 'bad-1',
+        component_type: 'catalog_message',
+        labels: ['Secret Label'],
+      });
+      processor.process({
+        type: 'stream_text_end',
+        content: 'no id',
+      });
+      processor.process({
+        type: 'stream_component',
+        component_type: 'cta_message',
+      });
+      processor.process({
+        type: 'stream_component',
+        id: 'bad-1',
+        component_type: 'cta_message',
+        cta_message: {
+          display_text: 'Secret CTA',
+          url: 'https://',
+        },
+      });
+      processor.process({ v: 'Texto seguro', seq: 1 });
+      processor.process({
+        type: 'stream_end',
+        id: 'bad-1',
+        content: 'Texto seguro',
+        cta_message: {
+          display_text: 'Secret CTA',
+          url: 'javascript:alert(1)',
+        },
+        quick_replies: ['Válido'],
+      });
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.ERROR,
+        expect.anything(),
+      );
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'bad-1',
+        expect.objectContaining({
+          text: 'Texto seguro',
+          status: 'delivered',
+          streamPhase: 'completed',
+          quick_replies: ['Válido'],
+        }),
+      );
+
+      // Verify zero PII in warning arguments
+      expect(warnSpy).toHaveBeenCalled();
+      const serializedWarnings = JSON.stringify(warnSpy.mock.calls);
+      expect(serializedWarnings).not.toContain('Secret Label');
+      expect(serializedWarnings).not.toContain('Secret CTA');
+      expect(serializedWarnings).not.toContain('javascript:alert(1)');
+    });
+
+    it('ignores frames for unrelated active streams and late frames after stream_end', () => {
+      processor.process({ type: 'stream_start', id: 'active-1' });
+      processor.process({
+        type: 'stream_component_hint',
+        id: 'other-stream',
+        component_type: 'quick_replies',
+        labels: ['Ignored'],
+      });
+      processor.process({
+        type: 'stream_component',
+        id: 'other-stream',
+        component_type: 'quick_replies',
+        quick_replies: ['Ignored'],
+      });
+      processor.process({
+        type: 'stream_text_end',
+        id: 'other-stream',
+        content: 'Ignored',
+      });
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.anything(),
+      );
+
+      processor.process({ v: 'Done', seq: 1 });
+      processor.process({
+        type: 'stream_end',
+        id: 'active-1',
+        content: 'Done',
+      });
+      mockEmit.mockClear();
+
+      // Late frames for completed stream are ignored
+      processor.process({
+        type: 'stream_component_hint',
+        id: 'active-1',
+        component_type: 'quick_replies',
+        labels: ['Late'],
+      });
+      processor.process({
+        type: 'stream_component',
+        id: 'active-1',
+        component_type: 'quick_replies',
+        quick_replies: ['Late'],
+      });
+      processor.process({
+        type: 'stream_text_end',
+        id: 'active-1',
+        content: 'Late',
+      });
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('evicts oldest completedStreamIds beyond the bounded window of 20', () => {
+      for (let i = 1; i <= 25; i++) {
+        processor.process({ type: 'stream_start', id: `s-${i}` });
+        processor.process({ v: `msg ${i}`, seq: 1 });
+        processor.process({
+          type: 'stream_end',
+          id: `s-${i}`,
+          content: `msg ${i}`,
+        });
+      }
+
+      expect(processor.completedStreamIds.size).toBe(20);
+      expect(processor.completedStreamIds.has(MESSAGE_ID_PREFIX + 's-1')).toBe(
+        false,
+      );
+      expect(processor.completedStreamIds.has(MESSAGE_ID_PREFIX + 's-25')).toBe(
+        true,
+      );
+    });
+
+    it('finalizes emitted streams and cleans up unemitted streams on handleConnectionLost (FR-012)', () => {
+      processor.isThinkingActive = true;
+      processor.process({ type: 'stream_start', id: 'drop-1' });
+      processor.process({
+        type: 'stream_component_hint',
+        id: 'drop-1',
+        component_type: 'cta_message',
+        labels: ['Acompanhar'],
+      });
+      processor.process({ v: 'Texto parcial', seq: 1 });
+
+      // Add a second unemitted stream entry directly to exercise the non-emitted cleanup branch
+      processor.streams.set(MESSAGE_ID_PREFIX + 'unemitted', {
+        text: '',
+        timestamp: Date.now(),
+        emitted: false,
+        streamPhase: 'streaming_text',
+        componentHints: [],
+      });
+
+      mockEmit.mockClear();
+      processor.handleConnectionLost();
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'drop-1',
+        expect.objectContaining({
+          status: 'delivered',
+          streamPhase: 'completed',
+          componentHints: undefined,
+        }),
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UPDATED,
+        MESSAGE_ID_PREFIX + 'unemitted',
+        expect.anything(),
+      );
+      expect(processor.streams.size).toBe(0);
+      expect(processor.activeStreamId).toBeNull();
+      expect(processor.isThinkingActive).toBe(false);
+    });
+
+    it('ignores unemitted stream_end with leaked JSON and no valid components', () => {
+      processor.process({ type: 'stream_start', id: 'leaked-only' });
+      processor.process({
+        type: 'stream_end',
+        id: 'leaked-only',
+        content: '{"internal":"leak"}',
+      });
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.anything(),
+      );
+      expect(processor.streams.size).toBe(0);
     });
   });
 });

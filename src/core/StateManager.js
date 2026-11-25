@@ -85,9 +85,17 @@ export default class StateManager extends EventEmitter {
    * @param {Object} updates
    */
   updateMessage(messageId, updates) {
-    const messages = this.state.messages.map((msg) =>
-      msg.id === messageId ? { ...msg, ...updates } : msg,
-    );
+    const messages = this.state.messages.map((msg) => {
+      if (msg.id !== messageId) {
+        return msg;
+      }
+
+      const merged = { ...msg, ...updates };
+      if ('componentHints' in updates && updates.componentHints === undefined) {
+        delete merged.componentHints;
+      }
+      return merged;
+    });
 
     this.setState({ messages });
     this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, updates);

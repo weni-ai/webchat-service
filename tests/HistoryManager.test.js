@@ -1487,4 +1487,106 @@ describe('HistoryManager', () => {
       expect(historyManager.isLoading()).toBe(false);
     });
   });
+
+  describe('streaming components history parity (cta_message & list_message.item_count)', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('restores valid cta_message (unescaping URL slashes) and list_message.item_count without streamPhase or componentHints', () => {
+      const result = historyManager.processHistory([
+        {
+          ID: '673ca120f1a2b3c4d5e6f789',
+          direction: 'in',
+          timestamp: 1795100000,
+          message: {
+            type: 'text',
+            text: 'Acompanhe seu pedido:',
+            cta_message: {
+              display_text: 'Acompanhar pedido',
+              url: 'https:\\/\\/loja.example\\/pedidos\\/48213\\/rastreio',
+            },
+            list_message: {
+              button_text: 'Ver 9 ofertas',
+              item_count: 9,
+              list_items: [{ uuid: 'u1', title: 'Café' }],
+            },
+            quick_replies: ['Sim', 'Não'],
+          },
+        },
+      ]);
+
+      expect(result[0]).toMatchObject({
+        id: '673ca120f1a2b3c4d5e6f789',
+        type: 'text',
+        text: 'Acompanhe seu pedido:',
+        direction: 'incoming',
+        cta_message: {
+          display_text: 'Acompanhar pedido',
+          url: 'https://loja.example/pedidos/48213/rastreio',
+        },
+        list_message: {
+          button_text: 'Ver 9 ofertas',
+          item_count: 9,
+          list_items: [{ uuid: 'u1', title: 'Café' }],
+        },
+        quick_replies: ['Sim', 'Não'],
+      });
+      expect('streamPhase' in result[0]).toBe(false);
+      expect('componentHints' in result[0]).toBe(false);
+    });
+
+    it('discards invalid cta_message in history with a PII-free console.warn', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const result = historyManager.processHistory([
+        {
+          ID: 'hist-bad-cta',
+          direction: 'in',
+          timestamp: 1795100000,
+          message: {
+            type: 'text',
+            text: 'Texto preservado',
+            cta_message: {
+              display_text: 'Secret Order 999',
+              url: 'javascript:alert(1)',
+            },
+          },
+        },
+      ]);
+
+      expect(result[0].text).toBe('Texto preservado');
+      expect(result[0].cta_message).toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledWith(
+        'HistoryManager: invalid cta_message discarded',
+        {
+          operation: 'normalize-history-cta',
+          messageId: 'hist-bad-cta',
+          componentType: 'cta_message',
+          reason: 'invalid_cta_payload',
+        },
+      );
+      const serialized = JSON.stringify(warnSpy.mock.calls);
+      expect(serialized).not.toContain('Secret Order 999');
+      expect(serialized).not.toContain('javascript:alert(1)');
+    });
+
+    it('backfills cta_message during merge when cached copy lacks it', () => {
+      const cached = { id: 'm-cta', text: 'Link:', timestamp: 1000 };
+      const fromHistory = {
+        id: 'm-cta',
+        text: 'Link:',
+        timestamp: 1000,
+        cta_message: {
+          display_text: 'Acompanhar pedido',
+          url: 'https://loja.example/pedidos/48213',
+        },
+      };
+
+      const merged = historyManager.merge([fromHistory], [cached]);
+
+      expect(merged).toHaveLength(1);
+      expect(merged[0].cta_message).toEqual(fromHistory.cta_message);
+    });
+  });
 });

@@ -291,6 +291,31 @@ describe('StateManager', () => {
       expect(handler).toHaveBeenCalledWith('m1', { status: 'sent' });
     });
 
+    it('omits componentHints from stored message when updated with componentHints: undefined', () => {
+      manager.addMessage({
+        id: 'm3',
+        text: 'Stream',
+        status: 'streaming',
+        streamPhase: 'streaming_text',
+        componentHints: [{ componentType: 'quick_replies', count: 2 }],
+      });
+      const handler = jest.fn();
+      manager.on(SERVICE_EVENTS.MESSAGE_UPDATED, handler);
+
+      const updates = {
+        status: 'delivered',
+        streamPhase: 'completed',
+        componentHints: undefined,
+      };
+      manager.updateMessage('m3', updates);
+
+      const stored = manager.getMessage('m3');
+      expect('componentHints' in stored).toBe(false);
+      expect(stored.status).toBe('delivered');
+      expect(stored.streamPhase).toBe('completed');
+      expect(handler).toHaveBeenCalledWith('m3', updates);
+    });
+
     it('does not throw and does not change the contents when the id is unknown', () => {
       const before = manager.getMessages();
 
