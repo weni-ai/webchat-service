@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-11-25
+
 ### Added
 
 - Support for Shopping Assistant streaming component WebSocket frames (`stream_component_hint`, `stream_component`, `stream_text_end`, and extended `stream_end` with `quick_replies`, `list_message` including optional `item_count`, and `cta_message`), normalized to camelCase `componentHints` and `streamPhase` (`streaming_text` | `awaiting_components` | `completed`) on emitted `Message` objects.
