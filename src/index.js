@@ -29,6 +29,8 @@ import {
   MESSAGE_TYPES,
   MESSAGE_KINDS,
   MESSAGE_STATUS,
+  COMPONENT_TYPES,
+  STREAM_PHASES,
   MESSAGE_DIRECTIONS,
   CONNECTION_STATUS,
   STORAGE_TYPES,
@@ -1156,11 +1158,13 @@ export default class WeniWebchatService extends EventEmitter {
 
       if (status === 'disconnected') {
         this._connected = false;
+        this.messageProcessor.handleConnectionLost();
         this.emit(SERVICE_EVENTS.DISCONNECTED);
       }
 
       if (status === 'closed') {
         this._connected = false;
+        this.messageProcessor.handleConnectionLost();
         this.emit(SERVICE_EVENTS.CLOSED);
       }
 
@@ -1430,6 +1434,8 @@ WeniWebchatService.ALLOWED_DOCUMENT_TYPES = ALLOWED_DOCUMENT_TYPES;
 WeniWebchatService.MESSAGE_TYPES = MESSAGE_TYPES;
 WeniWebchatService.MESSAGE_KINDS = MESSAGE_KINDS;
 WeniWebchatService.MESSAGE_STATUS = MESSAGE_STATUS;
+WeniWebchatService.COMPONENT_TYPES = COMPONENT_TYPES;
+WeniWebchatService.STREAM_PHASES = STREAM_PHASES;
 WeniWebchatService.MESSAGE_DIRECTIONS = MESSAGE_DIRECTIONS;
 WeniWebchatService.CONNECTION_STATUS = CONNECTION_STATUS;
 WeniWebchatService.STORAGE_TYPES = STORAGE_TYPES;
@@ -1449,6 +1455,8 @@ export {
   MESSAGE_TYPES,
   MESSAGE_KINDS,
   MESSAGE_STATUS,
+  COMPONENT_TYPES,
+  STREAM_PHASES,
   MESSAGE_DIRECTIONS,
   CONNECTION_STATUS,
   STORAGE_TYPES,

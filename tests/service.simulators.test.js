@@ -80,6 +80,78 @@ describe('WeniWebchatService — local simulators', () => {
       expect(listener).toHaveBeenCalledWith('Checking your order...');
       jest.useRealTimers();
     });
+
+    it('replays streaming component wire frames through simulateMessageReceived', () => {
+      const received = [];
+      const updated = [];
+      service.on(SERVICE_EVENTS.MESSAGE_RECEIVED, (msg) => received.push(msg));
+      service.on(SERVICE_EVENTS.MESSAGE_UPDATED, (id, patch) =>
+        updated.push({ id, patch }),
+      );
+
+      service.simulateMessageReceived({ type: 'stream_start', id: 'sim-c1' });
+      service.simulateMessageReceived({
+        type: 'stream_component_hint',
+        id: 'sim-c1',
+        component_type: 'cta_message',
+        labels: ['Acompanhar pedido'],
+        count: 1,
+      });
+      service.simulateMessageReceived({ v: 'Confira seu pedido:', seq: 1 });
+      service.simulateMessageReceived({
+        type: 'stream_text_end',
+        id: 'sim-c1',
+        content: 'Confira seu pedido:',
+      });
+      service.simulateMessageReceived({
+        type: 'stream_component',
+        id: 'sim-c1',
+        component_type: 'cta_message',
+        cta_message: {
+          display_text: 'Acompanhar pedido',
+          url: 'https://loja.example/pedidos/48213',
+        },
+      });
+      service.simulateMessageReceived({
+        type: 'stream_end',
+        id: 'sim-c1',
+        content: 'Confira seu pedido:',
+        cta_message: {
+          display_text: 'Acompanhar pedido',
+          url: 'https://loja.example/pedidos/48213',
+        },
+      });
+
+      expect(received).toHaveLength(1);
+      expect(received[0]).toMatchObject({
+        id: 'msg_sim-c1',
+        status: 'streaming',
+        streamPhase: 'streaming_text',
+        componentHints: [
+          {
+            componentType: 'cta_message',
+            labels: ['Acompanhar pedido'],
+            count: 1,
+          },
+        ],
+      });
+      expect(
+        updated.some((u) => u.patch.streamPhase === 'awaiting_components'),
+      ).toBe(true);
+
+      const [finalMessage] = service.getMessages();
+      expect(finalMessage).toMatchObject({
+        id: 'msg_sim-c1',
+        text: 'Confira seu pedido:',
+        status: 'delivered',
+        streamPhase: 'completed',
+        cta_message: {
+          display_text: 'Acompanhar pedido',
+          url: 'https://loja.example/pedidos/48213',
+        },
+      });
+      expect('componentHints' in finalMessage).toBe(false);
+    });
   });
 
   describe('setThinkingText()', () => {

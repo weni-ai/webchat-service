@@ -1,6 +1,7 @@
 import { generateSessionId } from '../utils/helpers';
 import EventEmitter from 'eventemitter3';
 import { SERVICE_EVENTS } from '../utils/constants';
+import { stripTransientStreamingFields } from '../utils/streamComponents';
 
 /**
  * SessionManager
@@ -52,6 +53,11 @@ export default class SessionManager extends EventEmitter {
     const stored = this.storage.get(this.sessionKey);
 
     if (stored && this._isSessionValid(stored)) {
+      if (Array.isArray(stored.conversation)) {
+        stored.conversation = stored.conversation.map(
+          stripTransientStreamingFields,
+        );
+      }
       this.session = stored;
       this._updateLastActivity();
       return this.session.id;
@@ -68,6 +74,11 @@ export default class SessionManager extends EventEmitter {
     const stored = this.storage.get(this.sessionKey);
 
     if (stored && this._isSessionValid(stored)) {
+      if (Array.isArray(stored.conversation)) {
+        stored.conversation = stored.conversation.map(
+          stripTransientStreamingFields,
+        );
+      }
       this.session = stored;
       this._updateLastActivity();
       this._startAutoClearTimer();
@@ -328,9 +339,13 @@ export default class SessionManager extends EventEmitter {
   updateConversation(messageId, update) {
     if (!this.session) return;
     const list = this.getConversation();
-    const message = list.find((m) => m.id === messageId);
-    if (message) {
-      Object.assign(message, update);
+    const index = list.findIndex((m) => m.id === messageId);
+    if (index !== -1) {
+      const merged = { ...list[index], ...update };
+      if ('componentHints' in update && update.componentHints === undefined) {
+        delete merged.componentHints;
+      }
+      list[index] = merged;
     }
     this._save();
   }
@@ -356,9 +371,9 @@ export default class SessionManager extends EventEmitter {
     }
 
     const conversation = Array.isArray(this.session.conversation)
-      ? this.session.conversation.filter(
-          (item) => !isEphemeralMediaMessage(item),
-        )
+      ? this.session.conversation
+          .filter((item) => !isEphemeralMediaMessage(item))
+          .map(stripTransientStreamingFields)
       : this.session.conversation;
 
     this.storage.set(this.sessionKey, {

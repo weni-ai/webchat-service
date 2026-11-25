@@ -7,6 +7,8 @@ import WeniWebchatService, {
   MESSAGE_TYPES,
   MESSAGE_KINDS,
   MESSAGE_STATUS,
+  COMPONENT_TYPES,
+  STREAM_PHASES,
   MESSAGE_DIRECTIONS,
   CONNECTION_STATUS,
   STORAGE_TYPES,
@@ -32,6 +34,8 @@ describe('WeniWebchatService — public surface', () => {
       ['MESSAGE_TYPES', 'MESSAGE_TYPES'],
       ['MESSAGE_KINDS', 'MESSAGE_KINDS'],
       ['MESSAGE_STATUS', 'MESSAGE_STATUS'],
+      ['COMPONENT_TYPES', 'COMPONENT_TYPES'],
+      ['STREAM_PHASES', 'STREAM_PHASES'],
       ['MESSAGE_DIRECTIONS', 'MESSAGE_DIRECTIONS'],
       ['CONNECTION_STATUS', 'CONNECTION_STATUS'],
       ['STORAGE_TYPES', 'STORAGE_TYPES'],
@@ -83,6 +87,14 @@ describe('WeniWebchatService — public surface', () => {
 
     it('re-exports MESSAGE_STATUS identical to constants', () => {
       expect(MESSAGE_STATUS).toBe(Constants.MESSAGE_STATUS);
+    });
+
+    it('re-exports COMPONENT_TYPES identical to constants', () => {
+      expect(COMPONENT_TYPES).toBe(Constants.COMPONENT_TYPES);
+    });
+
+    it('re-exports STREAM_PHASES identical to constants', () => {
+      expect(STREAM_PHASES).toBe(Constants.STREAM_PHASES);
     });
 
     it('re-exports MESSAGE_DIRECTIONS identical to constants', () => {

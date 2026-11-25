@@ -1009,4 +1009,101 @@ describe('SessionManager', () => {
       expect(() => manager._stopAutoClearTimer()).not.toThrow();
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Transient streaming field sanitization (BD-007, FR-029, AD-005)
+  // -------------------------------------------------------------------------
+  describe('transient streaming field sanitization', () => {
+    it('strips componentHints, streamPhase, and status: streaming from persisted storage without mutating live messages', () => {
+      const storage = makeStorage();
+      manager = createManager({}, storage);
+      manager.createNewSession();
+
+      const liveMessage = {
+        id: 'msg_stream-1',
+        type: 'text',
+        text: 'Escrevendo...',
+        direction: 'incoming',
+        status: 'streaming',
+        streamPhase: 'streaming_text',
+        componentHints: [
+          { componentType: 'quick_replies', labels: ['Sim', 'Não'], count: 2 },
+        ],
+      };
+
+      manager.appendToConversation(liveMessage);
+
+      // Live in-memory object stays untouched for active UI rendering
+      expect(liveMessage.status).toBe('streaming');
+      expect(liveMessage.streamPhase).toBe('streaming_text');
+      expect(liveMessage.componentHints).toHaveLength(1);
+
+      // Persisted snapshot contains no transient streaming fields
+      const persistedMsg = storage._peek().conversation[0];
+      expect(persistedMsg).toEqual({
+        id: 'msg_stream-1',
+        type: 'text',
+        text: 'Escrevendo...',
+        direction: 'incoming',
+        status: 'delivered',
+      });
+      expect('componentHints' in persistedMsg).toBe(false);
+      expect('streamPhase' in persistedMsg).toBe(false);
+
+      // updateConversation deletes componentHints when cleared without mutating original snapshot
+      manager.updateConversation('msg_stream-1', {
+        status: 'delivered',
+        streamPhase: 'completed',
+        componentHints: undefined,
+      });
+      expect(liveMessage.componentHints).toHaveLength(1);
+      expect('componentHints' in manager.getConversation()[0]).toBe(false);
+      expect('streamPhase' in storage._peek().conversation[0]).toBe(false);
+    });
+
+    it('defensively strips transient streaming fields on restore() and getOrCreate()', async () => {
+      const makeStored = () => ({
+        id: 'sess-reload',
+        createdAt: 1000,
+        lastActivity: Date.now(),
+        lastMessageSentAt: null,
+        hasSentAnyMessage: false,
+        metadata: {},
+        conversation: [
+          {
+            id: 'msg_stale',
+            type: 'text',
+            text: 'Interrupted',
+            status: 'streaming',
+            streamPhase: 'awaiting_components',
+            componentHints: [{ componentType: 'cta_message', count: 1 }],
+          },
+        ],
+      });
+
+      const storage1 = makeStorage(makeStored());
+      manager = createManager({}, storage1);
+      const restored = await manager.restore();
+
+      expect(restored.conversation[0]).toEqual({
+        id: 'msg_stale',
+        type: 'text',
+        text: 'Interrupted',
+        status: 'delivered',
+      });
+      expect('componentHints' in restored.conversation[0]).toBe(false);
+      expect('streamPhase' in restored.conversation[0]).toBe(false);
+
+      const storage2 = makeStorage(makeStored());
+      const manager2 = createManager({}, storage2);
+      manager2.getOrCreate();
+      expect(manager2.getConversation()[0]).toEqual({
+        id: 'msg_stale',
+        type: 'text',
+        text: 'Interrupted',
+        status: 'delivered',
+      });
+      manager2.clear();
+    });
+  });
 });

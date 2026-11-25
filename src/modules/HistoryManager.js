@@ -1,6 +1,10 @@
 import EventEmitter from 'eventemitter3';
 import { SERVICE_EVENTS } from '../utils/constants';
 import { readCustomData, unescapeEscapedUrlSlashes } from '../utils/helpers';
+import {
+  normalizeCtaMessage,
+  warnComponentContract,
+} from '../utils/streamComponents';
 
 /**
  * @class HistoryManager
@@ -146,6 +150,27 @@ export default class HistoryManager extends EventEmitter {
         message.list_message = item.message.list_message;
       }
 
+      if (
+        item.message?.cta_message !== undefined &&
+        item.message?.cta_message !== null
+      ) {
+        const ctaMessage = normalizeCtaMessage(item.message.cta_message);
+        if (ctaMessage) {
+          message.cta_message = ctaMessage;
+        } else {
+          warnComponentContract(
+            'HistoryManager',
+            'invalid cta_message discarded',
+            {
+              operation: 'normalize-history-cta',
+              messageId: message.id,
+              componentType: 'cta_message',
+              reason: 'invalid_cta_payload',
+            },
+          );
+        }
+      }
+
       if (item.message?.type === 'interactive') {
         const { interactive } = item.message;
         message.text = unescapeEscapedUrlSlashes(item.message.text);
@@ -229,8 +254,17 @@ export default class HistoryManager extends EventEmitter {
 
         if (!cachedMessage) {
           messageMap.set(id, msg);
-        } else if (msg.customData && !cachedMessage.customData) {
-          messageMap.set(id, { ...cachedMessage, customData: msg.customData });
+        } else {
+          let nextMessage = cachedMessage;
+          if (msg.customData && !nextMessage.customData) {
+            nextMessage = { ...nextMessage, customData: msg.customData };
+          }
+          if (msg.cta_message && !nextMessage.cta_message) {
+            nextMessage = { ...nextMessage, cta_message: msg.cta_message };
+          }
+          if (nextMessage !== cachedMessage) {
+            messageMap.set(id, nextMessage);
+          }
         }
       }
     });

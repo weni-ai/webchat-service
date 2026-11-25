@@ -462,6 +462,28 @@ service.on('message:received', (message) => {
 - The service does not validate size, depth or keys of the object, and does not render it. When a message is split into several parts, only the part that carries it exposes `customData`.
 - It is unrelated to the `customData` option of the service configuration.
 
+### Streaming Components (`componentHints` and `streamPhase`)
+
+Live streamed incoming messages support additive Shopping Assistant component frames (`stream_component_hint`, `stream_component`, `stream_text_end`, and extended `stream_end`) for `quick_replies`, `list_message` (with optional `item_count`), and `cta_message`:
+
+```javascript
+service.on('message:received', (message) => {
+  // message.streamPhase: 'streaming_text' | 'awaiting_components' | 'completed'
+  // message.componentHints: [{ componentType, labels?, count?, itemCount? }]
+})
+
+service.on('message:updated', (messageId, updates) => {
+  // updates.streamPhase transitions to 'awaiting_components' on stream_text_end
+  // and 'completed' (with componentHints cleared) on stream_end or disconnect
+})
+```
+
+- `componentHints` uses camelCase (`componentType`, `labels`, `count`, `itemCount`) and never carries a CTA `url`. Receiving another hint or component for the same `componentType` updates it idempotently.
+- When `stream_component_hint` arrives before the first text `delta`, the service stops the thinking indicator and emits the streaming message immediately (supporting early skeletons and textless component responses).
+- CTA URLs are validated to require a complete absolute `http(s)` URL; malformed hints or component payloads are discarded with a structured, content-free `console.warn` without interrupting text streaming.
+- On `stream_end` or when the WebSocket transitions to `disconnected`/`closed`, active streams are finalized with `status: 'delivered'`, `streamPhase: 'completed'`, and `componentHints` cleared.
+- `componentHints` and `streamPhase` are never persisted to browser storage and are omitted on `history:loaded` messages (which restore `quick_replies`, `list_message` including optional `item_count`, and validated `cta_message`).
+
 ### Typing & Thinking Indicators
 
 The service distinguishes between two types of indicators:

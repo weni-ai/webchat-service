@@ -720,4 +720,320 @@ describe('WeniWebchatService — _setupEventListeners wiring', () => {
       expect(cb).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ===========================================================================
+  // Streaming components end-to-end relays & disconnect cleanup
+  // ===========================================================================
+  describe('streaming components relays', () => {
+    it('relays early hint, deltas, stream_text_end, stream_component, and stream_end without persisting transient fields', () => {
+      service.session.createNewSession();
+      const received = [];
+      const updated = [];
+      service.on(SERVICE_EVENTS.MESSAGE_RECEIVED, (msg) => received.push(msg));
+      service.on(SERVICE_EVENTS.MESSAGE_UPDATED, (id, patch) =>
+        updated.push({ id, patch }),
+      );
+
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_start',
+        id: 'e2e-1',
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component_hint',
+        id: 'e2e-1',
+        component_type: 'list_message',
+        labels: ['Ver 9 ofertas'],
+        count: 1,
+        item_count: 9,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component_hint',
+        id: 'e2e-1',
+        component_type: 'cta_message',
+        labels: ['Acompanhar pedido'],
+        count: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        v: 'Veja as ofertas:',
+        seq: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_text_end',
+        id: 'e2e-1',
+        content: 'Veja as ofertas:',
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component',
+        id: 'e2e-1',
+        component_type: 'cta_message',
+        cta_message: {
+          display_text: 'Acompanhar pedido',
+          url: 'https://loja.example/pedidos/48213/rastreio',
+        },
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_end',
+        id: 'e2e-1',
+        content: 'Veja as ofertas:',
+        list_message: {
+          button_text: 'Ver 9 ofertas',
+          item_count: 9,
+          list_items: [{ uuid: 'u1', title: 'Café' }],
+        },
+        cta_message: {
+          display_text: 'Acompanhar pedido',
+          url: 'https://loja.example/pedidos/48213/rastreio',
+        },
+      });
+
+      expect(received).toHaveLength(1);
+      expect(received[0].streamPhase).toBe('streaming_text');
+      expect(
+        updated.some(
+          (entry) => entry.patch.streamPhase === 'awaiting_components',
+        ),
+      ).toBe(true);
+
+      const finalMsg = service.getMessages()[0];
+      expect(finalMsg).toMatchObject({
+        id: 'msg_e2e-1',
+        text: 'Veja as ofertas:',
+        status: 'delivered',
+        streamPhase: 'completed',
+        list_message: {
+          button_text: 'Ver 9 ofertas',
+          item_count: 9,
+          list_items: [{ uuid: 'u1', title: 'Café' }],
+        },
+        cta_message: {
+          display_text: 'Acompanhar pedido',
+          url: 'https://loja.example/pedidos/48213/rastreio',
+        },
+      });
+      expect('componentHints' in finalMsg).toBe(false);
+
+      // Persisted session must never store streamPhase or componentHints
+      const storedSession = service.storage.get(service.session.sessionKey);
+      expect('streamPhase' in storedSession.conversation[0]).toBe(false);
+      expect('componentHints' in storedSession.conversation[0]).toBe(false);
+    });
+
+    it.each(['disconnected', 'closed'])(
+      'finalizes active streams and clears componentHints when WebSocket transitions to %s (FR-012)',
+      (status) => {
+        service.session.createNewSession();
+        const updated = [];
+        service.on(SERVICE_EVENTS.MESSAGE_UPDATED, (id, patch) =>
+          updated.push({ id, patch }),
+        );
+
+        service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+          type: 'stream_start',
+          id: `drop-${status}`,
+        });
+        service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+          type: 'stream_component_hint',
+          id: `drop-${status}`,
+          component_type: 'quick_replies',
+          labels: ['Sim', 'Não'],
+          count: 2,
+        });
+        service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+          v: 'Texto interrompido',
+          seq: 1,
+        });
+
+        service.websocket.emit(
+          SERVICE_EVENTS.CONNECTION_STATUS_CHANGED,
+          status,
+        );
+
+        const finalMsg = service.getMessages()[0];
+        expect(finalMsg).toMatchObject({
+          id: `msg_drop-${status}`,
+          text: 'Texto interrompido',
+          status: 'delivered',
+          streamPhase: 'completed',
+        });
+        expect('componentHints' in finalMsg).toBe(false);
+        expect(
+          updated.some(
+            (entry) =>
+              entry.id === `msg_drop-${status}` &&
+              entry.patch.status === 'delivered' &&
+              entry.patch.streamPhase === 'completed' &&
+              entry.patch.componentHints === undefined,
+          ),
+        ).toBe(true);
+      },
+    );
+
+    it('preserves early stream_component payloads delivered before text deltas across cta_message, quick_replies, and list_message without stream_text_end', () => {
+      service.session.createNewSession();
+
+      // 1. cta_message
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_start',
+        id: '0b27ff642e9d6e3a',
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'typing_start',
+        from: 'ai-assistant',
+        message: {
+          type: '',
+          timestamp: '',
+          list_message: { button_text: '', list_items: null },
+        },
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component_hint',
+        id: '0b27ff642e9d6e3a',
+        component_type: 'cta_message',
+        labels: ['Acessar'],
+        count: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component',
+        id: '0b27ff642e9d6e3a',
+        component_type: 'cta_message',
+        cta_message: { url: 'https://weni.ai', display_text: 'Acessar' },
+      });
+
+      const midCta = service.getMessages()[0];
+      expect(midCta).toMatchObject({
+        id: 'msg_0b27ff642e9d6e3a',
+        text: '',
+        status: 'streaming',
+        streamPhase: 'streaming_text',
+        componentHints: [
+          { componentType: 'cta_message', labels: ['Acessar'], count: 1 },
+        ],
+        cta_message: { url: 'https://weni.ai', display_text: 'Acessar' },
+      });
+
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, { v: 'Claro', seq: 1 });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        v: '! Aqui está o CTA:',
+        seq: 2,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_end',
+        id: '0b27ff642e9d6e3a',
+        content: 'Claro! Aqui está o CTA:',
+        cta_message: { url: 'https://weni.ai', display_text: 'Acessar' },
+      });
+
+      // 2. quick_replies
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_start',
+        id: '3043634f97a2c5ba',
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component_hint',
+        id: '3043634f97a2c5ba',
+        component_type: 'quick_replies',
+        labels: ['Sim', 'Não'],
+        count: 2,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component',
+        id: '3043634f97a2c5ba',
+        component_type: 'quick_replies',
+        quick_replies: ['Sim', 'Não'],
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        v: 'Aqui estão as opções:',
+        seq: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_end',
+        id: '3043634f97a2c5ba',
+        content: 'Aqui estão as opções:',
+        quick_replies: ['Sim', 'Não'],
+      });
+
+      // 3. list_message
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_start',
+        id: '5e6ddc3e098eeb01',
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component_hint',
+        id: '5e6ddc3e098eeb01',
+        component_type: 'list_message',
+        labels: ['Ver opções'],
+        count: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_component',
+        id: '5e6ddc3e098eeb01',
+        component_type: 'list_message',
+        list_message: {
+          button_text: 'Ver opções',
+          list_items: [
+            {
+              uuid: '7c3f8d08-20ae-54ea-990b-ca8338884cc8',
+              title: 'Primeira',
+              description: 'Opção primeira',
+            },
+          ],
+        },
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        v: 'Aqui está a lista de opções:',
+        seq: 1,
+      });
+      service.websocket.emit(SERVICE_EVENTS.MESSAGE, {
+        type: 'stream_end',
+        id: '5e6ddc3e098eeb01',
+        content: 'Aqui está a lista de opções:',
+        list_message: {
+          button_text: 'Ver opções',
+          list_items: [
+            {
+              uuid: '7c3f8d08-20ae-54ea-990b-ca8338884cc8',
+              title: 'Primeira',
+              description: 'Opção primeira',
+            },
+          ],
+        },
+      });
+
+      const messages = service.getMessages();
+      expect(messages).toHaveLength(3);
+      expect(messages[0]).toMatchObject({
+        id: 'msg_0b27ff642e9d6e3a',
+        text: 'Claro! Aqui está o CTA:',
+        status: 'delivered',
+        streamPhase: 'completed',
+        cta_message: { url: 'https://weni.ai', display_text: 'Acessar' },
+      });
+      expect(messages[1]).toMatchObject({
+        id: 'msg_3043634f97a2c5ba',
+        text: 'Aqui estão as opções:',
+        status: 'delivered',
+        streamPhase: 'completed',
+        quick_replies: ['Sim', 'Não'],
+      });
+      expect(messages[2]).toMatchObject({
+        id: 'msg_5e6ddc3e098eeb01',
+        text: 'Aqui está a lista de opções:',
+        status: 'delivered',
+        streamPhase: 'completed',
+        list_message: {
+          button_text: 'Ver opções',
+          list_items: [
+            {
+              uuid: '7c3f8d08-20ae-54ea-990b-ca8338884cc8',
+              title: 'Primeira',
+              description: 'Opção primeira',
+            },
+          ],
+        },
+      });
+      messages.forEach((m) => {
+        expect('componentHints' in m).toBe(false);
+      });
+    });
+  });
 });
