@@ -65,6 +65,7 @@ export type MessageType =
   | 'location'
   | 'interactive'
   | 'conversation_status'
+  | 'human_support_event'
 
 /**
  * Streaming component types supported in Shopping Assistant responses
@@ -117,10 +118,61 @@ export interface CtaMessage {
 }
 
 /**
+ * Who wrote a message. `undefined` on a message means it was saved before the
+ * human support launch for its channel (render it as before: no time, name or
+ * status). A `human_agent` without `id` is a Live Desk system message.
+ */
+export type MessageAuthor =
+  | { type: 'contact' }
+  | { type: 'ai_agent' }
+  | {
+      type: 'human_agent'
+      /** Agent first name at send time, when configured */
+      name?: string
+      /** Opaque key used only to group consecutive messages; never render it */
+      id?: string
+    }
+
+/**
+ * Start or end of a human support period, carried by `human_support_event`
+ * messages
+ */
+export interface HumanSupportEvent {
+  eventId: string
+  event: 'started' | 'ended'
+  /** Epoch milliseconds; the time to show on the milestone */
+  occurredAt: number
+}
+
+/**
+ * Human support state of the conversation (`state.humanSupport`)
+ */
+export interface HumanSupportState {
+  active: boolean
+}
+
+/**
+ * Live Desk agent shown while typing (`state.typingAuthor`)
+ */
+export interface TypingAuthor {
+  type: 'human_agent'
+  name?: string
+}
+
+/**
+ * Features the socket enabled for the current connection (`state.features`)
+ */
+export interface ServiceFeatures {
+  /** Render human support status only when true */
+  humanSupportStatus: boolean
+}
+
+/**
  * Message structure
  */
 export interface Message {
   // Core fields
+  /** For outgoing messages, also the `message.id` sent on the wire */
   id?: string
   ID?: string // Uppercase for history compatibility
   type: MessageType
@@ -133,9 +185,24 @@ export interface Message {
   caption?: string // Media caption
   
   // Metadata
+  /** Epoch milliseconds; the time to display */
   timestamp?: number
+  /**
+   * Server ordering key (epoch ms, socket clock). `state.messages` is already
+   * ordered by it; do not re-sort by `timestamp`.
+   */
+  orderKey?: number
+  author?: MessageAuthor
+  /** Present when `type` is `'human_support_event'` */
+  humanSupportEvent?: HumanSupportEvent
   direction?: 'incoming' | 'outgoing' | 'in' | 'out'
   sender?: 'response' | 'client'
+  /**
+   * On outgoing messages, a server status (`sent`, `delivered`, `read`) only
+   * moves forward and means the message belongs to human support; `pending`
+   * and `error` are local. On channels with human support status enabled, an
+   * AI-mode message has no status after it is sent.
+   */
   status?: 'pending' | 'sent' | 'delivered' | 'read' | 'streaming' | 'error'
   /** Live streaming phase; omitted on history/persisted messages */
   streamPhase?: StreamPhase
@@ -194,6 +261,9 @@ export interface ChatState {
   isTyping: boolean
   thinkingText: string | null
   error?: Error | null
+  features: ServiceFeatures
+  humanSupport: HumanSupportState
+  typingAuthor: TypingAuthor | null
 }
 
 /**
@@ -286,6 +356,51 @@ export interface StreamEndMessage {
   quick_replies?: Array<string | QuickReply>
   list_message?: ListMessage
   cta_message?: CtaMessage
+}
+
+/**
+ * Socket event confirming a shopper message was saved
+ */
+export interface MessageSavedFrame {
+  type: 'message_saved'
+  id: string
+  order_key: number
+  /** Present only when saved during human support */
+  status?: 'sent'
+}
+
+/**
+ * Socket event moving shopper messages to `delivered` or `read`
+ */
+export interface MessageStatusFrame {
+  type: 'message_status'
+  message_status: {
+    ids: string[]
+    status: 'delivered' | 'read'
+  }
+}
+
+/**
+ * Socket event carrying a human support milestone
+ */
+export interface HumanSupportEventFrame {
+  type: 'human_support_event'
+  order_key: number
+  human_support_event: {
+    event_id: string
+    event: 'started' | 'ended'
+    /** RFC 3339 */
+    occurred_at: string
+  }
+}
+
+/**
+ * Socket answer to `get_human_support_state`; `active` is absent when the
+ * state could not be confirmed
+ */
+export interface HumanSupportStateFrame {
+  type: 'human_support_state'
+  active?: boolean
 }
 
 /**
@@ -651,6 +766,15 @@ export default class WeniWebchatService {
   static QUICK_REPLY_TYPES: Record<string, string>
   static SERVICE_EVENTS: Record<string, string>
   static DEFAULTS: any
+  static MESSAGE_AUTHOR_TYPES: {
+    CONTACT: 'contact'
+    AI_AGENT: 'ai_agent'
+    HUMAN_AGENT: 'human_agent'
+  }
+  static HUMAN_SUPPORT_EVENTS: {
+    STARTED: 'started'
+    ENDED: 'ended'
+  }
 }
 
 // Named exports for constants
@@ -675,3 +799,12 @@ export const ERROR_TYPES: Record<string, string>
 export const QUICK_REPLY_TYPES: Record<string, string>
 export const SERVICE_EVENTS: Record<string, string>
 export const DEFAULTS: any
+export const MESSAGE_AUTHOR_TYPES: {
+  CONTACT: 'contact'
+  AI_AGENT: 'ai_agent'
+  HUMAN_AGENT: 'human_agent'
+}
+export const HUMAN_SUPPORT_EVENTS: {
+  STARTED: 'started'
+  ENDED: 'ended'
+}

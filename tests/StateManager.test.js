@@ -53,6 +53,9 @@ describe('StateManager', () => {
         isThinking: false,
         thinkingText: null,
         error: null,
+        features: { humanSupportStatus: false },
+        humanSupport: { active: false },
+        typingAuthor: null,
       });
     });
   });
@@ -690,6 +693,9 @@ describe('StateManager', () => {
         isThinking: false,
         thinkingText: null,
         error: null,
+        features: { humanSupportStatus: false },
+        humanSupport: { active: false },
+        typingAuthor: null,
       });
     });
 
@@ -752,6 +758,96 @@ describe('StateManager', () => {
 
     it('getMessage returns undefined for unknown ids', () => {
       expect(manager.getMessage('missing')).toBeUndefined();
+    });
+  });
+
+  describe('human support state', () => {
+    beforeEach(() => {
+      manager = createManager();
+    });
+
+    it('inserts keyed messages by orderKey and appends unkeyed ones', () => {
+      manager.addMessage({ id: 'a', orderKey: 100 });
+      manager.addMessage({ id: 'c', orderKey: 300 });
+      manager.addMessage({ id: 'b', orderKey: 200 });
+      manager.addMessage({ id: 'stream', timestamp: 1 });
+
+      expect(manager.getMessages().map(({ id }) => id)).toEqual([
+        'a',
+        'b',
+        'c',
+        'stream',
+      ]);
+    });
+
+    it('removes status and __awaitingSave when updated to undefined', () => {
+      manager.addMessage({
+        id: 'm',
+        direction: 'outgoing',
+        status: 'pending',
+        __awaitingSave: true,
+      });
+
+      manager.updateMessage('m', {
+        status: undefined,
+        __awaitingSave: undefined,
+      });
+
+      expect(manager.getMessage('m')).toEqual({
+        id: 'm',
+        direction: 'outgoing',
+      });
+    });
+
+    it('repositions a message that receives its orderKey', () => {
+      manager.addMessage({ id: 'agent', orderKey: 500 });
+      manager.addMessage({
+        id: 'mine',
+        direction: 'outgoing',
+        status: 'pending',
+      });
+
+      manager.updateMessage('mine', { orderKey: 400, status: 'sent' });
+
+      expect(manager.getMessages().map(({ id }) => id)).toEqual([
+        'mine',
+        'agent',
+      ]);
+    });
+
+    it('applies a batch with one state change and reports order changes', () => {
+      manager.addMessage({ id: 'a', orderKey: 1, status: 'sent' });
+      manager.addMessage({ id: 'b', orderKey: 2, status: 'sent' });
+      const stateChanged = jest.fn();
+      const messageUpdated = jest.fn();
+      manager.on(SERVICE_EVENTS.STATE_CHANGED, stateChanged);
+      manager.on(SERVICE_EVENTS.MESSAGE_UPDATED, messageUpdated);
+
+      const reordered = manager.updateMessages([
+        ['a', { status: 'read' }],
+        ['b', { status: 'read' }],
+      ]);
+
+      expect(reordered).toBe(false);
+      expect(stateChanged).toHaveBeenCalledTimes(1);
+      expect(messageUpdated).toHaveBeenCalledTimes(2);
+      expect(manager.getMessages().map(({ status }) => status)).toEqual([
+        'read',
+        'read',
+      ]);
+    });
+
+    it('sets features, human support and typing author', () => {
+      manager.setFeatures({ humanSupportStatus: true });
+      manager.setHumanSupport({ active: true });
+      manager.setTypingAuthor({ type: 'human_agent', name: 'Julia' });
+
+      expect(manager.get('features')).toEqual({ humanSupportStatus: true });
+      expect(manager.get('humanSupport')).toEqual({ active: true });
+      expect(manager.get('typingAuthor')).toEqual({
+        type: 'human_agent',
+        name: 'Julia',
+      });
     });
   });
 });

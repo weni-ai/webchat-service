@@ -5,6 +5,7 @@ import {
   MESSAGE_KINDS,
   STREAM_INITIAL_SEQUENCE,
   DEFAULTS,
+  INTERNAL_EVENTS,
 } from '../src/utils/constants';
 
 describe('MessageProcessor', () => {
@@ -3281,6 +3282,169 @@ describe('MessageProcessor', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+  });
+
+  describe('human support frames', () => {
+    const AGENT = {
+      type: 'human_agent',
+      id: 'ha_5f0c3a9e1b7d4c2a8e6f0b1d3c5a7e9f',
+      name: 'Julia',
+    };
+    let warn;
+
+    beforeEach(() => {
+      warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      warn.mockRestore();
+    });
+
+    it('queues a milestone as a chat item', () => {
+      processor.process({
+        type: 'human_support_event',
+        order_key: 1793727247312,
+        human_support_event: {
+          event_id: '6f1d2c3b-4a59-5e6f-8a7b-9c0d1e2f3a4b',
+          event: 'started',
+          occurred_at: '2026-11-03T17:34:05.120Z',
+        },
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({
+          id: 'hs_6f1d2c3b-4a59-5e6f-8a7b-9c0d1e2f3a4b',
+          type: 'human_support_event',
+          orderKey: 1793727247312,
+        }),
+      );
+    });
+
+    it('discards an invalid milestone with a warning and no error', () => {
+      processor.process({
+        type: 'human_support_event',
+        human_support_event: { event_id: 'x', event: 'started' },
+      });
+
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.anything(),
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.ERROR,
+        expect.anything(),
+      );
+      expect(warn).toHaveBeenCalledWith(
+        'MessageProcessor: invalid human_support_event discarded',
+        {
+          operation: 'normalize-human-support-event',
+          eventId: 'x',
+          reason: 'invalid_event_id',
+        },
+      );
+    });
+
+    it('forwards status frames internally instead of as unknown messages', () => {
+      const saved = { type: 'message_saved', id: 'msg_1', order_key: 1 };
+      const status = {
+        type: 'message_status',
+        message_status: { ids: ['msg_1'], status: 'read' },
+      };
+
+      processor.process(saved);
+      processor.process(status);
+      processor.process({ type: 'human_support_state', active: true });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        INTERNAL_EVENTS.MESSAGE_SAVED,
+        saved,
+      );
+      expect(mockEmit).toHaveBeenCalledWith(
+        INTERNAL_EVENTS.MESSAGE_STATUS,
+        status,
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_UNKNOWN,
+        expect.anything(),
+      );
+    });
+
+    it('routes Live Desk typing to the tracker only with the feature on', () => {
+      processor.process({
+        type: 'typing_start',
+        from: 'human_agent',
+        author: AGENT,
+      });
+      expect(mockEmit).toHaveBeenCalledWith(SERVICE_EVENTS.TYPING_START);
+
+      mockEmit.mockClear();
+      processor.humanSupportEnabled = true;
+      processor.process({
+        type: 'typing_start',
+        from: 'human_agent',
+        author: AGENT,
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        INTERNAL_EVENTS.HUMAN_AGENT_TYPING,
+        AGENT,
+      );
+      expect(mockEmit).not.toHaveBeenCalledWith(SERVICE_EVENTS.TYPING_START);
+    });
+
+    it('adds author, orderKey and server time to keyed messages', () => {
+      processor.process({
+        type: 'message',
+        order_key: 1793727372518,
+        message: {
+          type: 'text',
+          timestamp: '1793727372',
+          text: 'Oi! Sou a Julia',
+          author: { ...AGENT, email: 'julia@example.com' },
+        },
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        SERVICE_EVENTS.MESSAGE_PROCESSED,
+        expect.objectContaining({
+          author: AGENT,
+          orderKey: 1793727372518,
+          timestamp: 1793727372000,
+        }),
+      );
+    });
+
+    it('keeps the browser time and no author on legacy messages', () => {
+      jest.setSystemTime(1000);
+      processor.process({
+        type: 'message',
+        message: { type: 'text', timestamp: '5', text: 'antigo' },
+      });
+
+      const processed = mockEmit.mock.calls.find(
+        ([event]) => event === SERVICE_EVENTS.MESSAGE_PROCESSED,
+      )[1];
+      expect(processed.timestamp).toBe(1000);
+      expect(processed).not.toHaveProperty('author');
+      expect(processed).not.toHaveProperty('orderKey');
+    });
+
+    it('drops an out-of-contract author with a warning', () => {
+      processor.process({
+        type: 'message',
+        message: { type: 'text', text: 'Oi', author: { type: 'robot' } },
+      });
+
+      const processed = mockEmit.mock.calls.find(
+        ([event]) => event === SERVICE_EVENTS.MESSAGE_PROCESSED,
+      )[1];
+      expect(processed).not.toHaveProperty('author');
+      expect(warn).toHaveBeenCalledWith(
+        'MessageProcessor: invalid author discarded',
+        expect.objectContaining({ reason: 'unknown_author_type' }),
+      );
     });
   });
 });

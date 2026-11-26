@@ -9,11 +9,20 @@ import {
 } from '../utils/helpers';
 import {
   DEFAULTS,
+  INTERNAL_EVENTS,
   SERVICE_EVENTS,
   MESSAGE_ID_PREFIX,
   MESSAGE_KINDS,
   STREAM_INITIAL_SEQUENCE,
 } from '../utils/constants';
+import {
+  buildMilestoneMessage,
+  normalizeAuthor,
+  normalizeHumanSupportEvent,
+  normalizeOrderKey,
+  unixSecondsToMs,
+  warnHumanSupportContract,
+} from '../utils/humanSupportWire';
 import { isOfficialHttpUrl } from '../utils/messageBuilder';
 import {
   STREAM_PHASES,
@@ -59,6 +68,9 @@ export default class MessageProcessor extends EventEmitter {
     this.streams = new Map();
     this.completedStreamIds = new Set();
     this.recentIncomingTexts = [];
+    // Set by the service from `ready_for_message`; routes Live Desk typing to
+    // the human support tracker instead of the anonymous typing indicator.
+    this.humanSupportEnabled = false;
 
     // Streaming state
     this._resetStreamState();
@@ -124,7 +136,23 @@ export default class MessageProcessor extends EventEmitter {
           this._processStreamEnd(rawMessage);
           break;
         case 'typing_start':
-          this._handleTypingIndicator(rawMessage);
+          if (this._isHumanAgentTyping(rawMessage)) {
+            this._processHumanAgentTyping(rawMessage);
+          } else {
+            this._handleTypingIndicator(rawMessage);
+          }
+          break;
+        case 'human_support_event':
+          this._processHumanSupportEvent(rawMessage);
+          break;
+        case 'message_saved':
+          this.emit(INTERNAL_EVENTS.MESSAGE_SAVED, rawMessage);
+          break;
+        case 'message_status':
+          this.emit(INTERNAL_EVENTS.MESSAGE_STATUS, rawMessage);
+          break;
+        case 'human_support_state':
+          // Answered through WebSocketManager.requestHumanSupportState.
           break;
         case 'ack':
           this._processMediaAck(rawMessage);
@@ -177,6 +205,83 @@ export default class MessageProcessor extends EventEmitter {
     } catch (error) {
       this.emit(SERVICE_EVENTS.ERROR, error);
     }
+  }
+
+  /**
+   * Whether a typing frame comes from a Live Desk agent while the feature is
+   * on. Otherwise it keeps today's anonymous typing behavior.
+   * @private
+   * @param {Object} raw
+   * @returns {boolean}
+   */
+  _isHumanAgentTyping(raw) {
+    return this.humanSupportEnabled && raw?.from === 'human_agent';
+  }
+
+  /**
+   * Forwards a Live Desk typing heartbeat with its normalized author.
+   * @private
+   * @param {Object} raw
+   */
+  _processHumanAgentTyping(raw) {
+    if (!this.config.enableTypingIndicator) {
+      return;
+    }
+
+    const author = this._readAuthor(raw.author);
+    this.emit(INTERNAL_EVENTS.HUMAN_AGENT_TYPING, author);
+  }
+
+  /**
+   * Queues a human support milestone so it is emitted in arrival order after
+   * the messages received before it (FR-005).
+   * @private
+   * @param {Object} raw
+   */
+  _processHumanSupportEvent(raw) {
+    const { event, reason } = normalizeHumanSupportEvent(
+      raw?.human_support_event,
+    );
+
+    if (!event) {
+      warnHumanSupportContract(
+        'MessageProcessor',
+        'invalid human_support_event discarded',
+        {
+          operation: 'normalize-human-support-event',
+          eventId:
+            typeof raw?.human_support_event?.event_id === 'string'
+              ? raw.human_support_event.event_id
+              : undefined,
+          reason,
+        },
+      );
+      return;
+    }
+
+    this.queue.push(
+      buildMilestoneMessage(event, normalizeOrderKey(raw.order_key)),
+    );
+    this._processQueue();
+  }
+
+  /**
+   * Normalizes a wire author, warning when it is out of contract.
+   * @private
+   * @param {unknown} rawAuthor
+   * @param {string} [messageId]
+   * @returns {Object|undefined}
+   */
+  _readAuthor(rawAuthor, messageId) {
+    const { author, reason } = normalizeAuthor(rawAuthor);
+    if (reason) {
+      warnHumanSupportContract('MessageProcessor', 'invalid author discarded', {
+        operation: 'normalize-author',
+        messageId,
+        reason,
+      });
+    }
+    return author;
   }
 
   /**
@@ -295,6 +400,20 @@ export default class MessageProcessor extends EventEmitter {
 
     if (raw.metadata) {
       message.metadata = raw.metadata;
+    }
+
+    const author = this._readAuthor(raw.message?.author, message.id);
+    if (author) {
+      message.author = author;
+    }
+
+    // Keyed frames come from the socket after it saved the message: show the
+    // server time, so the live time equals the time after a reload (FR-034).
+    const orderKey = normalizeOrderKey(raw.order_key);
+    if (orderKey !== undefined) {
+      message.orderKey = orderKey;
+      message.timestamp =
+        unixSecondsToMs(raw.message?.timestamp) ?? message.timestamp;
     }
 
     const interactive = raw.message?.interactive;

@@ -5,6 +5,16 @@ import {
   normalizeCtaMessage,
   warnComponentContract,
 } from '../utils/streamComponents';
+import {
+  HUMAN_SUPPORT_EVENT_MESSAGE_TYPE,
+  warnHumanSupportContract,
+} from '../utils/humanSupportWire';
+import {
+  buildHistoryMilestone,
+  mergeServerOwnedFields,
+  readHistoryHumanSupportFields,
+} from '../utils/humanSupportHistory';
+import { sortMessages } from '../utils/messageOrdering';
 
 /**
  * @class HistoryManager
@@ -14,7 +24,7 @@ import {
  * Features from monolith:
  * - Fetch history from server via WebSocket
  * - Merge history with local messages (deduplication)
- * - Sort messages by timestamp
+ * - Sort messages by server order (`orderKey`, then timestamp)
  * - Pagination support
  */
 export default class HistoryManager extends EventEmitter {
@@ -123,107 +133,171 @@ export default class HistoryManager extends EventEmitter {
       return [];
     }
 
-    return rawHistory.map((item) => {
-      // Normalize message structure
-      const message = {
-        id: item.ID || item.id,
-        type: item.message?.type || 'text',
-        timestamp: item.timestamp * 1e3 || Date.now(),
-        direction: this._normalizeDirection(item.direction),
-        sender: item.direction === 'in' ? 'response' : 'client',
-      };
+    return rawHistory
+      .map((item) => this._processHistoryItem(item))
+      .filter(Boolean);
+  }
 
-      if (item.message?.type === 'text') {
-        message.text = unescapeEscapedUrlSlashes(item.message.text);
+  /**
+   * Normalizes one history item, or returns null for an invalid milestone.
+   *
+   * @private
+   * @param {Object} item - Raw history item
+   * @returns {import('../types').Message|null}
+   */
+  _processHistoryItem(item) {
+    if (item?.message?.type === HUMAN_SUPPORT_EVENT_MESSAGE_TYPE) {
+      const { milestone, reason } = buildHistoryMilestone(item);
+      if (!milestone) {
+        warnHumanSupportContract(
+          'HistoryManager',
+          'invalid human_support_event discarded',
+          { operation: 'normalize-human-support-event', reason },
+        );
+      }
+      return milestone || null;
+    }
+
+    // Normalize message structure
+    const message = {
+      id: item.ID || item.id,
+      type: item.message?.type || 'text',
+      timestamp: item.timestamp * 1e3 || Date.now(),
+      direction: this._normalizeDirection(item.direction),
+      sender: item.direction === 'in' ? 'response' : 'client',
+    };
+
+    if (item.message?.type === 'text') {
+      message.text = unescapeEscapedUrlSlashes(item.message.text);
+    }
+
+    if (item.message?.media_url) {
+      message.media = item.message.media_url;
+      message.caption = unescapeEscapedUrlSlashes(item.message.caption);
+    }
+
+    if (item.message?.quick_replies) {
+      message.quick_replies = item.message.quick_replies;
+    }
+
+    if (item.message?.list_message?.list_items?.length >= 1) {
+      message.list_message = item.message.list_message;
+    }
+
+    if (
+      item.message?.cta_message !== undefined &&
+      item.message?.cta_message !== null
+    ) {
+      const ctaMessage = normalizeCtaMessage(item.message.cta_message);
+      if (ctaMessage) {
+        message.cta_message = ctaMessage;
+      } else {
+        warnComponentContract(
+          'HistoryManager',
+          'invalid cta_message discarded',
+          {
+            operation: 'normalize-history-cta',
+            messageId: message.id,
+            componentType: 'cta_message',
+            reason: 'invalid_cta_payload',
+          },
+        );
+      }
+    }
+
+    if (item.message?.type === 'interactive') {
+      const { interactive } = item.message;
+      message.text = unescapeEscapedUrlSlashes(item.message.text);
+
+      if (interactive?.header) {
+        message.header = unescapeEscapedUrlSlashes(interactive.header.text);
       }
 
-      if (item.message?.media_url) {
-        message.media = item.message.media_url;
-        message.caption = unescapeEscapedUrlSlashes(item.message.caption);
+      if (interactive?.footer) {
+        message.footer = unescapeEscapedUrlSlashes(interactive.footer.text);
       }
 
-      if (item.message?.quick_replies) {
-        message.quick_replies = item.message.quick_replies;
-      }
-
-      if (item.message?.list_message?.list_items?.length >= 1) {
-        message.list_message = item.message.list_message;
-      }
-
-      if (
-        item.message?.cta_message !== undefined &&
-        item.message?.cta_message !== null
-      ) {
-        const ctaMessage = normalizeCtaMessage(item.message.cta_message);
-        if (ctaMessage) {
-          message.cta_message = ctaMessage;
-        } else {
-          warnComponentContract(
-            'HistoryManager',
-            'invalid cta_message discarded',
-            {
-              operation: 'normalize-history-cta',
-              messageId: message.id,
-              componentType: 'cta_message',
-              reason: 'invalid_cta_payload',
-            },
-          );
-        }
-      }
-
-      if (item.message?.type === 'interactive') {
-        const { interactive } = item.message;
-        message.text = unescapeEscapedUrlSlashes(item.message.text);
-
-        if (interactive?.header) {
-          message.header = unescapeEscapedUrlSlashes(interactive.header.text);
-        }
-
-        if (interactive?.footer) {
-          message.footer = unescapeEscapedUrlSlashes(interactive.footer.text);
-        }
-
-        if (interactive?.type === 'product_list') {
-          message.product_list = {
-            text: message.text,
-            buttonText: interactive.action?.name,
-            sections: interactive.action?.sections,
-          };
-        }
-
-        if (interactive?.type === 'product_carousel') {
-          message.product_carousel = {
-            text: message.text,
-            product_items: interactive.action?.product_items,
-          };
-        }
-      }
-
-      if (item.message?.type === 'order') {
-        message.order = {
-          product_items: item.message.order.product_items,
+      if (interactive?.type === 'product_list') {
+        message.product_list = {
+          text: message.text,
+          buttonText: interactive.action?.name,
+          sections: interactive.action?.sections,
         };
       }
 
-      const { customData, discardedKind } = readCustomData(item.message);
-
-      if (customData) {
-        message.customData = customData;
-      } else if (discardedKind) {
-        console.warn('HistoryManager: custom_data discarded', {
-          operation: 'normalize-custom-data',
-          messageType: message.type,
-          receivedKind: discardedKind,
-        });
+      if (interactive?.type === 'product_carousel') {
+        message.product_carousel = {
+          text: message.text,
+          product_items: interactive.action?.product_items,
+        };
       }
+    }
 
-      return message;
-    });
+    if (item.message?.type === 'order') {
+      message.order = {
+        product_items: item.message.order.product_items,
+      };
+    }
+
+    const { customData, discardedKind } = readCustomData(item.message);
+
+    if (customData) {
+      message.customData = customData;
+    } else if (discardedKind) {
+      console.warn('HistoryManager: custom_data discarded', {
+        operation: 'normalize-custom-data',
+        messageType: message.type,
+        receivedKind: discardedKind,
+      });
+    }
+
+    this._applyHumanSupportFields(message, item);
+
+    return message;
+  }
+
+  /**
+   * Adds the human support fields of a post-launch item. Pre-launch items
+   * carry none of them and stay exactly as before (FR-010).
+   *
+   * @private
+   * @param {import('../types').Message} message - Normalized message
+   * @param {Object} item - Raw history item
+   */
+  _applyHumanSupportFields(message, item) {
+    const fields = readHistoryHumanSupportFields(item);
+
+    if (fields.authorReason) {
+      warnHumanSupportContract('HistoryManager', 'invalid author discarded', {
+        operation: 'normalize-author',
+        messageId: message.id,
+        reason: fields.authorReason,
+      });
+    }
+
+    // Shopper messages are identified by the id the widget sent, so the
+    // history copy and the local copy are the same message.
+    if (fields.clientMessageId) {
+      message.id = fields.clientMessageId;
+    }
+
+    if (fields.author) {
+      message.author = fields.author;
+    }
+
+    if (fields.orderKey !== undefined) {
+      message.orderKey = fields.orderKey;
+      message.timestamp = fields.serverTimestamp ?? message.timestamp;
+    }
+
+    if (fields.status) {
+      message.status = fields.status;
+    }
   }
 
   /**
    * Merges history messages with current local messages.
-   * Removes duplicates and sorts by timestamp.
+   * Removes duplicates and sorts by server order.
    *
    * From monolith:
    * - Deduplicates based on message ID
@@ -262,6 +336,7 @@ export default class HistoryManager extends EventEmitter {
           if (msg.cta_message && !nextMessage.cta_message) {
             nextMessage = { ...nextMessage, cta_message: msg.cta_message };
           }
+          nextMessage = mergeServerOwnedFields(nextMessage, msg);
           if (nextMessage !== cachedMessage) {
             messageMap.set(id, nextMessage);
           }
@@ -269,15 +344,8 @@ export default class HistoryManager extends EventEmitter {
       }
     });
 
-    // Convert map back to array and sort by timestamp
-    const merged = Array.from(messageMap.values());
-
-    // Sort by timestamp (oldest first)
-    merged.sort((a, b) => {
-      const timeA = a.timestamp || 0;
-      const timeB = b.timestamp || 0;
-      return timeA - timeB;
-    });
+    // Oldest first, by `orderKey` or timestamp; local pending messages last
+    const merged = sortMessages(Array.from(messageMap.values()));
 
     this.emit(SERVICE_EVENTS.HISTORY_MERGED, {
       historyCount: historyMessages.length,

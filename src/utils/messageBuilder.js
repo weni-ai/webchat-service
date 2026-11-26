@@ -3,6 +3,29 @@
  */
 
 import { generateMessageId } from './helpers';
+import { isValidClientMessageId } from './humanSupportWire';
+
+/**
+ * Wire `message.id` of a shopper message (AD-003). An invalid id is omitted,
+ * never rewritten: the message is still delivered, just without a status.
+ * @param {Object} outbound
+ * @returns {{ id?: string }}
+ */
+function buildClientMessageId(outbound) {
+  if (isValidClientMessageId(outbound.id)) {
+    return { id: outbound.id };
+  }
+
+  if (outbound.id !== undefined) {
+    console.warn('WeniWebchatService: outgoing message id omitted', {
+      operation: 'send-message',
+      messageType: outbound.type,
+      reason: 'invalid_client_message_id',
+    });
+  }
+
+  return {};
+}
 
 export function isOfficialHttpUrl(value) {
   if (typeof value !== 'string' || value.length === 0) {
@@ -96,7 +119,11 @@ export function buildMessagePayload(sessionId, message, options = {}) {
   const messageData = hasCustomFields ? outbound.__customFields : undefined;
 
   if (outbound.type === 'text') {
-    const textPayload = { type: 'text', text: outbound.text };
+    const textPayload = {
+      type: 'text',
+      text: outbound.text,
+      ...buildClientMessageId(outbound),
+    };
     if (outbound.fromConversationStarter) {
       textPayload.from_conversation_starter = true;
     }
@@ -109,7 +136,11 @@ export function buildMessagePayload(sessionId, message, options = {}) {
   } else if (['image', 'video', 'audio', 'file'].includes(outbound.type)) {
     return buildWebSocketMessage(
       messageType,
-      { type: outbound.type, media: outbound.media },
+      {
+        type: outbound.type,
+        media: outbound.media,
+        ...buildClientMessageId(outbound),
+      },
       {
         context,
         from,
@@ -119,7 +150,12 @@ export function buildMessagePayload(sessionId, message, options = {}) {
   } else if (outbound.type === 'order') {
     return buildWebSocketMessage(
       messageType,
-      { type: 'order', timestamp: outbound.timestamp, order: outbound.order },
+      {
+        type: 'order',
+        timestamp: outbound.timestamp,
+        order: outbound.order,
+        ...buildClientMessageId(outbound),
+      },
       {
         context,
         from,

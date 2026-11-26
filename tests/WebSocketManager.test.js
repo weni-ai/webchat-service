@@ -1,6 +1,10 @@
 import WebSocketManager from '../src/core/WebSocketManager';
 import RetryStrategy from '../src/network/RetryStrategy';
-import { DEFAULTS, SERVICE_EVENTS } from '../src/utils/constants';
+import {
+  DEFAULTS,
+  INTERNAL_EVENTS,
+  SERVICE_EVENTS,
+} from '../src/utils/constants';
 
 function createManager(config = {}) {
   const manager = new WebSocketManager({
@@ -667,7 +671,9 @@ describe('WebSocketManager', () => {
       await manager.register();
 
       const sent = JSON.parse(manager.socket.send.mock.calls[0][0]);
-      expect(sent.data).toEqual({ features: { voiceMode: true } });
+      expect(sent.data).toEqual({
+        features: { voiceMode: true, humanSupportStatus: true },
+      });
     });
 
     it('coerces missing voiceMode to false', async () => {
@@ -677,7 +683,9 @@ describe('WebSocketManager', () => {
       await manager.register();
 
       const sent = JSON.parse(manager.socket.send.mock.calls[0][0]);
-      expect(sent.data).toEqual({ features: { voiceMode: false } });
+      expect(sent.data).toEqual({
+        features: { voiceMode: false, humanSupportStatus: true },
+      });
     });
 
     it('prefers registrationData.token, then config.sessionToken', async () => {
@@ -1916,6 +1924,89 @@ describe('WebSocketManager', () => {
       expect(manager.socket.send).toHaveBeenCalledWith(
         JSON.stringify({ type: 'get_project_language' }),
       );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Human support status
+  // ---------------------------------------------------------------------------
+  describe('human support status', () => {
+    it('emits the ready data before the connected status', () => {
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+      const order = [];
+      manager.on(INTERNAL_EVENTS.READY_FOR_MESSAGE, (data) =>
+        order.push(['ready', data]),
+      );
+      manager.on(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, (status) =>
+        order.push(['status', status]),
+      );
+
+      sendMessage(manager, {
+        type: 'ready_for_message',
+        data: { human_support_enabled: true, history: [] },
+      });
+
+      expect(order[0]).toEqual([
+        'ready',
+        { human_support_enabled: true, history: [] },
+      ]);
+      expect(order[1]).toEqual(['status', 'connected']);
+      manager.disconnect();
+    });
+
+    it('requests the human support state and resolves with active', async () => {
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+
+      const promise = manager.requestHumanSupportState(1000);
+      expect(JSON.parse(manager.socket.send.mock.calls[0][0])).toEqual({
+        type: 'get_human_support_state',
+      });
+      sendMessage(manager, { type: 'human_support_state', active: true });
+
+      await expect(promise).resolves.toEqual({ active: true });
+    });
+
+    it('resolves without active when the state is unconfirmed', async () => {
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+
+      const promise = manager.requestHumanSupportState(1000);
+      sendMessage(manager, { type: 'human_support_state' });
+
+      await expect(promise).resolves.toEqual({});
+    });
+
+    it('rejects on timeout and on send failure', async () => {
+      jest.useFakeTimers();
+      const manager = createManager();
+      manager.socket = makeOpenSocketMock();
+
+      const timed = manager.requestHumanSupportState(1000);
+      jest.advanceTimersByTime(1000);
+      await expect(timed).rejects.toThrow(
+        'Human support state request timed out',
+      );
+      expect(manager.listenerCount(INTERNAL_EVENTS.HUMAN_SUPPORT_STATE)).toBe(
+        0,
+      );
+      jest.useRealTimers();
+
+      manager.socket = null;
+      await expect(manager.requestHumanSupportState(1000)).rejects.toThrow(
+        'WebSocket not connected',
+      );
+    });
+
+    it('does not forward human_support_state as a chat message', () => {
+      const manager = createManager();
+      const messages = jest.fn();
+      manager.on(SERVICE_EVENTS.MESSAGE, messages);
+
+      sendMessage(manager, { type: 'human_support_state', active: false });
+
+      expect(messages).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,6 +1,28 @@
 import EventEmitter from 'eventemitter3';
 
 import { SERVICE_EVENTS } from '../utils/constants';
+import { mergeMessageUpdates } from '../utils/helpers';
+import { insertMessage, repositionMessage } from '../utils/messageOrdering';
+
+function createInitialState() {
+  return {
+    messages: [],
+    session: {},
+    connection: {
+      status: 'disconnected',
+      reconnectAttempts: 0,
+      lastError: null,
+    },
+    context: '',
+    isTyping: false,
+    isThinking: false,
+    thinkingText: null,
+    error: null,
+    features: { humanSupportStatus: false },
+    humanSupport: { active: false },
+    typingAuthor: null,
+  };
+}
 
 /**
  * StateManager
@@ -11,6 +33,7 @@ import { SERVICE_EVENTS } from '../utils/constants';
  * - Connection state
  * - Context string
  * - UI state (typing, etc.)
+ * - Human support state (feature gate, active support, typing author)
  *
  * Uses EventEmitter to notify subscribers of state changes
  */
@@ -18,20 +41,7 @@ export default class StateManager extends EventEmitter {
   constructor() {
     super();
 
-    this.state = {
-      messages: [],
-      session: {},
-      connection: {
-        status: 'disconnected',
-        reconnectAttempts: 0,
-        lastError: null,
-      },
-      context: '',
-      isTyping: false,
-      isThinking: false,
-      thinkingText: null,
-      error: null,
-    };
+    this.state = createInitialState();
   }
 
   /**
@@ -70,35 +80,52 @@ export default class StateManager extends EventEmitter {
   }
 
   /**
-   * Adds a message to state
+   * Adds a message to state at its server position (`orderKey`), or at the
+   * end when it has none
    * @param {Object} message
    */
   addMessage(message) {
-    const messages = [...this.state.messages, message];
+    const messages = insertMessage(this.state.messages, message);
     this.setState({ messages });
     this.emit(SERVICE_EVENTS.MESSAGE_ADDED, message);
   }
 
   /**
-   * Updates a message in state
+   * Updates a message in state. A clearable field (see mergeMessageUpdates)
+   * set to `undefined` is removed; a new `orderKey` repositions the message.
    * @param {string} messageId
    * @param {Object} updates
    */
   updateMessage(messageId, updates) {
-    const messages = this.state.messages.map((msg) => {
-      if (msg.id !== messageId) {
-        return msg;
-      }
+    this.updateMessages([[messageId, updates]]);
+  }
 
-      const merged = { ...msg, ...updates };
-      if ('componentHints' in updates && updates.componentHints === undefined) {
-        delete merged.componentHints;
+  /**
+   * Updates several messages with a single state change
+   * @param {Array<[string, Object]>} entries Message id and updates pairs
+   * @returns {boolean} Whether the message order changed
+   */
+  updateMessages(entries) {
+    const updatesById = new Map(entries);
+    let messages = this.state.messages.map((msg) =>
+      updatesById.has(msg.id)
+        ? mergeMessageUpdates(msg, updatesById.get(msg.id))
+        : msg,
+    );
+
+    const before = messages;
+    entries.forEach(([messageId, updates]) => {
+      if ('orderKey' in updates) {
+        messages = repositionMessage(messages, messageId);
       }
-      return merged;
     });
 
     this.setState({ messages });
-    this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, updates);
+    entries.forEach(([messageId, updates]) => {
+      this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, messageId, updates);
+    });
+
+    return messages !== before;
   }
 
   /**
@@ -170,6 +197,30 @@ export default class StateManager extends EventEmitter {
   }
 
   /**
+   * Sets the feature gate the socket enabled for this connection
+   * @param {{ humanSupportStatus: boolean }} features
+   */
+  setFeatures(features) {
+    this.setState({ features: { ...this.state.features, ...features } });
+  }
+
+  /**
+   * Sets the human support state of the conversation
+   * @param {{ active: boolean }} humanSupport
+   */
+  setHumanSupport(humanSupport) {
+    this.setState({ humanSupport });
+  }
+
+  /**
+   * Sets the Live Desk agent shown in the typing indicator
+   * @param {{ type: 'human_agent', name?: string }|null} typingAuthor
+   */
+  setTypingAuthor(typingAuthor) {
+    this.setState({ typingAuthor });
+  }
+
+  /**
    * Sets thinking indicator.
    * Stopping thinking also clears the rationale text in the same update.
    * @param {boolean} isThinking
@@ -212,20 +263,7 @@ export default class StateManager extends EventEmitter {
    * Resets state to initial values
    */
   reset() {
-    this.state = {
-      messages: [],
-      session: {},
-      connection: {
-        status: 'disconnected',
-        reconnectAttempts: 0,
-        lastError: null,
-      },
-      context: '',
-      isTyping: false,
-      isThinking: false,
-      thinkingText: null,
-      error: null,
-    };
+    this.state = createInitialState();
 
     this.emit(SERVICE_EVENTS.STATE_RESET);
   }
