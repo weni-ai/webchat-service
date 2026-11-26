@@ -1106,4 +1106,43 @@ describe('SessionManager', () => {
       manager2.clear();
     });
   });
+
+  describe('human support fields', () => {
+    it('syncConversation writes once without touching lastActivity', () => {
+      const storage = makeStorage();
+      const manager = createManager({}, storage);
+      manager.createNewSession();
+      manager.session.lastActivity = 1;
+      storage.set.mockClear();
+
+      manager.syncConversation([{ id: 'a', status: 'read' }]);
+
+      expect(storage.set).toHaveBeenCalledTimes(1);
+      expect(manager.session.lastActivity).toBe(1);
+      expect(manager.getConversation()).toEqual([{ id: 'a', status: 'read' }]);
+    });
+
+    it('syncConversation is a no-op without a session', () => {
+      const manager = createManager();
+      expect(() => manager.syncConversation([])).not.toThrow();
+    });
+
+    it('updateConversation removes status and __awaitingSave set to undefined', () => {
+      const manager = createManager();
+      manager.createNewSession();
+      manager.setConversation([
+        { id: 'a', status: 'pending', __awaitingSave: true, text: 'x' },
+      ]);
+
+      manager.updateConversation('a', {
+        status: undefined,
+        __awaitingSave: undefined,
+        orderKey: 10,
+      });
+
+      expect(manager.session.conversation).toEqual([
+        { id: 'a', text: 'x', orderKey: 10 },
+      ]);
+    });
+  });
 });

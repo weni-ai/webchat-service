@@ -316,3 +316,23 @@ export function withTimeout(promise, ms) {
     ),
   ]);
 }
+
+// Fields a message update removes when it sets them to `undefined`, so the
+// stored message omits them instead of keeping an explicit `undefined`.
+const CLEARABLE_MESSAGE_FIELDS = ['componentHints', 'status', '__awaitingSave'];
+
+/**
+ * Merges updates into a message, removing clearable fields set to `undefined`.
+ * @param {Object} message
+ * @param {Object} updates
+ * @returns {Object} A new message object
+ */
+export function mergeMessageUpdates(message, updates) {
+  const merged = { ...message, ...updates };
+  CLEARABLE_MESSAGE_FIELDS.forEach((field) => {
+    if (field in updates && updates[field] === undefined) {
+      delete merged[field];
+    }
+  });
+  return merged;
+}

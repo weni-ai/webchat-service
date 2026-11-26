@@ -1589,4 +1589,150 @@ describe('HistoryManager', () => {
       expect(merged[0].cta_message).toEqual(fromHistory.cta_message);
     });
   });
+
+  describe('human support history', () => {
+    const START = {
+      event_id: '6f1d2c3b-4a59-5e6f-8a7b-9c0d1e2f3a4b',
+      event: 'started',
+      occurred_at: '2026-11-03T17:34:05.120Z',
+    };
+
+    it('restores milestones, client ids, authors, statuses and order keys', () => {
+      const [shopper, agent, milestone, legacy] = historyManager.processHistory(
+        [
+          {
+            ID: 'mongo_out',
+            direction: 'out',
+            timestamp: 1793727380,
+            order_key: 1793727380207,
+            message: {
+              id: 'msg_1793195220123_k3j9x2',
+              type: 'text',
+              timestamp: '1793727380',
+              text: 'Quero trocar',
+              author: { type: 'contact' },
+              status: 'read',
+            },
+          },
+          {
+            ID: 'mongo_in',
+            direction: 'in',
+            timestamp: 1793727372,
+            order_key: 1793727372518,
+            message: {
+              type: 'text',
+              timestamp: '1793727372',
+              text: 'Oi! Sou a Julia',
+              author: {
+                type: 'human_agent',
+                name: 'Julia',
+                id: 'ha_5f0c3a9e1b7d4c2a8e6f0b1d3c5a7e9f',
+              },
+            },
+          },
+          {
+            ID: 'mongo_hs',
+            direction: 'in',
+            timestamp: 1793727247,
+            order_key: 1793727247312,
+            message: {
+              type: 'human_support_event',
+              human_support_event: START,
+            },
+          },
+          {
+            ID: 'mongo_legacy',
+            direction: 'in',
+            timestamp: 1793640000,
+            message: { type: 'text', text: 'antes' },
+          },
+        ],
+      );
+
+      expect(shopper).toEqual(
+        expect.objectContaining({
+          id: 'msg_1793195220123_k3j9x2',
+          status: 'read',
+          orderKey: 1793727380207,
+          author: { type: 'contact' },
+          timestamp: 1793727380000,
+        }),
+      );
+      expect(agent.author.name).toBe('Julia');
+      expect(milestone).toEqual(
+        expect.objectContaining({
+          id: `hs_${START.event_id}`,
+          type: 'human_support_event',
+          orderKey: 1793727247312,
+          timestamp: Date.parse(START.occurred_at),
+        }),
+      );
+      expect(legacy).toEqual({
+        id: 'mongo_legacy',
+        type: 'text',
+        text: 'antes',
+        timestamp: 1793640000000,
+        direction: 'incoming',
+        sender: 'response',
+      });
+    });
+
+    it('drops an invalid milestone with a warning', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const processed = historyManager.processHistory([
+        {
+          ID: 'bad',
+          direction: 'in',
+          message: { type: 'human_support_event' },
+        },
+      ]);
+
+      expect(processed).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        'HistoryManager: invalid human_support_event discarded',
+        expect.objectContaining({ reason: 'invalid_human_support_event' }),
+      );
+      warn.mockRestore();
+    });
+
+    it('merges by server order and moves statuses forward only', () => {
+      const merged = historyManager.merge(
+        [
+          {
+            id: 'msg_1',
+            direction: 'outgoing',
+            orderKey: 300,
+            status: 'delivered',
+          },
+          {
+            id: 'hs_1',
+            type: 'human_support_event',
+            orderKey: 200,
+            timestamp: 5,
+          },
+          { id: 'legacy', timestamp: 100 },
+        ],
+        [
+          { id: 'msg_1', direction: 'outgoing', status: 'read', timestamp: 1 },
+          {
+            id: 'msg_2',
+            direction: 'outgoing',
+            status: 'pending',
+            timestamp: 0,
+          },
+        ],
+      );
+
+      expect(merged.map(({ id }) => id)).toEqual([
+        'legacy',
+        'hs_1',
+        'msg_1',
+        'msg_2',
+      ]);
+      expect(merged[2]).toEqual(
+        expect.objectContaining({ status: 'read', orderKey: 300 }),
+      );
+    });
+  });
 });

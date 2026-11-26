@@ -73,7 +73,12 @@ describe('WeniWebchatService — outgoing send paths', () => {
       expect(socket.send).toHaveBeenCalledTimes(1);
       const payload = JSON.parse(socket.send.mock.calls[0][0]);
       expect(payload.type).toBe('message');
-      expect(payload.message).toEqual({ type: 'text', text: 'Hello!' });
+      const [localMessage] = service.getMessages();
+      expect(payload.message).toEqual({
+        type: 'text',
+        text: 'Hello!',
+        id: localMessage.id,
+      });
       expect(payload.from).toBe(service.getSessionId());
       expect(sentListener).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'text', text: 'Hello!' }),
@@ -95,6 +100,7 @@ describe('WeniWebchatService — outgoing send paths', () => {
         type: 'text',
         text: 'Q?',
         from_conversation_starter: true,
+        id: expect.stringMatching(/^msg_/),
       });
     });
 

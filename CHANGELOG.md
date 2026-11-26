@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Shopping Assistant human support status, active only when the socket answers `human_support_enabled` in `ready_for_message`. The service exposes it as `state.features.humanSupportStatus`.
+- Every connection declares the fixed capability `register.data.features.humanSupportStatus: true`. It is not a configuration option.
+- Every outgoing shopper message sends its id as `message.id`. Invalid caller-provided ids are omitted with a warning.
+- New socket frames `message_saved`, `message_status`, `human_support_event` and `human_support_state`, and the extended `message`, `typing_start` and `history` payloads, normalized to camelCase.
+- `Message.author`, `Message.orderKey`, and `type: 'human_support_event'` milestones carrying `humanSupportEvent` (`{ eventId, event, occurredAt }`).
+- State fields `humanSupport` (`{ active }`) and `typingAuthor` (`{ type: 'human_agent', name? } | null`), and the `human_support:changed` event.
+- `humanSupport.active` is deduced from the last milestone in history on each connection, then confirmed with `get_human_support_state`. When the state cannot be confirmed, the deduced value is kept and no error is emitted.
+- Shopper message statuses (`sent`, `delivered`, `read`) only move forward. A Live Desk agent typing indicator expires 10 seconds after the last heartbeat.
+- Exported `MESSAGE_AUTHOR_TYPES`, `HUMAN_SUPPORT_EVENTS` and `MESSAGE_TYPES.HUMAN_SUPPORT_EVENT`, plus updated TypeScript declarations.
+
+### Changed
+
+- `state.messages`, history merges and the stored session are ordered by the server `orderKey`. Items without it keep the previous timestamp order or arrival order, and unconfirmed shopper messages stay at the end.
+- On channels with human support status enabled:
+  - an AI-mode shopper message has no `status` after it is sent, instead of `'sent'`;
+  - during human support a shopper message stays `pending` until the server confirms it;
+  - sending a message during human support no longer starts the generic typing indicator.
+
+### Fixed
+
+- After a reconnect, a shopper message whose history copy has the same id is no longer removed together with stale local copies.
+- A shopper message that already reached the socket is not sent again after a reload. If it is never confirmed, it is marked `error` once history proves it was not saved.
+
 ## [1.22.0] - 2026-11-25
 
 ### Added

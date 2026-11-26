@@ -1,6 +1,11 @@
 import EventEmitter from 'eventemitter3';
 
-import { DEFAULTS, SERVICE_EVENTS, WS_MESSAGE_TYPES } from '../utils/constants';
+import {
+  DEFAULTS,
+  INTERNAL_EVENTS,
+  SERVICE_EVENTS,
+  WS_MESSAGE_TYPES,
+} from '../utils/constants';
 import { buildRegistrationMessage } from '../utils/messageBuilder';
 import {
   normalizeAddToCartItems,
@@ -134,6 +139,9 @@ export default class WebSocketManager extends EventEmitter {
       data: {
         features: {
           voiceMode: !!this.config.voiceMode?.enabled,
+          // Capability, not configuration: whether the feature is on is
+          // decided by the socket allowlist (AD-007, AD-008).
+          humanSupportStatus: true,
         },
       },
     });
@@ -229,6 +237,51 @@ export default class WebSocketManager extends EventEmitter {
         cleanup();
         reject(err);
       });
+    });
+  }
+
+  /**
+   * Asks the socket to confirm the human support state with Flows.
+   * Resolves with `{ active }` when Flows answered, or `{}` when the socket
+   * reports that Flows failed or timed out. Rejects on send failure or when
+   * no answer arrives within `timeoutMs`.
+   *
+   * @param {number} [timeoutMs=DEFAULTS.HUMAN_SUPPORT_STATE_TIMEOUT]
+   * @returns {Promise<{ active?: boolean }>}
+   */
+  requestHumanSupportState(timeoutMs = DEFAULTS.HUMAN_SUPPORT_STATE_TIMEOUT) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+
+      const timer = setTimeout(() => {
+        settled = true;
+        cleanup();
+        reject(new Error('Human support state request timed out'));
+      }, timeoutMs);
+
+      const onState = (data) => {
+        settled = true;
+        cleanup();
+        resolve(
+          typeof data?.active === 'boolean' ? { active: data.active } : {},
+        );
+      };
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.off(INTERNAL_EVENTS.HUMAN_SUPPORT_STATE, onState);
+      };
+
+      this.once(INTERNAL_EVENTS.HUMAN_SUPPORT_STATE, onState);
+
+      this.send({ type: WS_MESSAGE_TYPES.GET_HUMAN_SUPPORT_STATE }).catch(
+        (err) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(err);
+        },
+      );
     });
   }
 
@@ -455,6 +508,10 @@ export default class WebSocketManager extends EventEmitter {
       this.emit(SERVICE_EVENTS.VOICE_ENABLED);
     }
 
+    // Emitted before the connected status so the human support gate is known
+    // when queued messages are sent.
+    this.emit(INTERNAL_EVENTS.READY_FOR_MESSAGE, data.data || {});
+
     this.emit(SERVICE_EVENTS.CONNECTION_STATUS_CHANGED, this.status);
     this.emit(SERVICE_EVENTS.CONNECTED);
     this._startPingInterval();
@@ -623,6 +680,11 @@ export default class WebSocketManager extends EventEmitter {
 
       if (data.type === 'voice_tokens') {
         this.emit(SERVICE_EVENTS.VOICE_TOKENS_RECEIVED, data);
+        return;
+      }
+
+      if (data.type === WS_MESSAGE_TYPES.HUMAN_SUPPORT_STATE) {
+        this.emit(INTERNAL_EVENTS.HUMAN_SUPPORT_STATE, data);
         return;
       }
 

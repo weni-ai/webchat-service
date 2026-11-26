@@ -2,6 +2,14 @@
  * Global Constants
  */
 
+import {
+  HUMAN_SUPPORT_EVENTS,
+  MESSAGE_AUTHOR_TYPES,
+  MILESTONE_ID_PREFIX,
+} from './humanSupportWire';
+
+export { HUMAN_SUPPORT_EVENTS, MESSAGE_AUTHOR_TYPES, MILESTONE_ID_PREFIX };
+
 export const CONNECTION_STATUS = {
   CONNECTING: 'connecting',
   CONNECTED: 'connected',
@@ -19,6 +27,7 @@ export const MESSAGE_TYPES = {
   LOCATION: 'location',
   INTERACTIVE: 'interactive',
   CONVERSATION_STATUS: 'conversation_status',
+  HUMAN_SUPPORT_EVENT: 'human_support_event',
   TYPING: 'typing',
 };
 
@@ -71,6 +80,12 @@ export const WS_MESSAGE_TYPES = {
   UTM_ERROR: 'utm_error',
   UTM_SENT: 'utm_sent',
   VOICE_TOKENS: 'voice_tokens',
+  READY_FOR_MESSAGE: 'ready_for_message',
+  GET_HUMAN_SUPPORT_STATE: 'get_human_support_state',
+  HUMAN_SUPPORT_STATE: 'human_support_state',
+  HUMAN_SUPPORT_EVENT: 'human_support_event',
+  MESSAGE_SAVED: 'message_saved',
+  MESSAGE_STATUS: 'message_status',
 };
 
 export const UTM_SOURCES = {
@@ -131,6 +146,11 @@ export const DEFAULTS = {
   TYPING_DELAY: 2000,
   ENABLE_TYPING_INDICATOR: true,
   TYPING_TIMEOUT: 50000, // 50 seconds
+
+  // Human support. The agent typing timeout is binding (NFR-002), so it is a
+  // documented default and not an init option.
+  HUMAN_AGENT_TYPING_TIMEOUT: 10000, // 10 seconds
+  HUMAN_SUPPORT_STATE_TIMEOUT: 10000, // 10 seconds
   DISPLAY_UNREAD_COUNT: false,
 
   // Cache
@@ -316,6 +336,9 @@ export const SERVICE_EVENTS = {
   WS_WARNING: 'websocket:warning',
   WS_DUPLICATE_SESSION: 'websocket:duplicate_session',
 
+  // Human support
+  HUMAN_SUPPORT_CHANGED: 'human_support:changed',
+
   // Errors
   ERROR: 'error',
 
@@ -336,6 +359,18 @@ export const SERVICE_EVENTS = {
   // Back in stock
   BACK_IN_STOCK_SUBSCRIBED: 'backInStock:subscribed',
   BACK_IN_STOCK_ERROR: 'backInStock:error',
+};
+
+/**
+ * Events exchanged between internal modules. Not part of the public contract
+ * and not exported by the package.
+ */
+export const INTERNAL_EVENTS = {
+  READY_FOR_MESSAGE: 'internal:ready_for_message',
+  HUMAN_SUPPORT_STATE: 'internal:human_support_state',
+  MESSAGE_SAVED: 'internal:message_saved',
+  MESSAGE_STATUS: 'internal:message_status',
+  HUMAN_AGENT_TYPING: 'internal:human_agent_typing',
 };
 
 export const LOG_LEVELS = {

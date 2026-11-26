@@ -10,6 +10,10 @@ import HistoryManager from './modules/HistoryManager';
 import FileHandler from './modules/FileHandler';
 import CameraRecorder from './modules/CameraRecorder';
 import AudioRecorder from './modules/AudioRecorder';
+import {
+  HumanSupportTracker,
+  HUMAN_SUPPORT_TRACKER_EVENTS,
+} from './modules/HumanSupportTracker';
 
 import RetryStrategy from './network/RetryStrategy';
 
@@ -38,6 +42,9 @@ import {
   QUICK_REPLY_TYPES,
   UTM_SOURCES,
   ALLOWED_UTM_SOURCES,
+  HUMAN_SUPPORT_EVENTS,
+  INTERNAL_EVENTS,
+  MESSAGE_AUTHOR_TYPES,
 } from './utils/constants';
 import {
   buildTextMessage,
@@ -155,6 +162,12 @@ export default class WeniWebchatService extends EventEmitter {
     });
 
     this.history = new HistoryManager(this.websocket);
+    this.humanSupport = new HumanSupportTracker({
+      state: this.state,
+      transport: this.websocket,
+      typingTimeoutMs: DEFAULTS.HUMAN_AGENT_TYPING_TIMEOUT,
+      stateTimeoutMs: DEFAULTS.HUMAN_SUPPORT_STATE_TIMEOUT,
+    });
     this.fileHandler = new FileHandler(this.config);
     this.audioRecorder = new AudioRecorder(this.config);
     this.cameraRecorder = new CameraRecorder(this.config);
@@ -192,8 +205,11 @@ export default class WeniWebchatService extends EventEmitter {
 
       const messages = this.state.getMessages();
 
-      const pendingMessages = messages.filter(({ status }) =>
-        ['pending'].includes(status),
+      // A message awaiting save already reached the socket: sending it again
+      // would duplicate it for the Live Desk agent.
+      const pendingMessages = messages.filter(
+        ({ status, __awaitingSave }) =>
+          ['pending'].includes(status) && !__awaitingSave,
       );
       this.enqueueMessages(pendingMessages);
 
@@ -288,10 +304,12 @@ export default class WeniWebchatService extends EventEmitter {
       throw new Error('Message text is required');
     }
 
-    const message = buildTextMessage(text, {
-      ...options,
-      direction: 'outgoing',
-    });
+    const message = this.humanSupport.decorateOutgoing(
+      buildTextMessage(text, {
+        ...options,
+        direction: 'outgoing',
+      }),
+    );
 
     if (!this.session.hasUserSentAnyMessage()) {
       const pendingFields = this.session.getPendingCustomFields();
@@ -479,9 +497,11 @@ export default class WeniWebchatService extends EventEmitter {
       throw new Error('Product items are required');
     }
 
-    const message = buildOrderMessage(productItems, {
-      direction: 'outgoing',
-    });
+    const message = this.humanSupport.decorateOutgoing(
+      buildOrderMessage(productItems, {
+        direction: 'outgoing',
+      }),
+    );
 
     // Add to state so the order appears in the chat
     this.state.addMessage(message);
@@ -508,17 +528,15 @@ export default class WeniWebchatService extends EventEmitter {
     try {
       const fileData = await this.fileHandler.process(file);
 
-      const message = buildMediaMessage(
-        fileData.type,
-        URL.createObjectURL(file),
-        {
+      const message = this.humanSupport.decorateOutgoing(
+        buildMediaMessage(fileData.type, URL.createObjectURL(file), {
           direction: 'outgoing',
           metadata: {
             filename: fileData.filename,
             size: fileData.size,
             mimeType: fileData.mimeType,
           },
-        },
+        }),
       );
 
       if (!this.session.hasUserSentAnyMessage()) {
@@ -554,16 +572,14 @@ export default class WeniWebchatService extends EventEmitter {
     try {
       const previewSource =
         audioData.blob || blobFromEncodedMedia(audioData.base64);
-      const message = buildMediaMessage(
-        'audio',
-        URL.createObjectURL(previewSource),
-        {
+      const message = this.humanSupport.decorateOutgoing(
+        buildMediaMessage('audio', URL.createObjectURL(previewSource), {
           direction: 'outgoing',
           metadata: {
             duration: audioData.duration,
             mimeType: audioData.mimeType,
           },
-        },
+        }),
       );
 
       if (!this.session.hasUserSentAnyMessage()) {
@@ -802,6 +818,7 @@ export default class WeniWebchatService extends EventEmitter {
   clearSession() {
     this.session.clear();
     this.state.reset();
+    this.humanSupport.reset();
     this.emit(SERVICE_EVENTS.SESSION_CLEARED);
   }
 
@@ -1089,6 +1106,7 @@ export default class WeniWebchatService extends EventEmitter {
       revokeBlobUrl(message && message.media);
     });
     this.disconnect();
+    this.humanSupport.destroy();
     this.removeAllListeners();
     this._initialized = false;
     this._connected = false;
@@ -1110,21 +1128,74 @@ export default class WeniWebchatService extends EventEmitter {
       .filter(({ id }) => id.startsWith('msg_'))
       .map((message) => message.id);
 
+    const historyLimit = 20;
+
     this.getHistory({
       page: 1,
-      limit: 20,
-    }).then(() => {
-      if (previousLocalMessagesIds.length > 0) {
-        const idsToRemove = new Set(previousLocalMessagesIds);
+      limit: historyLimit,
+    }).then((historyMessages) => {
+      // Shopper messages keep their id in history, so a local copy whose id
+      // came back is the merged message itself and must stay.
+      const historyIds = new Set(
+        (historyMessages || []).map((message) => message?.id),
+      );
+      const idsToRemove = new Set(
+        previousLocalMessagesIds.filter((id) => !historyIds.has(id)),
+      );
+
+      if (idsToRemove.size > 0) {
         const filtered = this.state
           .getMessages()
           .filter((m) => !idsToRemove.has(m?.id));
         this.state.setState({ messages: filtered });
         this.session.setConversation(filtered);
       }
+
+      this.humanSupport.reconcileAwaitingSave(
+        historyIds,
+        (historyMessages || []).length >= historyLimit,
+      );
     });
 
     this.runQueue();
+  }
+
+  /**
+   * Persists a message just added to state. A message placed before the end
+   * by its `orderKey` rewrites the stored order, so a reload shows the same
+   * order as the screen (FR-034).
+   * @private
+   * @param {Object} message
+   */
+  _persistAddedMessage(message) {
+    const messages = this.state.getMessages();
+    if (messages[messages.length - 1] === message) {
+      this.session.appendToConversation(message);
+    } else {
+      this.session.setConversation(messages);
+    }
+  }
+
+  /**
+   * Applies human support message changes with one state change and one
+   * storage write, then emits `message:updated` for each public change.
+   * @private
+   * @param {Array<{ id: string, updates: Object, internalUpdates?: Object }>} changes
+   */
+  _applyMessageUpdates(changes) {
+    this.state.updateMessages(
+      changes.map(({ id, updates, internalUpdates }) => [
+        id,
+        { ...updates, ...internalUpdates },
+      ]),
+    );
+    this.session.syncConversation(this.state.getMessages());
+
+    changes.forEach(({ id, updates }) => {
+      if (Object.keys(updates).length > 0) {
+        this.emit(SERVICE_EVENTS.MESSAGE_UPDATED, id, updates);
+      }
+    });
   }
 
   /**
@@ -1159,12 +1230,14 @@ export default class WeniWebchatService extends EventEmitter {
       if (status === 'disconnected') {
         this._connected = false;
         this.messageProcessor.handleConnectionLost();
+        this.humanSupport.handleConnectionLost();
         this.emit(SERVICE_EVENTS.DISCONNECTED);
       }
 
       if (status === 'closed') {
         this._connected = false;
         this.messageProcessor.handleConnectionLost();
+        this.humanSupport.handleConnectionLost();
         this.emit(SERVICE_EVENTS.CLOSED);
       }
 
@@ -1174,6 +1247,11 @@ export default class WeniWebchatService extends EventEmitter {
 
     this.websocket.on(SERVICE_EVENTS.MESSAGE, (msg) => {
       this.messageProcessor.process(msg);
+    });
+
+    this.websocket.on(INTERNAL_EVENTS.READY_FOR_MESSAGE, (readyData) => {
+      this.humanSupport.handleReady(readyData);
+      this.messageProcessor.humanSupportEnabled = this.humanSupport.isEnabled();
     });
 
     this.websocket.on(SERVICE_EVENTS.ERROR, (error) => {
@@ -1235,9 +1313,47 @@ export default class WeniWebchatService extends EventEmitter {
 
     // Message processor events
     this.messageProcessor.on(SERVICE_EVENTS.MESSAGE_PROCESSED, (msg) => {
+      if (this.humanSupport.isDuplicateMilestone(msg)) {
+        return;
+      }
+
       this.state.addMessage(msg);
-      this.session.appendToConversation(msg);
+      this._persistAddedMessage(msg);
       this.emit(SERVICE_EVENTS.MESSAGE_RECEIVED, msg);
+      this.humanSupport.handleProcessedMessage(msg);
+    });
+
+    this.messageProcessor.on(INTERNAL_EVENTS.MESSAGE_SAVED, (raw) => {
+      this.humanSupport.handleMessageSaved(raw);
+    });
+
+    this.messageProcessor.on(INTERNAL_EVENTS.MESSAGE_STATUS, (raw) => {
+      this.humanSupport.handleMessageStatus(raw);
+    });
+
+    this.messageProcessor.on(INTERNAL_EVENTS.HUMAN_AGENT_TYPING, (author) => {
+      this.humanSupport.handleHumanAgentTyping(author);
+    });
+
+    // Human support tracker events
+    this.humanSupport.on(
+      HUMAN_SUPPORT_TRACKER_EVENTS.MESSAGES_UPDATED,
+      (changes) => this._applyMessageUpdates(changes),
+    );
+
+    this.humanSupport.on(
+      HUMAN_SUPPORT_TRACKER_EVENTS.HUMAN_SUPPORT_CHANGED,
+      (humanSupport) => {
+        this.emit(SERVICE_EVENTS.HUMAN_SUPPORT_CHANGED, humanSupport);
+      },
+    );
+
+    this.humanSupport.on(HUMAN_SUPPORT_TRACKER_EVENTS.TYPING_START, () => {
+      this.emit(SERVICE_EVENTS.TYPING_START);
+    });
+
+    this.humanSupport.on(HUMAN_SUPPORT_TRACKER_EVENTS.TYPING_STOP, () => {
+      this.emit(SERVICE_EVENTS.TYPING_STOP);
     });
 
     this.messageProcessor.on(
@@ -1405,8 +1521,9 @@ export default class WeniWebchatService extends EventEmitter {
       const typingTypes = ['text', 'image', 'video', 'audio', 'file'];
 
       if (message.id) {
-        this.state.updateMessage(message.id, { status: 'sent' });
-        this.session.updateConversation(message.id, { status: 'sent' });
+        const updates = this.humanSupport.resolveLocalSendUpdates(message);
+        this.state.updateMessage(message.id, updates);
+        this.session.updateConversation(message.id, updates);
       }
 
       this.session.setLastMessageSentAt(Date.now());
@@ -1415,7 +1532,9 @@ export default class WeniWebchatService extends EventEmitter {
         this.session.clearPendingCustomFields();
       }
 
-      if (typingTypes.includes(message.type)) {
+      // During human support only a Live Desk heartbeat shows typing
+      // (FR-031, FR-045).
+      if (typingTypes.includes(message.type) && !this.humanSupport.isActive()) {
         this.messageProcessor.startTypingOnMessageSent();
       }
     });
@@ -1445,6 +1564,8 @@ WeniWebchatService.SERVICE_EVENTS = SERVICE_EVENTS;
 WeniWebchatService.DEFAULTS = DEFAULTS;
 WeniWebchatService.UTM_SOURCES = UTM_SOURCES;
 WeniWebchatService.ALLOWED_UTM_SOURCES = ALLOWED_UTM_SOURCES;
+WeniWebchatService.MESSAGE_AUTHOR_TYPES = MESSAGE_AUTHOR_TYPES;
+WeniWebchatService.HUMAN_SUPPORT_EVENTS = HUMAN_SUPPORT_EVENTS;
 
 export {
   ALLOWED_FILE_TYPES,
@@ -1466,5 +1587,7 @@ export {
   DEFAULTS,
   UTM_SOURCES,
   ALLOWED_UTM_SOURCES,
+  MESSAGE_AUTHOR_TYPES,
+  HUMAN_SUPPORT_EVENTS,
   BackInStockError,
 };

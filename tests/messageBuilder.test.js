@@ -816,4 +816,65 @@ describe('messageBuilder', () => {
       },
     );
   });
+
+  describe('buildMessagePayload shopper message id', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('sends the local id as message.id for text, media and order', () => {
+      expect(
+        buildMessagePayload('s', { id: 'msg_1', type: 'text', text: 'Oi' })
+          .message,
+      ).toEqual({ type: 'text', text: 'Oi', id: 'msg_1' });
+      expect(
+        buildMessagePayload('s', {
+          id: 'msg_2',
+          type: 'image',
+          media: 'blob:x',
+        }).message,
+      ).toEqual({ type: 'image', media: 'blob:x', id: 'msg_2' });
+      expect(
+        buildMessagePayload('s', {
+          id: 'msg_3',
+          type: 'order',
+          timestamp: '1',
+          order: { product_items: [] },
+        }).message,
+      ).toEqual({
+        type: 'order',
+        timestamp: '1',
+        order: { product_items: [] },
+        id: 'msg_3',
+      });
+    });
+
+    it('omits an invalid id with a warning that does not include it', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const payload = buildMessagePayload('s', {
+        id: 'not valid!',
+        type: 'text',
+        text: 'Oi',
+      });
+
+      expect(payload.message).toEqual({ type: 'text', text: 'Oi' });
+      expect(warn).toHaveBeenCalledWith(
+        'WeniWebchatService: outgoing message id omitted',
+        {
+          operation: 'send-message',
+          messageType: 'text',
+          reason: 'invalid_client_message_id',
+        },
+      );
+    });
+
+    it('does not warn when there is no id', () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      buildMessagePayload('s', { type: 'text', text: 'Oi' });
+
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
 });

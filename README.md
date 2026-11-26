@@ -263,9 +263,14 @@ const state = service.getState()
 //   session: {},
 //   connection: { status: 'connected' },
 //   context: '',
-//   isTyping: false
+//   isTyping: false,
+//   features: { humanSupportStatus: false },
+//   humanSupport: { active: false },
+//   typingAuthor: null
 // }
 ```
+
+`messages` is already in server order (see [Human Support Status](#human-support-status)); render it as is instead of re-sorting by `timestamp`.
 
 #### `isConnected()`
 Checks if connected.
@@ -383,6 +388,8 @@ The service exposes important constants for use in templates. These can be acces
 | `QUICK_REPLY_TYPES` | Quick reply types | `{ TEXT, LOCATION, EMAIL, PHONE }` |
 | `SERVICE_EVENTS` | All event names | `{ CONNECTED, MESSAGE_RECEIVED, ... }` |
 | `DEFAULTS` | Default configuration values | `{ MAX_FILE_SIZE: 32MB, ... }` |
+| `MESSAGE_AUTHOR_TYPES` | Message author types | `{ CONTACT, AI_AGENT, HUMAN_AGENT }` |
+| `HUMAN_SUPPORT_EVENTS` | Human support milestone events | `{ STARTED, ENDED }` |
 ---
 
 ## Events
@@ -416,6 +423,7 @@ service.on('session:cleared', () => {})
 
 // State events
 service.on('state:changed', (newState, oldState) => {})
+service.on('human_support:changed', ({ active }) => {}) // Human support started or ended
 service.on('context:changed', (context) => {})
 
 // Recording events
@@ -484,6 +492,40 @@ service.on('message:updated', (messageId, updates) => {
 - On `stream_end` or when the WebSocket transitions to `disconnected`/`closed`, active streams are finalized with `status: 'delivered'`, `streamPhase: 'completed'`, and `componentHints` cleared.
 - `componentHints` and `streamPhase` are never persisted to browser storage and are omitted on `history:loaded` messages (which restore `quick_replies`, `list_message` including optional `item_count`, and validated `cta_message`).
 
+### Human Support Status
+
+When the socket enables it for the channel, the service tracks the Shopping Assistant human support period: header tag, start and end milestones, message authors, shopper message statuses, and the Live Desk agent typing indicator. Render these only when `state.features.humanSupportStatus` is `true`; with it `false` the service behaves as before.
+
+```javascript
+service.on('state:changed', (state) => {
+  state.features.humanSupportStatus // render the feature only when true
+  state.humanSupport.active         // conversation is in human support
+  state.typingAuthor                // { type: 'human_agent', name? } | null
+})
+
+service.on('human_support:changed', ({ active }) => {})
+
+service.on('message:received', (message) => {
+  if (message.type === 'human_support_event') {
+    // message.humanSupportEvent: { eventId, event: 'started' | 'ended', occurredAt }
+  }
+  // message.author: { type: 'contact' | 'ai_agent' | 'human_agent', name?, id? }
+})
+
+service.on('message:updated', (messageId, updates) => {
+  // updates.status: 'sent' | 'delivered' | 'read' on shopper messages
+})
+```
+
+- **Capability**: every connection declares `register.data.features.humanSupportStatus: true`. It is not a configuration option; the socket decides per channel and answers `human_support_enabled` in `ready_for_message`.
+- **Order**: `state.messages` is ordered by the server `orderKey`, live and after history merges. Messages saved before the launch use `timestamp`, and shopper messages not yet confirmed stay at the end. `timestamp` is still the time to display; on milestones, show `humanSupportEvent.occurredAt`.
+- **Authors**: `author` is absent on messages saved before the launch for the channel; render those as before (no time, name or status). `author.name` is the agent first name; `author.id` is an opaque key for grouping consecutive messages and must never be displayed. A `human_agent` without `id` is a Live Desk system message.
+- **Shopper message status**: every outgoing message sends its id as `message.id`. During human support it shows `pending` until the server confirms it, then moves to `sent`, `delivered` and `read`, never backwards. Show the status icon only when the message has `sent`, `delivered` or `read`. Outside human support, the status is removed once the message is sent, so AI-mode messages show no icon. `error` is a local send failure.
+- **Human support state**: on each connection the service deduces `humanSupport.active` from the last milestone in the history page, then confirms it with the socket. If the socket cannot confirm it, the deduced value stays and no error is emitted. During a disconnect the state is kept until the next connection.
+- **Typing**: a Live Desk heartbeat sets `typingAuthor` and `isTyping`; they clear 10 seconds after the last heartbeat, when that agent's message arrives, when support ends, or on disconnect. During human support, sending a message no longer starts the generic typing indicator.
+- **Reconnect**: a message the socket received but never confirmed is not sent again. If the history loaded after reconnecting proves it was not saved, it becomes `error`.
+- Malformed frames are discarded with a structured `console.warn` that never includes message text, agent names or agent ids.
+
 ### Typing & Thinking Indicators
 
 The service distinguishes between two types of indicators:
@@ -504,6 +546,7 @@ The service distinguishes between two types of indicators:
 - Starts after `typingDelay` (2s default) when user sends a message
 - Also activated by server `typing_start` messages (non-AI sources)
 - Auto-stops after `typingTimeout` (50s default) or when message is received
+- With human support status enabled, a `typing_start` with `from: 'human_agent'` also sets `state.typingAuthor` and stops after 10 seconds without a heartbeat (see [Human Support Status](#human-support-status))
 
 **Flow Diagram:**
 

@@ -1,4 +1,4 @@
-import { generateSessionId } from '../utils/helpers';
+import { generateSessionId, mergeMessageUpdates } from '../utils/helpers';
 import EventEmitter from 'eventemitter3';
 import { SERVICE_EVENTS } from '../utils/constants';
 import { stripTransientStreamingFields } from '../utils/streamComponents';
@@ -314,6 +314,18 @@ export default class SessionManager extends EventEmitter {
   }
 
   /**
+   * Replaces the stored conversation with a single write and without
+   * counting as shopper activity: used for server-driven changes such as
+   * statuses and server order.
+   * @param {Array} messages
+   */
+  syncConversation(messages) {
+    if (!this.session) return;
+    this.session.conversation = Array.isArray(messages) ? messages : [];
+    this._save();
+  }
+
+  /**
    * Appends one message to the conversation and persists
    * @param {any} message
    * @param {{ limit?: number }} [options]
@@ -341,11 +353,7 @@ export default class SessionManager extends EventEmitter {
     const list = this.getConversation();
     const index = list.findIndex((m) => m.id === messageId);
     if (index !== -1) {
-      const merged = { ...list[index], ...update };
-      if ('componentHints' in update && update.componentHints === undefined) {
-        delete merged.componentHints;
-      }
-      list[index] = merged;
+      list[index] = mergeMessageUpdates(list[index], update);
     }
     this._save();
   }
